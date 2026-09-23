@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { REPORT_REASONS } from './constants';
+import { hasObjectionableText } from './moderation';
 
 /** Optional free text: trims, turns '' into null, caps length. */
 export const optionalText = (max: number) =>
@@ -12,25 +13,39 @@ export const optionalText = (max: number) =>
     .nullable()
     .optional();
 
+const clean = (v: string) => !hasObjectionableText(v);
+const OFFENSIVE = 'Please remove offensive language';
+
+/** optionalText for text other people see: also rejects slurs and severe profanity. */
+const publicText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .refine(clean, OFFENSIVE)
+    .transform((v) => (v === '' ? null : v))
+    .nullable()
+    .optional();
+
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 export const otpSchema = z.string().trim().regex(/^\d{6}$/, 'Enter the 6 digit code');
 
 export const linksSchema = z
   .object({
-    x: optionalText(200),
-    telegram: optionalText(200),
-    linkedin: optionalText(300),
-    website: optionalText(300),
-    youtube: optionalText(300),
+    x: publicText(200),
+    telegram: publicText(200),
+    linkedin: publicText(300),
+    website: publicText(300),
+    youtube: publicText(300),
   })
   .partial();
 
 export const profileInputSchema = z.object({
-  displayName: z.string().trim().min(1, 'Name is required').max(80),
-  headline: optionalText(120),
-  company: optionalText(80),
-  role: optionalText(80),
+  displayName: z.string().trim().min(1, 'Name is required').max(80).refine(clean, OFFENSIVE),
+  headline: publicText(120),
+  company: publicText(80),
+  role: publicText(80),
   links: linksSchema.optional(),
   /** R2 key returned by POST /files?purpose=avatar. Must belong to the caller. null removes the avatar. */
   avatarKey: z.string().max(300).nullable().optional(),
@@ -74,11 +89,12 @@ export const contactUpdateSchema = z
   .partial();
 export type ContactUpdateInput = z.input<typeof contactUpdateSchema>;
 
+/** Lands in the owner's contacts and notification email, so name and note are filtered too. */
 export const connectFormSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(120),
+  name: z.string().trim().min(1, 'Name is required').max(120).refine(clean, OFFENSIVE),
   /** Email address or a handle (Telegram, X, etc). */
   contact: z.string().trim().min(1, 'Add an email or handle').max(200),
-  note: optionalText(1000),
+  note: publicText(1000),
   turnstileToken: z.string().min(1).max(4096),
 });
 export type ConnectFormInput = z.input<typeof connectFormSchema>;
