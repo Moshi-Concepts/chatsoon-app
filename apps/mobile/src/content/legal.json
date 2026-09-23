@@ -1,0 +1,333 @@
+{
+  "privacy": {
+    "title": "Privacy Policy",
+    "updated": "24 September 2026",
+    "intro": "Chatsoon is a networking app for events, published by Moshi Concepts Inc. (\"we\", \"us\"). This policy explains what we collect when you use the Chatsoon apps for iOS and Android and the website at chatsoon.app, why we collect it, who processes it for us and the choices you have. The short version: we collect only what Chatsoon needs to work, we don't show ads, we don't track you across other apps or websites, and we never sell your data.",
+    "sections": [
+      {
+        "heading": "Who we are",
+        "paragraphs": [
+          "Chatsoon is operated by Moshi Concepts Inc., which is responsible for the personal information described in this policy. If you have a question about this policy or your data, email hello@chatsoon.app."
+        ]
+      },
+      {
+        "heading": "What we collect",
+        "paragraphs": [
+          "We collect only what Chatsoon needs to work. We don't access your phone's address book or your location, and we only receive the photos you choose to take or upload."
+        ],
+        "bullets": [
+          "Account: your email address. We use it to send you one-time sign-in codes, to identify your account and to let you know when someone sends you their details with the Connect form. Chatsoon doesn't use passwords.",
+          "Your public profile: the name, photo, headline, company, role and links (X, Telegram, LinkedIn, website, YouTube) you choose to publish.",
+          "Your contacts: the people you add and what you record about them, such as their name, company, role, email, phone, social handles, notes, tags, priority and the event where you met.",
+          "Card and badge photos: photos you take of business cards or event badges so Chatsoon can read the details for you.",
+          "Connections: when you connect with another Chatsoon user by scanning their QR code, we record that you are connected and, if you set one, the event where you met.",
+          "Connect form submissions: when someone sends you their details from your public profile page, we store the name, email or handle and note they entered, and email you to say they connected.",
+          "Reports and blocks: if you report or block someone, we store the block, or the report (who it's about, the reason and any details you add), and send the report to our moderation inbox for review.",
+          "Technical logs: basic information our servers record when the app or website makes a request, such as IP address, device and browser type, and the time and result of the request."
+        ]
+      },
+      {
+        "heading": "How we use your information",
+        "bullets": [
+          "To sign you in and keep your account secure.",
+          "To show your public profile to the people you share it with.",
+          "To store your contacts, notes and tags and keep them in sync across your devices.",
+          "To read the details from card and badge photos when you use card scanning.",
+          "To deliver connections and connect form submissions to you.",
+          "To review reports, enforce our Terms of Use and protect people from spam and abuse.",
+          "To run, maintain, secure and fix the service."
+        ]
+      },
+      {
+        "heading": "No ads, no tracking, no selling",
+        "paragraphs": [
+          "We don't use your information for advertising, we don't build advertising profiles, and we don't track you across other companies' apps or websites. We don't sell or rent your personal information to anyone."
+        ]
+      },
+      {
+        "heading": "Your public profile",
+        "paragraphs": [
+          "Your public profile is public. Anyone who scans your QR code or has your link, which looks like chatsoon.app/id/alex-rivera-7f3a, can see it and save it as a contact card. It shows only what you add to your profile: your name, photo, headline, role, company and links.",
+          "Your email address is never shown on your public profile.",
+          "Your contacts, notes, tags and priorities are private to you. People you connect with see only your public profile."
+        ]
+      },
+      {
+        "heading": "Connecting with people",
+        "paragraphs": [
+          "When two Chatsoon users connect by scanning a QR code in the app, each of them receives the other's public profile as a contact.",
+          "When you fill in the Connect form on someone's public profile page, the name, email or handle and note you enter are sent to that profile's owner and saved in their contacts. Only share details you're happy for them to have. Once they have your details, the profile owner is responsible for how they use them. The form is protected by Cloudflare Turnstile, which checks that a person, not a bot, is sending it."
+        ]
+      },
+      {
+        "heading": "Card scanning",
+        "paragraphs": [
+          "When you photograph a business card or badge, the photo is stored privately in your account and sent to Anthropic's Claude AI model, which reads the text and returns the details for you to review. Anthropic processes the photo on our behalf only to provide this service. Under Anthropic's commercial terms, it does not use this data to train its models."
+        ]
+      },
+      {
+        "heading": "Service providers",
+        "paragraphs": [
+          "We use a small number of providers to run Chatsoon. They process personal information only on our instructions and only to provide their service to us:"
+        ],
+        "bullets": [
+          "Cloudflare, Inc.: hosts our servers, database and file storage (including profile and card photos), serves the website, and provides Turnstile bot protection for the Connect form.",
+          "Anthropic, PBC: reads card and badge photos when you use card scanning.",
+          "Resend: sends Chatsoon's emails, such as your sign-in codes and connect notifications."
+        ]
+      },
+      {
+        "heading": "Sharing and international transfers",
+        "paragraphs": [
+          "We don't share your personal information with anyone except the providers above, the people you choose to share with (for example through your public profile or a connection), and where the law requires it or it is needed to protect the rights, safety or property of our users, the public or Moshi Concepts Inc.",
+          "Our providers may process information in the United States and other countries. Where the law requires it, we use appropriate safeguards for these transfers.",
+          "Apple and Google run the app stores you download Chatsoon from and handle any information they collect under their own privacy policies."
+        ]
+      },
+      {
+        "heading": "Retention and deletion",
+        "bullets": [
+          "We keep your information for as long as your account is open.",
+          "You can delete your account at any time in the app: open the Me tab and tap Delete account. This immediately and permanently deletes your account, profile, contacts, notes, tags, connections and the files you uploaded, including profile and card photos. Your public profile link stops working straight away.",
+          "Our database provider keeps backups for disaster recovery. Deleted data rolls off these backups automatically, within 30 days.",
+          "Reports you made, reports made about you and your blocks are deleted with your account. Copies of reports already sent to our moderation inbox may be kept until we finish reviewing them.",
+          "Contacts that other people saved about you, for example from your public profile or a connection, belong to their accounts and are not removed when you delete yours. You can ask them to remove it, or email us.",
+          "Technical logs are kept for a short time, no more than 30 days, unless we need them longer to investigate abuse or a security issue."
+        ]
+      },
+      {
+        "heading": "Export your data",
+        "paragraphs": [
+          "You can download all your contacts as a CSV file at any time: open the Me tab in the app and tap Export contacts (CSV). You can open it in Excel, Google Sheets or Numbers, or import it into another tool."
+        ]
+      },
+      {
+        "heading": "Your choices and rights",
+        "paragraphs": [
+          "You can view, change, export and delete your information in the app at any time. Depending on where you live, you may also have the right to access, correct, delete or move your personal information, and to object to or limit how we use it. To make a request, email hello@chatsoon.app from the address you sign in with. We'll respond within 30 days. You can also complain to your local data protection authority."
+        ]
+      },
+      {
+        "heading": "Security",
+        "paragraphs": [
+          "Every connection to Chatsoon is encrypted with HTTPS, and our hosting provider encrypts stored data. Sign-in uses one-time codes instead of passwords. Photos are stored privately and can only be opened through short-lived signed links. Every request for private data is checked against your account, so no one else can see your contacts, notes or tags.",
+          "No system is perfectly secure. If you find a security problem, please tell us at hello@chatsoon.app."
+        ]
+      },
+      {
+        "heading": "Age requirement",
+        "paragraphs": [
+          "Chatsoon is for adults. You must be 18 or older to use it. We don't knowingly collect information from anyone under 18. If you believe someone under 18 has given us their information, email hello@chatsoon.app and we'll delete it."
+        ]
+      },
+      {
+        "heading": "Changes to this policy",
+        "paragraphs": [
+          "We'll update this page when our practices change and change the date at the top. If a change is significant, we'll let you know in the app or by email before it takes effect."
+        ]
+      },
+      {
+        "heading": "Contact us",
+        "paragraphs": [
+          "Moshi Concepts Inc. Email hello@chatsoon.app with any question about privacy or your data."
+        ]
+      }
+    ]
+  },
+  "terms": {
+    "title": "Terms of Use",
+    "updated": "24 September 2026",
+    "intro": "These Terms of Use (\"Terms\") are an agreement between you and Moshi Concepts Inc. (\"we\", \"us\") and apply to your use of Chatsoon, including the iOS and Android apps and chatsoon.app. By creating an account or using Chatsoon, you agree to these Terms and to our Privacy Policy. If you don't agree, please don't use Chatsoon.",
+    "sections": [
+      {
+        "heading": "Eligibility",
+        "paragraphs": [
+          "You must be at least 18 years old and able to enter into a binding agreement to use Chatsoon. By using it, you confirm that you are. You may not use Chatsoon if we have previously removed you from the service."
+        ]
+      },
+      {
+        "heading": "Your account",
+        "paragraphs": [
+          "You sign in with a one-time code sent to your email address. Keep your email account secure, because you are responsible for what happens on your Chatsoon account. Never share your sign-in code with anyone. If you think someone else has used your account, email hello@chatsoon.app.",
+          "Give accurate information about yourself. Don't create an account for someone else or pretend to be someone you're not."
+        ]
+      },
+      {
+        "heading": "Your content",
+        "paragraphs": [
+          "You own the content you add to Chatsoon, including your profile, contacts, notes, tags and photos (\"your content\"). You give us a worldwide, non-exclusive, royalty-free licence to host, store, process, display and transmit your content only as needed to run Chatsoon for you, for example to show your public profile to the people you share it with, or to read a card photo when you ask us to. This licence ends when you delete the content or your account, apart from backups that roll off automatically.",
+          "You are responsible for your content and must have the right to add it. When you save details about other people, you are responsible for having a lawful reason to keep them and for using them respectfully and in line with the privacy laws that apply to you.",
+          "Your public profile can be seen by anyone who has its link or scans your QR code, so don't put anything on it that you want to keep private."
+        ]
+      },
+      {
+        "heading": "Acceptable use",
+        "paragraphs": [
+          "You agree not to use Chatsoon to:"
+        ],
+        "bullets": [
+          "post or send content that is illegal, hateful, discriminatory, harassing, threatening, sexually explicit, violent, defamatory or otherwise objectionable;",
+          "harass, bully, stalk, threaten, intimidate or abuse anyone;",
+          "impersonate any person or organisation, or misrepresent who you are or who you work for;",
+          "send spam, scams, phishing or unsolicited bulk messages, including through the Connect form;",
+          "collect other people's information without their permission, or scrape, crawl or harvest data from Chatsoon;",
+          "infringe anyone's intellectual property, privacy or other rights;",
+          "upload malware, or try to break, overload, probe or get around the security of Chatsoon;",
+          "break any law, or help anyone else do any of these things."
+        ]
+      },
+      {
+        "heading": "Zero tolerance for objectionable content and abusive users",
+        "paragraphs": [
+          "Chatsoon has zero tolerance for objectionable content and abusive users. Content or behaviour that breaks the acceptable use rules above is not allowed anywhere in Chatsoon, including on public profiles, in Connect form messages and in anything else you share with other people.",
+          "When we find, or are told about, content or behaviour that breaks these rules, we remove the content and eject the user responsible from Chatsoon, without notice. We may report serious cases to the authorities."
+        ]
+      },
+      {
+        "heading": "Reporting and blocking",
+        "bullets": [
+          "Report: every public profile and every connection has a Report option. Choose a reason, add details if you like and send it. You don't need an account to report a public profile on the web.",
+          "Block: when you're signed in, you can block anyone from their public profile or, if you're connected, from their contact page. Blocking removes them from your contacts and stops them from connecting with you.",
+          "We review every report within 24 hours. When content or a user breaks these Terms, we remove the content and eject the user.",
+          "You can also report a problem by emailing hello@chatsoon.app."
+        ]
+      },
+      {
+        "heading": "Card scanning",
+        "paragraphs": [
+          "Card scanning uses AI to read the text in your photo. It can make mistakes, so check the details before you save them."
+        ]
+      },
+      {
+        "heading": "The service",
+        "paragraphs": [
+          "We work hard to keep Chatsoon available and useful, but we may change, add or remove features, and the service may sometimes be unavailable. Chatsoon is free to use today. If we ever introduce paid features, we'll tell you first and you won't be charged unless you choose to pay."
+        ]
+      },
+      {
+        "heading": "Our intellectual property",
+        "paragraphs": [
+          "Chatsoon, including its name, logo, design and software, belongs to Moshi Concepts Inc. We give you a personal, non-transferable, revocable licence to use the apps and website as they are intended to be used. You may not copy, modify, reverse engineer, sell or resell any part of Chatsoon, except where the law allows it."
+        ]
+      },
+      {
+        "heading": "Termination",
+        "paragraphs": [
+          "You can stop using Chatsoon and delete your account at any time: open the Me tab in the app and tap Delete account.",
+          "We may suspend or end your account, or remove your content, at any time if you break these Terms, if the law requires it, or if we need to protect our users or Chatsoon. The sections of these Terms that by their nature should continue after your account ends, including the disclaimers and limitation of liability, will continue to apply."
+        ]
+      },
+      {
+        "heading": "Disclaimers",
+        "paragraphs": [
+          "Chatsoon is provided \"as is\" and \"as available\". To the fullest extent the law allows, we make no warranties of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose and non-infringement. We don't promise that Chatsoon will be uninterrupted, error free or secure, or that information from other users, the Connect form or card scanning is accurate.",
+          "You are responsible for your dealings with the people you meet through Chatsoon."
+        ]
+      },
+      {
+        "heading": "Limitation of liability",
+        "paragraphs": [
+          "To the fullest extent the law allows, Moshi Concepts Inc. and its directors, employees and suppliers will not be liable for any indirect, incidental, special, consequential or punitive damages, or for any loss of data, profits, revenue, goodwill or business opportunities, arising out of or related to your use of Chatsoon. Our total liability for any claim related to Chatsoon is limited to the greater of the amount you paid us in the 12 months before the claim and USD 100.",
+          "Some places don't allow these limits, so they apply to you only as far as the law allows. Nothing in these Terms limits any rights you have under consumer protection laws that cannot be excluded."
+        ]
+      },
+      {
+        "heading": "App stores",
+        "paragraphs": [
+          "If you downloaded Chatsoon from the Apple App Store, you also agree that these Terms are between you and Moshi Concepts Inc., not Apple; that Apple has no obligation to provide maintenance or support for Chatsoon; that Apple is not responsible for any claims about Chatsoon, including product liability claims, claims that it fails to meet legal requirements, and claims that it infringes someone else's intellectual property; and that Apple and its subsidiaries are third-party beneficiaries of these Terms and may enforce them against you.",
+          "Your use of Chatsoon must also follow the terms of the app store you downloaded it from."
+        ]
+      },
+      {
+        "heading": "Changes to these Terms",
+        "paragraphs": [
+          "We may update these Terms from time to time. We'll post the new version on this page and change the date at the top, and we'll let you know in the app or by email about significant changes. If you keep using Chatsoon after the changes take effect, you accept the updated Terms."
+        ]
+      },
+      {
+        "heading": "General",
+        "paragraphs": [
+          "These Terms and our Privacy Policy are the whole agreement between you and us about Chatsoon. If any part of these Terms can't be enforced, the rest still applies. If we don't enforce a right, we haven't given it up. You may not transfer your rights under these Terms. We may transfer ours as part of a merger, acquisition or sale of assets."
+        ]
+      },
+      {
+        "heading": "Contact us",
+        "paragraphs": [
+          "Questions about these Terms? Email hello@chatsoon.app."
+        ]
+      }
+    ]
+  },
+  "support": {
+    "title": "Support",
+    "updated": "24 September 2026",
+    "intro": "Need a hand with Chatsoon? Start with the answers below. If you can't find what you need, email hello@chatsoon.app and we'll get back to you. We usually reply within one business day.",
+    "sections": [
+      {
+        "heading": "Getting started",
+        "paragraphs": [
+          "Open Chatsoon, enter your email address and type in the 6 digit code we send you. There's no password to remember. Then add your name to create your profile. You can add a photo, headline, company, role and links at any time."
+        ]
+      },
+      {
+        "heading": "How do I connect with someone?",
+        "bullets": [
+          "You both have Chatsoon: open the My QR tab and let them scan it from the app, or tap Scan someone to scan theirs. You both get each other's card straight away.",
+          "They don't have the app: they can scan your QR code with their phone's camera. It opens your public profile at chatsoon.app, where they can save your contact card and send you their details with the Connect form. Their details land straight in your contacts.",
+          "Not in the same room: tap Share or Copy link on the My QR tab and send your profile link in any messaging app."
+        ]
+      },
+      {
+        "heading": "How do I scan a business card or badge?",
+        "paragraphs": [
+          "Open the Add tab and tap Photograph a card or badge. Take a clear, well-lit photo of the business card or event badge. Chatsoon reads the details with AI and fills them in for you. Check them on the review screen, fix anything that's wrong, then save.",
+          "Tap Scan a QR code on the Add tab to scan QR codes from Telegram, LinkedIn or X, a digital business card (vCard) or a website link. Chatsoon turns them into a contact for you to review. Or tap Type it in to add someone by hand."
+        ]
+      },
+      {
+        "heading": "Does Chatsoon work offline?",
+        "paragraphs": [
+          "Yes. At a busy venue with poor signal, you can still add contacts and take card photos. They're saved on your phone and sent automatically when you're back online. Card details are read once the photo has been sent, and your contact list refreshes when you reconnect."
+        ]
+      },
+      {
+        "heading": "How do tags, notes and priority work?",
+        "paragraphs": [
+          "Open a contact to add tags such as Sponsor, Investor or Founder, write notes, set a priority from 1 (low) to 5 (top) and record the event where you met. You can create your own tags and delete the ones you don't need.",
+          "Search your contacts by name, company, tag or notes, or filter the list by tag. Tap a contact's links to message them on Telegram, email them, or open their LinkedIn or X profile."
+        ]
+      },
+      {
+        "heading": "How do I export my contacts?",
+        "paragraphs": [
+          "Open the Me tab and tap Export contacts (CSV). Chatsoon creates a CSV file of all your contacts that you can open in Excel, Google Sheets or Numbers, or import into another tool."
+        ]
+      },
+      {
+        "heading": "How do I delete my account?",
+        "paragraphs": [
+          "Open the Me tab, tap Delete account and confirm. This permanently deletes your account, profile, contacts, notes, tags, connections and photos straight away, and it can't be undone. Your public profile link stops working immediately. If you want to keep your contacts, export them first."
+        ]
+      },
+      {
+        "heading": "How do I report or block someone?",
+        "paragraphs": [
+          "In the app, open their profile, or their contact if you're connected, and tap Report or Block. On the web, use the Report profile link on any public profile. You don't need an account to report.",
+          "We review every report within 24 hours and remove content and users that break our Terms of Use."
+        ]
+      },
+      {
+        "heading": "I didn't get my sign-in code",
+        "paragraphs": [
+          "Check your spam or junk folder, and make sure your email address is spelled correctly. Codes expire after 10 minutes, so request a new one if it's been longer. Still stuck? Email hello@chatsoon.app."
+        ]
+      },
+      {
+        "heading": "Contact us",
+        "paragraphs": [
+          "Email hello@chatsoon.app with your question. If it's about your account, send it from the email address you sign in with so we can find your account. We will never ask for your sign-in code, so please don't share it with anyone."
+        ]
+      }
+    ]
+  }
+}

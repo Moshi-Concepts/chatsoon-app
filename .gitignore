@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+dist/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+coverage/
+.wrangler-dev.log
+.expo-web.log

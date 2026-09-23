@@ -1,0 +1,13 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+BETTER_AUTH_SECRET=dev-secret-change-me-dev-secret-change-me
+# "log" prints the sign-in code to the wrangler console instead of sending email.
+EMAIL_PROVIDER=log
+RESEND_API_KEY=
+ANTHROPIC_API_KEY=
+# Cloudflare Turnstile test secret: always passes.
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+FILE_SIGNING_SECRET=dev-file-signing-secret
+REVIEWER_CODE=246810
+WEB_ORIGIN=http://localhost:8081
+API_ORIGIN=http://localhost:8787
+EXTRA_ORIGINS=http://localhost:8081,http://localhost:19006

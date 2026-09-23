@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "22.16.0",
+      "pnpm": "10.13.1"
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.chatsoon.app" }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.chatsoon.app" }
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.chatsoon.app" }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "REPLACE_WITH_APPLE_ID_EMAIL",
+        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

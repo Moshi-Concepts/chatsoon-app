@@ -1,0 +1,450 @@
+import type { ApiErrorBody, PublicProfile } from '@chatsoon/shared';
+import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { env } from 'cloudflare:workers';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { capturedEmails } from '../src/lib/email';
+import { contactFieldsFromConnectValue } from '../src/lib/profiles';
+import { TURNSTILE_VERIFY_URL } from '../src/lib/turnstile';
+import { call, signIn, signUpWithProfile } from './helpers';
+
+type Session = Awaited<ReturnType<typeof signUpWithProfile>>;
+type ContactDbRow = {
+  user_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  telegram: string | null;
+  x_handle: string | null;
+  linkedin_url: string | null;
+  website: string | null;
+  notes: string | null;
+  source: string;
+  linked_user_id: string | null;
+};
+
+const OWNER_EMAIL = 'owner-public@example.com';
+const OWNER_LINKS = {
+  x: '@olivia',
+  telegram: 'olivia_tg',
+  linkedin: 'https://linkedin.com/in/olivia',
+  website: 'https://olivia.dev',
+};
+
+let owner: Session;
+let viewer: Session;
+
+async function contactsOf(userId: string) {
+  const { results } = await env.DB.prepare('select * from contacts where user_id = ? order by created_at')
+    .bind(userId)
+    .all<ContactDbRow>();
+  return results;
+}
+
+async function block(blockerId: string, blockedId: string) {
+  await env.DB.prepare('insert into blocks (blocker_id, blocked_id) values (?, ?)').bind(blockerId, blockedId).run();
+}
+
+// Turnstile siteverify is stubbed so tests never depend on the network. `turnstilePasses`
+// controls the verdict and `siteverifyForms` records what the Worker sent.
+const realFetch = globalThis.fetch;
+let turnstilePasses = true;
+let siteverifyForms: FormData[] = [];
+
+beforeEach(() => {
+  turnstilePasses = true;
+  siteverifyForms = [];
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url === TURNSTILE_VERIFY_URL) {
+      siteverifyForms.push(init?.body as FormData);
+      const errorCodes = turnstilePasses ? [] : ['invalid-input-response'];
+      return Response.json({ success: turnstilePasses, 'error-codes': errorCodes });
+    }
+    return realFetch(input, init);
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+beforeAll(async () => {
+  owner = await signUpWithProfile(OWNER_EMAIL, 'Olivia Owner');
+  const res = await call('/me/profile', {
+    method: 'PUT',
+    token: owner.token,
+    json: {
+      displayName: 'Olivia Owner',
+      headline: 'Partnerships at Chatsoon',
+      company: 'Chatsoon',
+      role: 'Head of Partnerships',
+      links: OWNER_LINKS,
+    },
+  });
+  expect(res.status).toBe(200);
+  viewer = await signUpWithProfile('viewer-public@example.com', 'Victor Viewer');
+});
+
+describe('GET /id/:slug', () => {
+  it('tells a signed-in viewer whether they blocked this person, and nobody else', async () => {
+    const blocker = await signUpWithProfile('blockedbyme-a@example.com', 'Bea Blocker');
+    const other = await signUpWithProfile('blockedbyme-b@example.com', 'Otto Other');
+    await block(blocker.userId, owner.userId);
+
+    const asBlocker = (await (await call(`/id/${owner.slug}`, { token: blocker.token })).json()) as PublicProfile;
+    expect(asBlocker.blockedByMe).toBe(true);
+    const asOther = (await (await call(`/id/${owner.slug}`, { token: other.token })).json()) as PublicProfile;
+    expect(asOther.blockedByMe).toBe(false);
+    const anonymous = (await (await call(`/id/${owner.slug}`)).json()) as PublicProfile;
+    expect(anonymous).not.toHaveProperty('blockedByMe');
+    const self = (await (await call(`/id/${owner.slug}`, { token: owner.token })).json()) as PublicProfile;
+    expect(self).not.toHaveProperty('blockedByMe');
+
+    // Unblock by slug clears it.
+    expect((await call(`/blocks/${owner.slug}`, { method: 'DELETE', token: blocker.token })).status).toBe(204);
+    const after = (await (await call(`/id/${owner.slug}`, { token: blocker.token })).json()) as PublicProfile;
+    expect(after.blockedByMe).toBe(false);
+  });
+
+  it('returns the public profile without the email or private fields', async () => {
+    const res = await call(`/id/${owner.slug}`);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain(OWNER_EMAIL);
+    expect(text).not.toContain('@example.com');
+
+    const profile = JSON.parse(text) as PublicProfile & Record<string, unknown>;
+    expect(profile).toEqual({
+      slug: owner.slug,
+      displayName: 'Olivia Owner',
+      headline: 'Partnerships at Chatsoon',
+      company: 'Chatsoon',
+      role: 'Head of Partnerships',
+      links: OWNER_LINKS,
+      avatarUrl: null,
+    });
+    expect(profile).not.toHaveProperty('email');
+    expect(profile).not.toHaveProperty('userId');
+    expect(profile).not.toHaveProperty('avatarKey');
+  });
+
+  it('is cacheable when anonymous and private when signed in', async () => {
+    const anon = await call(`/id/${owner.slug}`);
+    expect(anon.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(anon.headers.get('vary')).toMatch(/authorization/i);
+    expect(anon.headers.get('vary')).toMatch(/cookie/i);
+
+    const authed = await call(`/id/${owner.slug}`, { token: viewer.token });
+    expect(authed.status).toBe(200);
+    expect(authed.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('matches the slug case-insensitively', async () => {
+    const res = await call(`/id/${owner.slug.toUpperCase()}`);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as PublicProfile).slug).toBe(owner.slug);
+  });
+
+  it('returns 404 for unknown and malformed slugs', async () => {
+    for (const slug of ['nobody-here-0000', 'bad_slug!', '-dash-', encodeURIComponent('a'.repeat(101))]) {
+      const res = await call(`/id/${slug}`);
+      expect(res.status, slug).toBe(404);
+      expect(((await res.json()) as ApiErrorBody).error.code).toBe('not_found');
+    }
+  });
+
+  it('returns a signed avatar URL but never the R2 key', async () => {
+    const person = await signUpWithProfile('avatar-public@example.com', 'Ada Avatar');
+    const key = `u/${person.userId}/avatar/${crypto.randomUUID()}.jpg`;
+    await env.FILES.put(key, new Uint8Array([1, 2, 3]));
+    const put = await call('/me/profile', {
+      method: 'PUT',
+      token: person.token,
+      json: { displayName: 'Ada Avatar', avatarKey: key },
+    });
+    expect(put.status).toBe(200);
+
+    const res = await call(`/id/${person.slug}`);
+    const profile = (await res.json()) as PublicProfile & Record<string, unknown>;
+    expect(profile.avatarUrl).toContain('/files/u/');
+    expect(profile.avatarUrl).toMatch(/[?&]exp=\d+&sig=[0-9a-f]{64}$/);
+    expect(profile).not.toHaveProperty('avatarKey');
+  });
+
+  it('returns 404 to a viewer the owner has blocked, and only to them', async () => {
+    const target = await signUpWithProfile('blocker-public@example.com', 'Bea Blocker');
+    const blocked = await signUpWithProfile('blocked-public@example.com', 'Bo Blocked');
+    await block(target.userId, blocked.userId);
+
+    const hidden = await call(`/id/${target.slug}`, { token: blocked.token });
+    expect(hidden.status).toBe(404);
+    expect(hidden.headers.get('cache-control')).toBeNull();
+    expect(((await hidden.json()) as ApiErrorBody).error.code).toBe('not_found');
+
+    const vcard = await call(`/id/${target.slug}/vcard`, { token: blocked.token });
+    expect(vcard.status).toBe(404);
+
+    // Anonymous visitors, other users and the owner still see it.
+    expect((await call(`/id/${target.slug}`)).status).toBe(200);
+    expect((await call(`/id/${target.slug}`, { token: viewer.token })).status).toBe(200);
+    expect((await call(`/id/${target.slug}`, { token: target.token })).status).toBe(200);
+    // The block is one way: the owner can still see the blocked user's profile.
+    expect((await call(`/id/${blocked.slug}`, { token: target.token })).status).toBe(200);
+  });
+
+  it('treats an invalid token as anonymous', async () => {
+    const res = await call(`/id/${owner.slug}`, { token: 'not-a-real-token' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('public, max-age=60');
+  });
+});
+
+describe('GET /id/:slug/vcard', () => {
+  it('downloads a vCard named after the slug', async () => {
+    const res = await call(`/id/${owner.slug}/vcard`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/vcard; charset=utf-8');
+    expect(res.headers.get('content-disposition')).toBe(`attachment; filename="${owner.slug}.vcf"`);
+    expect(res.headers.get('cache-control')).toBe('public, max-age=60');
+
+    const text = await res.text();
+    expect(text).toMatch(/^BEGIN:VCARD\r\n/);
+    expect(text).toContain('VERSION:3.0');
+    expect(text).toMatch(/END:VCARD\r\n$/);
+    const lines = text.split('\r\n');
+    expect(lines).toContain('FN:Olivia Owner');
+    expect(lines).toContain('ORG:Chatsoon');
+    expect(lines).toContain('TITLE:Head of Partnerships');
+    // Points back at the public profile on the web origin (the exact URL line format is buildVCard's).
+    const profileUrl = `${env.WEB_ORIGIN}/id/${owner.slug}`;
+    expect(lines.some((l) => /^(?:item\d+\.)?URL[;:]/i.test(l) && l.endsWith(`:${profileUrl}`))).toBe(true);
+    expect(text).not.toContain(OWNER_EMAIL);
+    expect(text).not.toContain('@example.com');
+  });
+
+  it('returns 404 for an unknown slug', async () => {
+    const res = await call('/id/nobody-here-0000/vcard');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /id/:slug/connect', () => {
+  const connect = (slug: string, json: unknown, init: { token?: string; ip?: string } = {}) =>
+    call(`/id/${slug}/connect`, {
+      method: 'POST',
+      json,
+      token: init.token,
+      headers: init.ip ? { 'cf-connecting-ip': init.ip } : undefined,
+    });
+  const form = (overrides: Record<string, unknown> = {}) => ({
+    name: 'Nina Newcomer',
+    contact: 'nina@example.org',
+    note: 'Met at the Token2049 afterparty',
+    turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
+    ...overrides,
+  });
+
+  it('validates the form', async () => {
+    const before = (await contactsOf(owner.userId)).length;
+    for (const body of [
+      form({ name: '' }),
+      form({ name: undefined }),
+      form({ contact: '  ' }),
+      form({ turnstileToken: undefined }),
+      form({ note: 'x'.repeat(1001) }),
+      // Nothing left once control and bidi-override characters are removed.
+      form({ name: '‮\u0000' }),
+    ]) {
+      const res = await connect(owner.slug, body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect(((await res.json()) as ApiErrorBody).error.code).toBe('bad_request');
+    }
+    expect(siteverifyForms).toHaveLength(0);
+    expect(await contactsOf(owner.userId)).toHaveLength(before);
+  });
+
+  it('rejects a failed captcha with 403 captcha_failed', async () => {
+    const before = (await contactsOf(owner.userId)).length;
+    turnstilePasses = false;
+    const res = await connect(owner.slug, form());
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as ApiErrorBody).error.code).toBe('captcha_failed');
+    expect(await contactsOf(owner.userId)).toHaveLength(before);
+  });
+
+  it('fails closed when siteverify is unreachable', async () => {
+    vi.mocked(globalThis.fetch).mockRejectedValueOnce(new TypeError('network down'));
+    const res = await connect(owner.slug, form());
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as ApiErrorBody).error.code).toBe('captcha_failed');
+  });
+
+  it('returns 404 for an unknown slug', async () => {
+    const res = await connect('nobody-here-0000', form());
+    expect(res.status).toBe(404);
+  });
+
+  it('adds a web_connect contact to the owner only and emails the owner', async () => {
+    const person = await signUpWithProfile('connect-owner@example.com', 'Carmen Connect');
+    const bystander = await signUpWithProfile('connect-bystander@example.com', 'Bystander Bee');
+
+    const res = await connect(person.slug, form(), { ip: '203.0.113.7' });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: true });
+
+    // Turnstile got the secret from env, the token and the caller's IP.
+    expect(siteverifyForms).toHaveLength(1);
+    expect(siteverifyForms[0]!.get('secret')).toBe(env.TURNSTILE_SECRET);
+    expect(siteverifyForms[0]!.get('response')).toBe('XXXX.DUMMY.TOKEN.XXXX');
+    expect(siteverifyForms[0]!.get('remoteip')).toBe('203.0.113.7');
+
+    const rows = await contactsOf(person.userId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      user_id: person.userId,
+      linked_user_id: null,
+      name: 'Nina Newcomer',
+      email: 'nina@example.org',
+      telegram: null,
+      notes: 'Met at the Token2049 afterparty',
+      source: 'web_connect',
+    });
+    expect(await contactsOf(bystander.userId)).toHaveLength(0);
+    expect(await contactsOf(owner.userId)).toHaveLength(0);
+
+    await vi.waitFor(() => {
+      const mail = capturedEmails().find(
+        (m) => m.to === 'connect-owner@example.com' && m.subject.includes('connected'),
+      );
+      expect(mail?.subject).toBe('Nina Newcomer connected with you on Chatsoon');
+      expect(mail?.text).toContain('Nina Newcomer');
+      // Visitor-supplied text other than the name never goes out from our domain.
+      expect(mail?.text).not.toContain('nina@example.org');
+      expect(mail?.text).not.toContain('afterparty');
+    });
+  });
+
+  it('still succeeds when the owner notification cannot be sent', async () => {
+    const person = await signUpWithProfile('connect-nomail@example.com', 'Nora Nomail');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Same app, but the email provider has no API key, so sendEmail throws.
+    const { default: app } = await import('../src/index');
+    const ctx = createExecutionContext();
+    const req = new Request(`http://localhost:8787/id/${person.slug}/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form()),
+    });
+    const res = await app.fetch(req, { ...env, EMAIL_PROVIDER: 'resend', RESEND_API_KEY: '' }, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(res.status).toBe(201);
+    expect(await contactsOf(person.userId)).toHaveLength(1);
+    expect(errors).toHaveBeenCalledWith('Connect notification failed', expect.any(Error));
+  });
+
+  it('routes the contact value to the right field', async () => {
+    const person = await signUpWithProfile('connect-routing@example.com', 'Rita Routing');
+    const cases: [string, Partial<ContactDbRow>][] = [
+      ['https://www.linkedin.com/in/nina-n/?utm_source=qr', { linkedin_url: 'https://www.linkedin.com/in/nina-n' }],
+      ['x.com/nina_x', { x_handle: 'nina_x' }],
+      ['@nina_tg', { telegram: 'nina_tg' }],
+      ['+65 9123 4567', { phone: '+65 9123 4567' }],
+      ['nina.dev', { website: 'https://nina.dev' }],
+    ];
+    for (const [contact] of cases) {
+      const res = await connect(person.slug, form({ contact, note: null }));
+      expect(res.status, contact).toBe(201);
+    }
+    const rows = await contactsOf(person.userId);
+    expect(rows).toHaveLength(cases.length);
+    cases.forEach(([contact, expected], i) => {
+      expect(rows[i], contact).toMatchObject({ ...expected, notes: null, source: 'web_connect' });
+    });
+  });
+
+  it('keeps an unrecognised contact value in the notes and collapses whitespace in the name', async () => {
+    const person = await signUpWithProfile('connect-unmatched@example.com', 'Uma Unmatched');
+    const res = await connect(
+      person.slug,
+      form({ name: 'Nina\n\n‮Newcomer\u0007', contact: 'find me at booth 12', note: 'Loved the demo' }),
+    );
+    expect(res.status).toBe(201);
+    const [row] = await contactsOf(person.userId);
+    expect(row).toMatchObject({
+      name: 'Nina Newcomer',
+      email: null,
+      telegram: null,
+      notes: 'Loved the demo\n\nContact: find me at booth 12',
+    });
+  });
+
+  it('returns 404 to a signed-in visitor the owner has blocked', async () => {
+    const person = await signUpWithProfile('connect-blocker@example.com', 'Cole Blocker');
+    const pest = await signIn('connect-pest@example.com');
+    await block(person.userId, pest.userId);
+
+    const res = await connect(person.slug, form(), { token: pest.token });
+    expect(res.status).toBe(404);
+    expect(await contactsOf(person.userId)).toHaveLength(0);
+  });
+
+  it('rate limits repeated submissions from one IP', async () => {
+    const person = await signUpWithProfile('connect-limit@example.com', 'Lim Limit');
+    const statuses: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      statuses.push((await connect(person.slug, form(), { ip: '198.51.100.23' })).status);
+    }
+    expect(statuses.slice(0, 5)).toEqual([201, 201, 201, 201, 201]);
+    expect(statuses.at(-1)).toBe(429);
+    // Other visitors are unaffected.
+    expect((await connect(person.slug, form(), { ip: '198.51.100.24' })).status).toBe(201);
+  });
+});
+
+describe('contactFieldsFromConnectValue', () => {
+  it.each([
+    ['Nina@Example.org', { email: 'nina@example.org' }],
+    ['mailto:nina@example.org', { email: 'nina@example.org' }],
+    ['linkedin.com/in/nina', { linkedinUrl: 'https://www.linkedin.com/in/nina' }],
+    ['https://uk.linkedin.com/in/nina/', { linkedinUrl: 'https://www.linkedin.com/in/nina' }],
+    [
+      'https://www.linkedin.com/company/chatsoon/?trk=qr',
+      { linkedinUrl: 'https://www.linkedin.com/company/chatsoon' },
+    ],
+    ['https://twitter.com/nina_x', { xHandle: 'nina_x' }],
+    ['https://x.com/nina_x/status/1', { xHandle: 'nina_x' }],
+    ['https://x.com/intent/user?screen_name=nina_x', { xHandle: 'nina_x' }],
+    ['https://x.com/home', { website: 'https://x.com/home' }],
+    ['t.me/nina_tg', { telegram: 'nina_tg' }],
+    ['tg://resolve?domain=nina_tg', { telegram: 'nina_tg' }],
+    // An invite is not a username: keep it as a link that still opens Telegram.
+    ['https://t.me/+AbCdEf', { website: 'https://t.me/+AbCdEf' }],
+    ['https://nina.dev/about?ref=card#top', { website: 'https://nina.dev/about?ref=card' }],
+    ['http://nina.dev/', { website: 'http://nina.dev' }],
+    ['@nina_tg', { telegram: 'nina_tg' }],
+    ['nina_tg', { telegram: 'nina_tg' }],
+    ['@nina_tg​', { telegram: 'nina_tg' }],
+    // Too short for a Telegram username, fine for X.
+    ['@abc', { xHandle: 'abc' }],
+    ['+1 (415) 555-0100', { phone: '+1 (415) 555-0100' }],
+    ['a'.repeat(40), { unmatched: 'a'.repeat(40) }],
+    // Parses as a URL, but the app would refuse to open it.
+    ['nina.dev/?q=`x`', { unmatched: 'nina.dev/?q=`x`' }],
+    ['javascript:alert(1)', { unmatched: 'javascript:alert(1)' }],
+    ['ftp://files.nina.dev', { unmatched: 'ftp://files.nina.dev' }],
+    ['nina:secret@evil.example', { unmatched: 'nina:secret@evil.example' }],
+    ['https://nina@evil.example/login', { unmatched: 'https://nina@evil.example/login' }],
+    ['Nina at booth 4', { unmatched: 'Nina at booth 4' }],
+  ])('%s', (value, expected) => {
+    expect(contactFieldsFromConnectValue(value)).toEqual(expected);
+  });
+
+  it('keeps a value that is too long for its contact field in the notes', () => {
+    // Percent-encoding pushes this LinkedIn URL past the 300 characters a contact's linkedinUrl allows.
+    const value = `linkedin.com/in/${'名'.repeat(60)}`;
+    expect(contactFieldsFromConnectValue(value)).toEqual({ unmatched: value });
+  });
+});

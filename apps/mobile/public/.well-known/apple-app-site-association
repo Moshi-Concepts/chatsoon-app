@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_TEAM_ID.app.chatsoon"],
+        "components": [
+          {
+            "/": "/id/*",
+            "comment": "Public profiles open in the app"
+          }
+        ]
+      }
+    ]
+  }
+}

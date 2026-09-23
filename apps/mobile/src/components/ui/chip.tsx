@@ -1,0 +1,53 @@
+import { Pressable, StyleSheet } from 'react-native';
+
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+
+import { Icon, type IconName } from './icon';
+import { Text } from './text';
+
+export function Chip({
+  label,
+  selected,
+  onPress,
+  icon,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress?: () => void;
+  icon?: IconName;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : 'text'}
+      accessibilityState={{ selected: !!selected }}
+      style={({ pressed }) => [
+        styles.chip,
+        {
+          backgroundColor: selected ? theme.primary : theme.surface,
+          borderColor: selected ? theme.primary : theme.border,
+          opacity: pressed ? 0.8 : 1,
+        },
+      ]}>
+      {icon ? <Icon name={icon} size={14} color={selected ? 'onPrimary' : 'textSecondary'} /> : null}
+      <Text variant="captionStrong" color={selected ? 'onPrimary' : 'text'}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    height: 32,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
+});

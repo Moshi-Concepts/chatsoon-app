@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@chatsoon/api", "run", "dev"],
+      "port": 8787
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@chatsoon/mobile", "exec", "expo", "start", "--web", "--port", "8081"],
+      "port": 8081
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+# Chatsoon: working notes for Claude
+
+Spec: v1.0 MVP ships to the App Store and Google Play. Scope is fixed: accounts, profile, My QR, connect,
+contacts (manual, QR scan, card photo with AI), tags, notes, search and store compliance. Wallet, voice notes,
+reminders and similar come later. Do not add them.
+
+## Layout
+- `apps/api`: Cloudflare Worker, Hono, Drizzle on D1, R2 (private, HMAC-signed URLs via `GET /files/*`), Better Auth email OTP + bearer plugin.
+- `apps/mobile`: Expo SDK 57, expo-router, routes in `src/app`. UI kit in `src/components/ui`, tokens in `src/constants/theme.ts`.
+- `packages/shared`: API types (`types.ts`), zod input schemas (`schemas.ts`), constants, parsers. Both apps import `@chatsoon/shared`.
+
+## Rules
+- Every private query is scoped by `user_id`. Client-sent R2 keys must pass `ownsKey(userId, key)`.
+- API errors use `ApiError` / helpers in `apps/api/src/lib/errors.ts` and the `{ error: { code, message } }` body.
+- JSON is camelCase on the wire, snake_case in D1. Row to DTO mapping lives in `apps/api/src/lib/serialize.ts`.
+- D1 allows at most 100 bound parameters per statement. Chunk `inArray` lists (`chunk()` in `lib/contacts.ts`).
+- Mobile: colours only via `useTheme()`, never hex literals in screens. Use `showAlert` / `confirm` from `src/lib/dialogs.ts` (Alert.alert does nothing on web).
+- Mobile: data access through `src/lib/api.ts` and hooks in `src/lib/queries.ts`.
+- Expo APIs change every SDK. Check the types in `node_modules` or https://docs.expo.dev/versions/v57.0.0/ before using one. Install packages with `npx expo install` from `apps/mobile`.
+- Camera permission text is exactly: "Used to scan QR codes and photograph business cards". Never request photo library permission.
+
+## Commands
+- Typecheck: `pnpm -r typecheck`. Tests: `pnpm --filter @chatsoon/api test`, `pnpm --filter @chatsoon/shared test`.
+- New migration: edit `apps/api/src/db/schema.ts`, then `pnpm --filter @chatsoon/api db:generate`.

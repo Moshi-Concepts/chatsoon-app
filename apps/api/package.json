@@ -1,0 +1,32 @@
+{
+  "name": "@chatsoon/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply chatsoon --local",
+    "db:migrate:remote": "wrangler d1 migrations apply chatsoon --remote",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@better-auth/expo": "^1.7.5",
+    "@chatsoon/shared": "workspace:*",
+    "better-auth": "^1.7.5",
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.8",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260923.1",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "~6.0.3",
+    "vitest": "~4.1.0",
+    "wrangler": "^4.136.3"
+  }
+}

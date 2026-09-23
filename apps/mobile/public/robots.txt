@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /contacts
+Disallow: /contact/
+Disallow: /add
+Disallow: /qr
+Disallow: /me
+Disallow: /scan
+Disallow: /card
+Disallow: /card-review/
+Disallow: /tags
+Disallow: /profile-edit
+Disallow: /onboarding
+Disallow: /sign-in
+
+Sitemap: https://chatsoon.app/sitemap.xml
