@@ -1,12 +1,17 @@
 import { ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES, type UploadPurpose, type UploadResponse } from '@chatsoon/shared';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
+import { contacts } from '../db/schema';
 import type { AppEnv } from '../env';
-import { ApiError, badRequest, forbidden, limit, notFound } from '../lib/errors';
+import { getDb } from '../lib/db';
+import { ApiError, badRequest, forbidden, limit, notFound, parseJson, userKey } from '../lib/errors';
 import { requireAuth } from '../lib/middleware';
-import { fileKey, signedFileUrl, verifyFileSignature } from '../lib/signing';
+import { fileKey, isCardKey, signedFileUrl, verifyFileSignature } from '../lib/signing';
 
 // POST /files uploads a photo to private R2. GET /files/* serves it back behind an HMAC signature.
+// DELETE /files/card removes a card photo that no contact uses (a queued card the app discarded).
 
 type ImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic';
 
@@ -56,6 +61,29 @@ filesRoutes.post('/files', requireAuth, async (c) => {
   });
   const body: UploadResponse = { key, url: await signedFileUrl(c.env, key) };
   return c.json(body, 201);
+});
+
+const cardKeySchema = z.object({ key: z.string().trim().min(1).max(300) });
+
+/**
+ * Deletes a card photo the app uploaded but never attached to a contact: the user discarded a
+ * queued card after its upload. Takes the key from `?key=` or a JSON body `{ key }`. Only keys
+ * under my own card prefix, and only when none of my contacts uses it. 204 when it's already gone.
+ */
+filesRoutes.delete('/files/card', requireAuth, async (c) => {
+  const userId = c.var.user.id;
+  await limit(c.env.WRITE_LIMITER, userKey(c, 'card-delete', userId));
+  const fromQuery = c.req.query('key');
+  const { key } = fromQuery !== undefined ? cardKeySchema.parse({ key: fromQuery }) : await parseJson(c, cardKeySchema);
+  if (!isCardKey(userId, key)) throw badRequest('Invalid card image');
+
+  const [used] = await getDb(c.env)
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), eq(contacts.cardImageKey, key)))
+    .limit(1);
+  if (!used) await c.env.FILES.delete(key);
+  return c.body(null, 204);
 });
 
 // No auth: the signature is the permission. Keys and expiries are covered by the HMAC.

@@ -121,6 +121,9 @@ export default function ContactDetailScreen() {
   const review = needsReview(c.extractionStatus) || (isReadingCard(c.extractionStatus) && !reading);
   const linked = !!c.linkedUserId;
   const profileSlug = c.linkedSlug;
+  // Sent with the Connect form on my public page by someone without an account: there is no
+  // profile to report or block, so the message itself can be reported.
+  const connectMessage = !linked && c.source === 'web_connect';
   // `frozen` stays set after a successful delete or block, so nothing re-enables while the screen closes.
   const busy = !!frozen || deleteContact.isPending || block.isPending;
 
@@ -325,6 +328,17 @@ export default function ContactDetailScreen() {
         </Section>
       ) : null}
 
+      {connectMessage ? (
+        <Section title="Connect form" footer="Sent from your public page. Report it if it's abusive, then delete it.">
+          <ListRow
+            title={`Report ${firstName(c.name)}`}
+            icon="flag-outline"
+            chevron={false}
+            onPress={busy ? undefined : () => setReporting(true)}
+          />
+        </Section>
+      ) : null}
+
       <Button
         title="Delete contact"
         icon="trash-outline"
@@ -342,6 +356,8 @@ export default function ContactDetailScreen() {
           targetUserId={c.linkedUserId}
           targetName={c.name}
         />
+      ) : connectMessage ? (
+        <ReportDialog visible={reporting} onClose={() => setReporting(false)} contactId={c.id} targetName={c.name} />
       ) : null}
     </Screen>
   );

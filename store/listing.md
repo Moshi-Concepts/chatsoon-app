@@ -41,9 +41,11 @@ Meet people. Follow up. Chatsoon.
 
 ## Reviewer notes (App Store and Play)
 
-Replace `[FIXED CODE]` with the `REVIEWER_CODE` secret you set on the Worker. Attach `store/reviewer-demo-qr.png`.
+Replace `[FIXED CODE]` with the `REVIEWER_CODE` secret you set on the Worker. The code changes with each
+submission: set a new one (`npx wrangler secret put REVIEWER_CODE` in `apps/api`) and paste the new code here before
+you submit. Attach `store/reviewer-demo-qr.png`.
 
-> Sign in with review@chatsoon.app: tap "Send code", then enter code [FIXED CODE]. The account has sample contacts. To test the connect flow in the app, scan the attached QR image of a second test profile with the in-app scanner (Add tab > Scan a QR code, or My QR tab > Scan someone). To test the web Connect form that people without the app use, open Me tab > View my public page, fill in the Connect form on the page that opens and tap Send, then close the page and pull down to refresh Contacts: the new contact is there, and its details say "Connected on the web". (A form sent from someone else's page, such as https://chatsoon.app/id/alex-rivera-demo, goes to that person's contacts, as the page says.) Card scanning: Add tab > Photograph a card or badge, then photograph any business card. Account deletion is in the Me tab > Delete account. Deleting resets this review account: sign in again with the same email and code to get the sample data back. Report and block are on every connected profile (open a contact connected via Chatsoon, or any public profile).
+> Sign in with review@chatsoon.app: tap "Send code", then enter code [FIXED CODE]. The account has sample contacts. To test the connect flow in the app, scan the attached QR image of a second test profile (Alex Rivera) with the in-app scanner (Add tab > Scan a QR code, or My QR tab > Scan someone). To test the web Connect form that people without the app use, open Me tab > View my public page, fill in the Connect form on the page that opens and tap Send, then close the page and pull down to refresh Contacts: the new contact is there, and its details say "Connected on the web". (A form sent from someone else's page, such as https://chatsoon.app/id/alex-rivera-demo, goes to that person's contacts, as the page says.) Card scanning: Add tab > Photograph a card or badge. Before the first photo, a one-time consent step explains that the photo is sent to Anthropic's Claude AI to read the details: tap Allow and continue, then photograph any business card. Account deletion is in the Me tab > Delete account. Deleting resets this review account: sign in again with the same email and code to get the sample data back. To try report and block, open Maya Lindqvist in Contacts (already connected through Chatsoon): Report and Block are at the bottom of her contact page, and View profile opens her public profile, which has them too. Please keep Alex Rivera for the scan test. A blocked profile offers Unblock. Messages sent with the web Connect form, such as Daniel Okafor's in Contacts, have their own Report option. Public profile text and Connect form messages are filtered for objectionable language; reported content is reviewed and removed within 24 hours.
 
 ## App Store Connect
 
@@ -66,7 +68,8 @@ above as Contacts.
 
 - Tracking: No.
 - Age rating questionnaire: no objectionable content categories. Answer "yes" to user-generated content (public
-  profiles, connect form) and note the report and block tools. After answering, choose **Override to Higher Age
+  profiles, connect form) and note the report and block tools. Note also: "Public profile text and Connect form
+  messages are filtered for objectionable language; reported content is reviewed and removed within 24 hours." After answering, choose **Override to Higher Age
   Rating** and select 18+. The Terms and Privacy Policy set a minimum age of 18, and Apple requires the rating to meet
   a minimum age set in the app's terms. This matches the Play target audience (18+). Set it before submitting:
   treat it as fixed once App Review approves the app.
@@ -114,6 +117,8 @@ form, because Google updates that list. The iOS build doesn't include ML Kit.
   with no alpha (brand colour #5146E5); at least 2 phone screenshots, 9:16, each side 320-3840 px (for example
   1080x1920), from an Android emulator running the EAS build. Save them under `store/screenshots/android/`.
 - Content rating: IARC questionnaire, and mark "users can interact / share content" (public profiles, connect form).
+  Public profile text and Connect form messages are filtered for objectionable language, every profile, connection
+  and Connect form message can be reported, and reports are reviewed within 24 hours.
 - Target audience: 18+.
 - Ads: No.
 - App access: provide the reviewer login above under "All or some functionality is restricted".

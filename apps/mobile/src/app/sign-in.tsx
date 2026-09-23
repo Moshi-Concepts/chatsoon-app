@@ -42,6 +42,8 @@ function authErrorMessage(err: unknown, step: Step): string {
       case 'INVALID_EMAIL':
         return 'Enter a valid email address.';
     }
+    // The server's safety cap on sign-in emails is reached.
+    if (step === 'email' && err.status === 503) return "We can't send sign-in codes right now. Please try again later.";
     if (err.status >= 500) return 'Something went wrong on our side. Please try again.';
     if (step === 'code' && err.status === 400) return "That code isn't right. Please try again.";
     return err.message;

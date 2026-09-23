@@ -256,7 +256,11 @@ export const api = {
     create: (name: string) => request<ChatsoonEvent>('POST', '/events', { body: { name } }),
   },
 
-  files: { upload },
+  files: {
+    upload,
+    /** Deletes an uploaded card photo that no contact uses (a queued card discarded after its upload). */
+    removeCard: (key: string) => request<void>('DELETE', '/files/card', { body: { key } }),
+  },
 
   extract: {
     card: (contactId: string, imageKey: string) =>

@@ -120,10 +120,14 @@ const target = {
 export const reportSchema = z
   .object({
     ...target,
+    /** A Connect form message in my contacts (a web_connect contact), instead of a user. Signed in only. */
+    contactId: z.string().trim().max(100).optional(),
     reason: z.enum(REPORT_REASONS),
     details: optionalText(1000),
   })
-  .refine((v) => v.targetSlug || v.targetUserId, { message: 'targetSlug or targetUserId is required' });
+  .refine((v) => v.targetSlug || v.targetUserId || v.contactId, {
+    message: 'targetSlug, targetUserId or contactId is required',
+  });
 export type ReportInput = z.input<typeof reportSchema>;
 
 export const blockSchema = z

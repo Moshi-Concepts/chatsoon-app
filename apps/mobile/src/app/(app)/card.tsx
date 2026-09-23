@@ -66,7 +66,8 @@ export default function CardCaptureScreen() {
       const picked = source === 'camera' ? await takePhoto() : await pickPhoto();
       if (!picked) return;
       setBusy(source);
-      const compressed = await compressImage(picked, 1600);
+      // On web a queued photo is kept inline in localStorage, so it is compressed harder there.
+      const compressed = await compressImage(picked, isWeb ? 1280 : 1600, isWeb ? 0.7 : 0.8);
       const saved = await persistImage(compressed);
       // Drop the picker's and the compressor's temporary copies.
       if (picked.uri !== saved.uri) void deleteLocalImage(picked.uri);

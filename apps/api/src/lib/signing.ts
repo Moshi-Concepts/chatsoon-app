@@ -32,6 +32,10 @@ export function ownsKey(userId: string, key: string): boolean {
 
 export const userPrefix = (userId: string) => `u/${userId}/`;
 
+/** Card photos live under u/<me>/card/ (POST /files?purpose=card). Never my avatar or anyone else's file. */
+export const isCardKey = (userId: string, key: string) =>
+  ownsKey(userId, key) && key.startsWith(`${userPrefix(userId)}card/`);
+
 /**
  * Signed URL valid for at least `ttlSeconds`. Expiry is rounded up to the hour so
  * repeated calls return the same URL and clients can cache the image.

@@ -161,11 +161,12 @@ ${doc.sections.map(renderSection).join('\n')}
 }
 
 // Refuse to finish a web build that still carries local dev values: an API on localhost or a LAN
-// address (from .env), or one of Cloudflare's always-pass Turnstile test site keys. Metro caches
-// inlined EXPO_PUBLIC_* values per file, which is why export:web runs with --clear.
+// address (from .env), one of Cloudflare's always-pass Turnstile test site keys, or the placeholder
+// site key committed in .env.production. Metro caches inlined EXPO_PUBLIC_* values per file, which
+// is why export:web runs with --clear.
 // Set CHATSOON_ALLOW_DEV_BUILD=1 to skip this for a local test build.
 const DEV_VALUE =
-  /\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)[:/"'`]|\b[123]x0{20}[A-F]{2}\b/;
+  /\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)[:/"'`]|\b[123]x0{20}[A-F]{2}\b|REPLACE_WITH_TURNSTILE_SITE_KEY/;
 
 async function assertProductionBundle() {
   if (process.env.CHATSOON_ALLOW_DEV_BUILD === '1') return;
@@ -180,8 +181,9 @@ async function assertProductionBundle() {
     const bad = src.match(DEV_VALUE);
     if (bad) {
       throw new Error(
-        `${name} contains the dev value "${bad[0]}". Set EXPO_PUBLIC_API_URL and EXPO_PUBLIC_TURNSTILE_SITE_KEY ` +
-          'to the production values and run "pnpm run export:web" again (it clears the Metro cache).',
+        `${name} contains the dev or placeholder value "${bad[0]}". Set EXPO_PUBLIC_API_URL and ` +
+          'EXPO_PUBLIC_TURNSTILE_SITE_KEY to the production values in apps/mobile/.env.production (and keep dev ' +
+          'values out of apps/mobile/.env and .env.local), then run "pnpm run export:web" again (it clears the Metro cache).',
       );
     }
   }

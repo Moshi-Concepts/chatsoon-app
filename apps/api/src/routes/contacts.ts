@@ -16,7 +16,7 @@ import { getDb, type DB } from '../lib/db';
 import { badRequest, conflict, limit, notFound, parseJson, userKey } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
-import { ownsKey, userPrefix } from '../lib/signing';
+import { isCardKey } from '../lib/signing';
 import { assertTagsOwned, contactTagWrites } from '../lib/tags';
 import { assertEventVisible, listVisibleEvents } from './events';
 
@@ -83,10 +83,6 @@ function matchesQuery(contact: Contact, names: SearchNames, terms: string[]): bo
 }
 
 // ---- Helpers ----
-
-/** Card photos live under u/<me>/card/ (POST /files?purpose=card). Never my avatar or anyone else's file. */
-const isCardKey = (userId: string, key: string) =>
-  ownsKey(userId, key) && key.startsWith(`${userPrefix(userId)}card/`);
 
 async function findMine(db: DB, userId: string, id: string): Promise<ContactRow | undefined> {
   const [row] = await db

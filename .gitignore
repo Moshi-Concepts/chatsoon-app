@@ -8,6 +8,8 @@ dist/
 .env
 .env.*
 !.env.example
+# Public web build values (API URL, Turnstile site key), see DEPLOY.md step 2.
+!.env.production
 *.tsbuildinfo
 .DS_Store
 coverage/

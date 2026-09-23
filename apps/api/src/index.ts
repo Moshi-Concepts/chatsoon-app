@@ -25,7 +25,7 @@ import { tagsRoutes } from './routes/tags';
 //   GET/POST /contacts  GET/PUT/DELETE /contacts/:id                  routes/contacts.ts
 //   GET/POST /tags  DELETE /tags/:id                                  routes/tags.ts
 //   GET/POST /events                                                  routes/events.ts
-//   POST /files  GET /files/*                                         routes/files.ts
+//   POST /files  GET /files/*  DELETE /files/card                     routes/files.ts
 //   POST /extract/card                                                routes/extract.ts
 //   POST /reports  POST /blocks  DELETE /blocks/:userId               routes/moderation.ts
 

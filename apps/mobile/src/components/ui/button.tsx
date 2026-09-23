@@ -51,7 +51,8 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         {
-          height,
+          // A minimum, so the largest accessibility text sizes can still grow the button.
+          minHeight: height,
           paddingHorizontal: size === 'sm' ? Spacing.three : Spacing.five,
           backgroundColor: p.bg === 'transparent' ? 'transparent' : theme[p.bg],
           borderColor: p.border ? theme[p.border] : 'transparent',
@@ -67,7 +68,14 @@ export function Button({
       ) : (
         <View style={styles.row}>
           {icon ? <Icon name={icon} size={size === 'sm' ? 16 : 20} color={p.fg} /> : null}
-          <Text variant={size === 'sm' ? 'captionStrong' : 'bodyStrong'} color={p.fg}>
+          {/* One line: in narrow side-by-side footers a long label shrinks instead of breaking mid-word. */}
+          <Text
+            variant={size === 'sm' ? 'captionStrong' : 'bodyStrong'}
+            color={p.fg}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            style={styles.label}>
             {title}
           </Text>
         </View>
@@ -78,5 +86,6 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: { borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, maxWidth: '100%' },
+  label: { flexShrink: 1 },
 });

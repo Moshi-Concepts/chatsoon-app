@@ -260,10 +260,12 @@ export default function ContactsScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   screen: { gap: 0 },
-  toolbar: { paddingTop: Spacing.two, paddingBottom: Spacing.three, gap: Spacing.three },
+  // Gap and bottom padding are 4pt less than they look: the chip row adds 4pt above and below.
+  toolbar: { paddingTop: Spacing.two, paddingBottom: Spacing.two, gap: Spacing.two },
   search: { paddingHorizontal: Spacing.four },
   chipScroll: { flexGrow: 0 },
-  chips: { gap: Spacing.two, paddingHorizontal: Spacing.four },
+  // The vertical padding keeps each chip's 4pt hitSlop inside the scroll view, which clips touches.
+  chips: { gap: Spacing.two, paddingHorizontal: Spacing.four, paddingVertical: Spacing.one },
   listContent: { flexGrow: 1, paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
   listHeader: { gap: Spacing.four, paddingBottom: Spacing.two },
   summary: { paddingHorizontal: Spacing.one },

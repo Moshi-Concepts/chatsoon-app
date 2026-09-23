@@ -257,3 +257,59 @@ describe('GET /files/*', () => {
     expect(((await res.json()) as ErrorBody).error.code).toBe('not_found');
   });
 });
+
+describe('DELETE /files/card', () => {
+  const removeCard = (token: string | undefined, key: string) =>
+    call('/files/card', { method: 'DELETE', token, json: { key } });
+
+  it('requires a session', async () => {
+    const res = await removeCard(undefined, `u/${alice.userId}/card/x.jpg`);
+    expect(res.status).toBe(401);
+  });
+
+  it('deletes a card photo no contact uses, and answers 204 again once it is gone', async () => {
+    const { key } = (await (await uploadForm(alice.token, JPEG)).json()) as Upload;
+    expect(await env.FILES.head(key)).not.toBeNull();
+
+    expect((await removeCard(alice.token, key)).status).toBe(204);
+    expect(await env.FILES.head(key)).toBeNull();
+    expect((await removeCard(alice.token, key)).status).toBe(204);
+  });
+
+  it('takes the key from the query string too', async () => {
+    const { key } = (await (await uploadForm(alice.token, JPEG)).json()) as Upload;
+    const res = await call(`/files/card?key=${encodeURIComponent(key)}`, { method: 'DELETE', token: alice.token });
+    expect(res.status).toBe(204);
+    expect(await env.FILES.head(key)).toBeNull();
+  });
+
+  it('keeps a photo one of my contacts uses', async () => {
+    const { key } = (await (await uploadForm(alice.token, JPEG)).json()) as Upload;
+    const created = await call('/contacts', {
+      method: 'POST',
+      token: alice.token,
+      json: { id: crypto.randomUUID(), name: 'Card person', source: 'card_photo', cardImageKey: key },
+    });
+    expect(created.status).toBe(201);
+
+    expect((await removeCard(alice.token, key)).status).toBe(204);
+    expect(await env.FILES.head(key)).not.toBeNull();
+  });
+
+  it("never touches an avatar, another user's file or a path outside the card folder", async () => {
+    const avatar = (await (await uploadForm(alice.token, JPEG, 'image/jpeg', 'avatar')).json()) as Upload;
+    const bobs = (await (await uploadForm(bob.token, JPEG)).json()) as Upload;
+
+    for (const key of [avatar.key, bobs.key, `u/${alice.userId}/card/../avatar/x.jpg`, `u/${alice.userId}/x.jpg`]) {
+      const res = await removeCard(alice.token, key);
+      expect(res.status, key).toBe(400);
+    }
+    expect(await env.FILES.head(avatar.key)).not.toBeNull();
+    expect(await env.FILES.head(bobs.key)).not.toBeNull();
+  });
+
+  it('rejects a missing key', async () => {
+    const res = await call('/files/card', { method: 'DELETE', token: alice.token, json: {} });
+    expect(res.status).toBe(400);
+  });
+});

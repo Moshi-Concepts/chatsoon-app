@@ -3,22 +3,38 @@ import type {
   Contact,
   ContactCreateInput,
   ContactUpdateInput,
+  Me,
   ProfileInput,
   ReportInput,
 } from '@chatsoon/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from './api';
-import { useAuth } from './auth';
+import { api, getAuthToken } from './api';
+import { ME_CACHE_KEY, useAuth } from './auth';
 import { putContactInCache, qk, removeContactFromCache } from './cache';
+import { setJson } from './storage';
 
 export { putContactInCache, qk, removeContactFromCache };
 
 // ---- Me / profile ----
 
+/** Keeps the account for the next cold start (see ME_CACHE_KEY), unless the session changed meanwhile. */
+function rememberMe(me: Me, token: string | null) {
+  if (token && getAuthToken() === token) void setJson(ME_CACHE_KEY, me).catch(() => {});
+}
+
 export function useMe() {
   const { status } = useAuth();
-  return useQuery({ queryKey: qk.me, queryFn: api.me.get, enabled: status === 'signedIn' });
+  return useQuery({
+    queryKey: qk.me,
+    queryFn: async () => {
+      const token = getAuthToken();
+      const me = await api.me.get();
+      rememberMe(me, token);
+      return me;
+    },
+    enabled: status === 'signedIn',
+  });
 }
 
 export function useUpdateProfile() {
@@ -26,9 +42,9 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: (input: ProfileInput) => api.me.updateProfile(input),
     onSuccess: (profile) => {
-      qc.setQueryData(qk.me, (me: Awaited<ReturnType<typeof api.me.get>> | undefined) =>
-        me ? { ...me, profile } : me,
-      );
+      const me = qc.setQueryData<Me>(qk.me, (current) => (current ? { ...current, profile } : current));
+      // So a profile created in onboarding survives a restart without signal.
+      if (me) rememberMe(me, getAuthToken());
       void qc.invalidateQueries({ queryKey: qk.me });
       // Your own public page (/id/<slug>) may be open under the editor: refetch it rather than
       // writing MyProfile into it (the public shape has fewer fields).
@@ -166,8 +182,13 @@ export function useBlock() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: BlockInput) => api.moderation.block(input),
-    // Blocking removes their card from my contacts on the server.
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.contacts }),
+    onSuccess: () => {
+      // Blocking removes their card from my contacts on the server.
+      void qc.invalidateQueries({ queryKey: qk.contacts });
+      // A cached profile would still say blockedByMe: false. Every profile, since a contact page
+      // blocks by user id and doesn't know which slug is cached.
+      void qc.invalidateQueries({ queryKey: ['profile'] });
+    },
   });
 }
 

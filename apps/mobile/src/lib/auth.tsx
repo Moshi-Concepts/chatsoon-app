@@ -1,15 +1,25 @@
+import type { Me } from '@chatsoon/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
 import { api, getAuthToken, setAuthToken, setUnauthorizedHandler } from './api';
+import { qk } from './cache';
 import { deleteExportedFiles } from './export';
 import { clearOutbox } from './outbox';
-import { getJson, secureDelete, secureGet, secureSet, setJson } from './storage';
+import { getJson, removeKey, secureDelete, secureGet, secureSet, setJson } from './storage';
 
 const TOKEN_KEY = 'chatsoon.session';
 /** Who the outbox belongs to, so an expired session keeps its offline captures for the same user. */
 const OUTBOX_OWNER_KEY = 'chatsoon.outboxOwner';
+/**
+ * The last GET /me of the signed-in account (written by useMe), so a cold start with no signal,
+ * say at an event, still opens the app instead of stopping at "Couldn't load your account".
+ * It holds the account's email: cleared on every sign-out and sign-in so it never seeds another account.
+ */
+export const ME_CACHE_KEY = 'chatsoon.me';
+
+const forgetMe = () => removeKey(ME_CACHE_KEY).catch(() => {});
 
 type AuthStatus = 'loading' | 'signedOut' | 'signedIn';
 
@@ -43,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await clearOutbox();
         await setJson(OUTBOX_OWNER_KEY, null);
       }
+      await forgetMe();
       deleteExportedFiles();
       queryClient.clear();
       setStatus('signedOut');
@@ -55,8 +66,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     secureGet(TOKEN_KEY)
-      .then((token) => {
+      .then(async (token) => {
         if (cancelled) return;
+        if (token) {
+          // Seed the account from the last launch, marked stale so it refetches straight away. Only
+          // if it is the account this device signed in as last (a late write can't cross accounts).
+          const [cached, owner] = await Promise.all([
+            getJson<Me | null>(ME_CACHE_KEY, null),
+            getJson<string | null>(OUTBOX_OWNER_KEY, null),
+          ]);
+          if (cancelled) return;
+          if (cached?.user?.id && cached.user.id === owner) queryClient.setQueryData(qk.me, cached, { updatedAt: 0 });
+        }
         setAuthToken(token);
         setStatus(token ? 'signedIn' : 'signedOut');
       })
@@ -69,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     // Web: tabs share localStorage but each keeps its own session and outbox in memory. When another
@@ -101,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const owner = await getJson<string | null>(OUTBOX_OWNER_KEY, null);
         if (owner !== user.id) await clearOutbox();
         await setJson(OUTBOX_OWNER_KEY, user.id);
+        await forgetMe();
         await secureSet(TOKEN_KEY, token);
         setAuthToken(token);
         queryClient.clear();

@@ -37,8 +37,8 @@ export type ReportReason = (typeof REPORT_REASONS)[number];
 
 export const CAMERA_PERMISSION_TEXT = 'Used to scan QR codes and photograph business cards';
 
-/** Upload limits for POST /files. */
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** Upload limits for POST /files. The app re-encodes photos to well under this before uploading. */
+export const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 export const ALLOWED_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] as const;
 export type UploadPurpose = 'avatar' | 'card';
 

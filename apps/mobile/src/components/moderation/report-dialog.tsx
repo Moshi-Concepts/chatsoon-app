@@ -17,14 +17,19 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useReport } from '@/lib/queries';
 
-// Used by: id/[slug] (public profile) and contact/[id] (linked contacts).
+// Used by: id/[slug] (public profile) and contact/[id] (linked contacts and Connect form messages).
 
 export type ReportDialogProps = {
   visible: boolean;
   onClose: () => void;
-  /** Who is being reported. One of targetSlug / targetUserId is required. */
+  /** Who is being reported. One of targetSlug / targetUserId / contactId is required. */
   targetSlug?: string | null;
   targetUserId?: string | null;
+  /**
+   * A Connect form message in my contacts (source web_connect). The sender has no account, so the
+   * message itself is reported. Signed in only.
+   */
+  contactId?: string | null;
   targetName: string;
 };
 
@@ -37,16 +42,16 @@ const REASON_LABELS: Record<ReportReason, { title: string; subtitle: string }> =
 };
 
 /** Modal to pick a reason, add details and send POST /reports. Works signed in or out. */
-export function ReportDialog({ visible, onClose, targetSlug, targetUserId, targetName }: ReportDialogProps) {
+export function ReportDialog({ visible, onClose, ...target }: ReportDialogProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       {/* Content unmounts when the modal hides, so each opening starts fresh. */}
-      <ReportSheet onClose={onClose} targetSlug={targetSlug} targetUserId={targetUserId} targetName={targetName} />
+      <ReportSheet onClose={onClose} {...target} />
     </Modal>
   );
 }
 
-function ReportSheet({ onClose, targetSlug, targetUserId, targetName }: Omit<ReportDialogProps, 'visible'>) {
+function ReportSheet({ onClose, targetSlug, targetUserId, contactId, targetName }: Omit<ReportDialogProps, 'visible'>) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -65,18 +70,20 @@ function ReportSheet({ onClose, targetSlug, targetUserId, targetName }: Omit<Rep
       setError('Choose a reason for your report.');
       return;
     }
-    if (!targetSlug && !targetUserId) {
+    if (!targetSlug && !targetUserId && !contactId) {
       setError("We couldn't tell who you're reporting. Close this and try again.");
       return;
     }
     setError(null);
     report.mutate(
-      {
-        targetSlug: targetSlug || undefined,
-        targetUserId: targetUserId || undefined,
-        reason,
-        details: details.trim() || null,
-      },
+      contactId
+        ? { contactId, reason, details: details.trim() || null }
+        : {
+            targetSlug: targetSlug || undefined,
+            targetUserId: targetUserId || undefined,
+            reason,
+            details: details.trim() || null,
+          },
       { onError: (err) => setError(err.message || "Your report didn't send. Please try again.") },
     );
   };

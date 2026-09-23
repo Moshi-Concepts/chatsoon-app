@@ -22,7 +22,7 @@
           "Card and badge photos: photos you take of business cards or event badges so Chatsoon can read the details for you.",
           "Connections: when you connect with another Chatsoon user by scanning their QR code, we record that you are connected and, if you set one, the event where you met.",
           "Connect form submissions: when someone sends you their details from your public profile page, we store the name, email or handle and note they entered, and email you to say they connected.",
-          "Reports and blocks: if you report or block someone, we store the block, or the report (who it's about, the reason and any details you add), and send the report to our moderation inbox for review.",
+          "Reports and blocks: if you report or block someone, we store the block, or the report (who or what it's about, the reason and any details you add, and for a reported Connect form message, a copy of that message), and send the report to our moderation inbox for review.",
           "Technical logs: basic information our servers record when the app or website makes a request, such as IP address, device and browser type, and the time and result of the request."
         ]
       },
@@ -68,12 +68,13 @@
       {
         "heading": "Service providers",
         "paragraphs": [
-          "We use a small number of providers to run Chatsoon. They process personal information only on our instructions and only to provide their service to us:"
+          "We use a small number of providers to run Chatsoon. Except for Google as described below, they process personal information only on our instructions and only to provide their service to us:"
         ],
         "bullets": [
           "Cloudflare, Inc.: hosts our servers, database and file storage (including profile and card photos), serves the website, and provides Turnstile bot protection for the Connect form.",
           "Anthropic, PBC: reads card and badge photos when you use card scanning.",
-          "Resend: sends Chatsoon's emails, such as your sign-in codes and connect notifications."
+          "Resend: sends Chatsoon's emails, such as your sign-in codes and connect notifications.",
+          "Google LLC (Android app only): the QR code scanner uses Google ML Kit, which sends Google basic device and app information, performance metrics, error codes and a per-installation identifier to measure and improve the scanner. The iPhone app doesn't use ML Kit."
         ]
       },
       {
@@ -186,8 +187,9 @@
       {
         "heading": "Reporting and blocking",
         "bullets": [
-          "Report: every public profile and every connection has a Report option. Choose a reason, add details if you like and send it. You don't need an account to report a public profile on the web.",
-          "Block: when you're signed in, you can block anyone from their public profile or, if you're connected, from their contact page. Blocking removes them from your contacts and stops them from connecting with you.",
+          "Report: every public profile, every connection and every Connect form message has a Report option. Choose a reason, add details if you like and send it. You don't need an account to report a public profile on the web.",
+          "Block: when you're signed in, you can block anyone from their public profile or, if you're connected, from their contact page. Blocking removes them from your contacts and stops them from connecting with you in the app.",
+          "Connect form messages come from people who don't have a Chatsoon account, so they can't be blocked. Delete any you don't want, and report abusive ones.",
           "We review every report within 24 hours. When content or a user breaks these Terms, we remove the content and eject the user.",
           "You can also report a problem by emailing hello@chatsoon.app."
         ]
@@ -319,6 +321,7 @@
         "heading": "How do I report or block someone?",
         "paragraphs": [
           "In the app, open their profile, or their contact if you're connected, and tap Report or Block. On the web, use the Report profile link on any public profile. You don't need an account to report.",
+          "A message someone sent you with the Connect form on your public page comes from a person without an account. Open it in Contacts and tap Report, then delete it if you don't want it.",
           "We review every report within 24 hours and remove content and users that break our Terms of Use."
         ]
       },

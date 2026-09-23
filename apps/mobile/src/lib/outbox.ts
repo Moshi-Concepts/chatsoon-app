@@ -215,6 +215,15 @@ async function deleteServerCopy(id: string) {
   if (queryClient) removeContactFromCache(queryClient, id);
 }
 
+/** Deletes an uploaded card photo that no contact will use. Offline, it stays until the account is deleted. */
+async function removeUploadedCard(key: string) {
+  try {
+    await api.files.removeCard(key);
+  } catch {
+    // Offline or signed out: nothing else to do.
+  }
+}
+
 /**
  * Called after every await in a contact send. False means the item was discarded or cleared, and
  * the send should stop (cleaning up the server copy if the user discarded it after creation).
@@ -268,7 +277,11 @@ async function sendContact(id: string): Promise<void> {
     const uri = resolveLocalImageUri(item.photo.uri);
     if (!localImageExists(uri)) throw new PermanentError('The photo is no longer on this device.');
     const { key } = await api.files.upload({ uri, mimeType: item.photo.mimeType || 'image/jpeg' }, 'card');
-    if (!(await stillWanted(id, false))) return;
+    if (!getItem(id)) {
+      // Discarded during the upload: no contact will use this photo, so delete it on the server.
+      if (discarded.delete(id)) await removeUploadedCard(key);
+      return;
+    }
     patch(id, { imageKey: key });
   }
 
@@ -564,7 +577,10 @@ export async function retryOutboxItem(id: string): Promise<void> {
   await flushOutbox();
 }
 
-/** Removes an item without sending it. If the contact already reached the server, deletes it there too. */
+/**
+ * Removes an item without sending it. If the contact already reached the server, deletes it there
+ * too, and so does a card photo that was uploaded for a contact that was never created.
+ */
 export async function discardOutboxItem(id: string): Promise<void> {
   await hydrate();
   const item = getItem(id);
@@ -575,6 +591,8 @@ export async function discardOutboxItem(id: string): Promise<void> {
   if (item.kind !== 'contact') return;
   if (item.photo) await deleteLocalImage(item.photo.uri);
   if (item.created) await deleteServerCopy(id);
+  // The server keeps the photo while any contact uses it, so this is safe even if a create is in flight.
+  else if (item.imageKey) await removeUploadedCard(item.imageKey);
 }
 
 /** Drops everything (on sign out / account deletion). Also forgets the current event. */
