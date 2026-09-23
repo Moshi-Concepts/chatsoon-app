@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { capturedEmails } from '../src/lib/email';
 import { contactFieldsFromConnectValue } from '../src/lib/profiles';
 import { TURNSTILE_VERIFY_URL } from '../src/lib/turnstile';
+import { CONNECT_EMAILS_PER_DAY } from '../src/routes/public';
 import { call, signIn, signUpWithProfile } from './helpers';
 
 type Session = Awaited<ReturnType<typeof signUpWithProfile>>;
@@ -152,6 +153,24 @@ describe('GET /id/:slug', () => {
       expect(res.status, slug).toBe(404);
       expect(((await res.json()) as ApiErrorBody).error.code).toBe('not_found');
     }
+  });
+
+  it('rate limits lookups that find nothing per IP, never ones that find a profile', { timeout: 30_000 }, async () => {
+    const intoWindow = Date.now() % 60_000;
+    if (intoWindow > 45_000) await new Promise((r) => setTimeout(r, 60_000 - intoWindow + 250));
+    const ip = { 'cf-connecting-ip': '203.0.113.60' };
+    const base = owner.slug.replace(/-[0-9a-f]+$/, '');
+    for (let i = 0; i < 60; i++) {
+      const res = await call(`/id/${base}-${i.toString(16).padStart(8, '0')}`, { headers: ip });
+      expect(res.status).toBe(404);
+    }
+    const guess = await call(`/id/${base}-ffffffff`, { headers: ip });
+    expect(guess.status).toBe(429);
+    expect((await call(`/id/${base}-ffffffff/vcard`, { headers: ip })).status).toBe(429);
+
+    // A real profile still loads from that IP, and other IPs can still miss.
+    expect((await call(`/id/${owner.slug}`, { headers: ip })).status).toBe(200);
+    expect((await call(`/id/${base}-ffffffff`, { headers: { 'cf-connecting-ip': '203.0.113.61' } })).status).toBe(404);
   });
 
   it('returns a signed avatar URL but never the R2 key', async () => {
@@ -317,12 +336,64 @@ describe('POST /id/:slug/connect', () => {
       const mail = capturedEmails().find(
         (m) => m.to === 'connect-owner@example.com' && m.subject.includes('connected'),
       );
-      expect(mail?.subject).toBe('Nina Newcomer connected with you on Chatsoon');
-      expect(mail?.text).toContain('Nina Newcomer');
-      // Visitor-supplied text other than the name never goes out from our domain.
+      expect(mail?.subject).toBe('Someone connected with you on Chatsoon');
+      // Nothing the visitor typed goes out from our domain, not even the name.
+      expect(mail?.subject).not.toContain('Nina');
+      expect(mail?.text).not.toContain('Nina Newcomer');
       expect(mail?.text).not.toContain('nina@example.org');
       expect(mail?.text).not.toContain('afterparty');
     });
+  });
+
+  it('keeps a phishing line in the name out of the email', async () => {
+    const person = await signUpWithProfile('connect-phish@example.com', 'Paula Phish');
+    const name = 'Chatsoon Security: unusual sign-in, verify at chatsoon-verify.co now';
+    expect((await connect(person.slug, form({ name }))).status).toBe(201);
+    expect((await contactsOf(person.userId))[0]?.name).toBe(name);
+    const notices = () =>
+      capturedEmails().filter((m) => m.to === 'connect-phish@example.com' && m.subject.includes('connected'));
+    await vi.waitFor(() => expect(notices()).toHaveLength(1));
+    const [mail] = notices();
+    expect(`${mail!.subject}\n${mail!.text}`).not.toMatch(/verify|Security/);
+  });
+
+  it(`emails the owner about at most ${CONNECT_EMAILS_PER_DAY} submissions a day, and saves the rest`, async () => {
+    const person = await signUpWithProfile('connect-flood@example.com', 'Flo Flood');
+    const total = CONNECT_EMAILS_PER_DAY + 3;
+    for (let i = 0; i < total; i++) {
+      expect((await connect(person.slug, form({ name: `Sender ${i}` }))).status).toBe(201);
+    }
+    expect(await contactsOf(person.userId)).toHaveLength(total);
+    const mails = () =>
+      capturedEmails().filter((m) => m.to === 'connect-flood@example.com' && m.subject.includes('connected'));
+    await vi.waitFor(() => expect(mails()).toHaveLength(CONNECT_EMAILS_PER_DAY));
+    // Give any stray notification time to land before checking there are no more.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(mails()).toHaveLength(CONNECT_EMAILS_PER_DAY);
+  });
+
+  it('rejects a body larger than any real form before reading it', async () => {
+    const big = form({ note: 'x'.repeat(70 * 1024) });
+    const res = await connect(owner.slug, big);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: { code: 'payload_too_large', message: 'Request body is too large' } });
+
+    // Also without a Content-Length (a streamed body).
+    const bytes = new TextEncoder().encode(JSON.stringify(big));
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+    const streamed = await call(`/id/${owner.slug}/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: stream,
+      duplex: 'half',
+    } as RequestInit);
+    expect(streamed.status).toBe(413);
+    expect(await contactsOf(owner.userId)).toHaveLength(0);
   });
 
   it('still succeeds when the owner notification cannot be sent', async () => {

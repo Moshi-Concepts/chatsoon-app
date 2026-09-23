@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { contacts, contactTags, events } from '../src/db/schema';
 import { getDb } from '../src/lib/db';
 import { contactTagWrites } from '../src/lib/tags';
+import { MAX_CONTACTS_PER_USER } from '../src/routes/contacts';
 import { call, signIn } from './helpers';
 
 type Session = { token: string; userId: string };
@@ -607,5 +608,56 @@ describe('event visibility guard', () => {
       json: { eventId: privateEvent!.id },
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('growth limits', () => {
+  it('rate limits writes that add rows per user, across contacts, tags and events', { timeout: 60_000 }, async () => {
+    const intoWindow = Date.now() % 60_000;
+    if (intoWindow > 40_000) await new Promise((r) => setTimeout(r, 60_000 - intoWindow + 250));
+    const w = await signIn('contacts-writer@example.com');
+    const ip = { 'cf-connecting-ip': '203.0.113.90' };
+    const post = (path: string, json: unknown, s: Session = w) =>
+      call(path, { method: 'POST', token: s.token, json, headers: ip });
+
+    // WRITE_LIMITER allows 120 a minute: plenty for the outbox syncing a day of offline contacts.
+    for (let i = 0; i < 118; i++) expect((await post('/contacts', { name: `Bulk ${i}` })).status).toBe(201);
+    expect((await post('/tags', { name: 'Late tag' })).status).toBe(201);
+    expect((await post('/events', { name: 'Late event' })).status).toBe(201);
+    for (const [path, json] of [
+      ['/contacts', { name: 'One too many' }],
+      ['/tags', { name: 'One tag too many' }],
+      ['/events', { name: 'One event too many' }],
+    ] as const) {
+      const res = await post(path, json);
+      expect(res.status, path).toBe(429);
+      expect((await errorOf(res)).code).toBe('rate_limited');
+    }
+    // Other users are unaffected, and so are reads and edits.
+    expect((await post('/contacts', { name: 'Someone else' }, b)).status).toBe(201);
+    expect((await call('/contacts', { token: w.token, headers: ip })).status).toBe(200);
+  });
+
+  it(`caps a user at ${MAX_CONTACTS_PER_USER} contacts, still answering retries of saved ones`, async () => {
+    const full = await signIn('contacts-full@example.com');
+    const saved = await create(full, { id: crypto.randomUUID(), name: 'Saved first' });
+    await env.DB.prepare(
+      `WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < ?2)
+       INSERT INTO contacts (id, user_id, name) SELECT lower(hex(randomblob(16))), ?1, 'Filler ' || x FROM n`,
+    )
+      .bind(full.userId, MAX_CONTACTS_PER_USER - 1)
+      .run();
+
+    const res = await call('/contacts', { method: 'POST', token: full.token, json: { name: 'Over the cap' } });
+    expect(res.status).toBe(409);
+    expect((await errorOf(res)).message).toBe('You have reached the limit of 10,000 contacts');
+
+    const retry = await call('/contacts', {
+      method: 'POST',
+      token: full.token,
+      json: { id: saved.id, name: 'Saved first' },
+    });
+    expect(retry.status).toBe(200);
+    await env.DB.prepare('DELETE FROM contacts WHERE user_id = ?').bind(full.userId).run();
   });
 });

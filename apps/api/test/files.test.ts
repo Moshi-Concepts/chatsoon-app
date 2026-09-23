@@ -1,8 +1,8 @@
-import { MAX_UPLOAD_BYTES } from '@chatsoon/shared';
 import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { signedFileUrl } from '../src/lib/signing';
+import { MAX_PHOTO_BYTES } from '../src/routes/files';
 import { call, signIn } from './helpers';
 
 // Minimal JPEG: SOI, APP0 (JFIF), SOF0 (200x100), EOI.
@@ -138,16 +138,16 @@ describe('POST /files', () => {
   });
 
   it('accepts a file of exactly the size limit', async () => {
-    const bytes = new Uint8Array(MAX_UPLOAD_BYTES);
+    const bytes = new Uint8Array(MAX_PHOTO_BYTES);
     bytes.set(JPEG);
     const res = await uploadForm(bob.token, bytes);
     expect(res.status).toBe(201);
     const { key } = (await res.json()) as Upload;
-    expect((await env.FILES.head(key))?.size).toBe(MAX_UPLOAD_BYTES);
+    expect((await env.FILES.head(key))?.size).toBe(MAX_PHOTO_BYTES);
   });
 
   it('rejects oversize uploads with 413', async () => {
-    const bytes = new Uint8Array(MAX_UPLOAD_BYTES + 1);
+    const bytes = new Uint8Array(MAX_PHOTO_BYTES + 1);
     bytes.set(JPEG);
     const before = await countObjects(`u/${bob.userId}/`);
 

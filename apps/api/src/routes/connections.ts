@@ -82,9 +82,10 @@ async function findUsableEvent(db: DB, userId: string, eventId: string) {
 }
 
 /**
- * Creates `ownerId`'s card for `other` if there is none (a single statement, so two people
- * scanning each other at the same moment still get one card each), then fills only the
- * fields the owner has left empty. Fields the owner edited are never overwritten.
+ * Links `ownerId`'s card that a block unlinked (POST /blocks), or creates a card for `other` if
+ * there is none (a single statement, so two people scanning each other at the same moment still
+ * get one card each), then fills only the fields the owner has left empty. Fields the owner
+ * edited, and their notes and tags, are never overwritten.
  */
 function linkedContactStatements(
   DB: D1Database,
@@ -93,6 +94,11 @@ function linkedContactStatements(
   eventId: string | null,
 ): D1PreparedStatement[] {
   const f = contactFieldsFromProfile(other);
+  const relink = DB.prepare(
+    `update contacts set linked_user_id = ?2, unlinked_user_id = null
+     where id = (select id from contacts where user_id = ?1 and unlinked_user_id = ?2 order by updated_at desc limit 1)
+       and not exists (select 1 from contacts where user_id = ?1 and linked_user_id = ?2)`,
+  ).bind(ownerId, other.userId);
   const insertIfMissing = DB.prepare(
     `insert into contacts
        (id, user_id, linked_user_id, name, company, role, telegram, x_handle, linkedin_url, website, event_id, source)
@@ -134,5 +140,5 @@ function linkedContactStatements(
     eventId,
     Date.now(),
   );
-  return [insertIfMissing, refresh];
+  return [relink, insertIfMissing, refresh];
 }

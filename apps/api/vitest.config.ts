@@ -21,6 +21,7 @@ export default defineConfig(async () => {
             FILE_SIGNING_SECRET: 'test-file-secret',
             REVIEWER_ENABLED: 'true',
             REVIEWER_CODE: '135790',
+            BANNED_EMAILS: ' removed.user@example.com, other-removed@example.com',
             ANTHROPIC_API_KEY: '',
           },
         },

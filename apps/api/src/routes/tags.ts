@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { tags } from '../db/schema';
 import type { AppEnv } from '../env';
 import { getDb } from '../lib/db';
-import { ApiError, notFound, parseJson } from '../lib/errors';
+import { ApiError, limit, notFound, parseJson, userKey } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
 import { toTag } from '../lib/serialize';
@@ -21,6 +21,7 @@ tagsRoutes.get('/tags', requireAuth, async (c) => {
 /** Creates a tag. A name I already have (any case) returns that tag with 200. */
 tagsRoutes.post('/tags', requireAuth, async (c) => {
   const userId = c.get('user').id;
+  await limit(c.env.WRITE_LIMITER, userKey(c, 'write', userId));
   const { name } = await parseJson(c, tagInputSchema);
   const db = getDb(c.env);
 

@@ -135,6 +135,11 @@ export const contacts = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     linkedUserId: text('linked_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /**
+     * Set on my card of someone who blocked me, in place of linked_user_id. Scanning again after an
+     * unblock links this card back instead of adding a second one. Never sent to clients.
+     */
+    unlinkedUserId: text('unlinked_user_id').references(() => users.id, { onDelete: 'set null' }),
     name: text('name').notNull(),
     company: text('company'),
     role: text('role'),
@@ -194,9 +199,10 @@ export const reports = sqliteTable('reports', {
   id: text('id').primaryKey(),
   /** Null for anonymous reports from the public web page. */
   reporterId: text('reporter_id').references(() => users.id, { onDelete: 'set null' }),
-  targetUserId: text('target_user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Null when the report is about a Connect form message (contact_id), which has no account behind it. */
+  targetUserId: text('target_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  /** The reporter's web_connect contact the report is about. Its content is copied into details. */
+  contactId: text('contact_id'),
   /** ReportReason */
   reason: text('reason').notNull(),
   details: text('details'),

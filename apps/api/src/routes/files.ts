@@ -17,6 +17,11 @@ const EXTENSIONS: Record<ImageType, string> = {
   'image/webp': 'webp',
   'image/heic': 'heic',
 };
+/**
+ * Largest photo stored. The app re-encodes every photo to a JPEG of at most 1600 px before uploading
+ * (well under 1 MB), so this only bounds what one account can put in storage.
+ */
+export const MAX_PHOTO_BYTES = Math.min(MAX_UPLOAD_BYTES, 3 * 1024 * 1024);
 /** Room for multipart boundaries and part headers on top of the file itself. */
 const MULTIPART_OVERHEAD = 64 * 1024;
 /** Clients may cache a signed file for up to a day, and never past its expiry. */
@@ -27,7 +32,7 @@ const HEIC_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'he
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 const tooLarge = () =>
-  new ApiError(413, 'payload_too_large', `Photos can be up to ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`);
+  new ApiError(413, 'payload_too_large', `Photos can be up to ${Math.round(MAX_PHOTO_BYTES / 1024 / 1024)} MB`);
 
 export const filesRoutes = new Hono<AppEnv>();
 
@@ -94,7 +99,7 @@ async function readUpload(req: Request): Promise<Uint8Array> {
   const kind = contentType.toLowerCase();
 
   if (kind.startsWith('multipart/form-data')) {
-    const body = await readCapped(req, MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD);
+    const body = await readCapped(req, MAX_PHOTO_BYTES + MULTIPART_OVERHEAD);
     let form: FormData;
     try {
       // The boundary is case sensitive, so pass the header through untouched.
@@ -104,11 +109,11 @@ async function readUpload(req: Request): Promise<Uint8Array> {
     }
     const file = form.get('file');
     if (!file || typeof file === 'string') throw badRequest('Attach the photo as the "file" field');
-    if (file.size > MAX_UPLOAD_BYTES) throw tooLarge();
+    if (file.size > MAX_PHOTO_BYTES) throw tooLarge();
     return new Uint8Array(await file.arrayBuffer());
   }
 
-  if (kind.startsWith('image/')) return readCapped(req, MAX_UPLOAD_BYTES);
+  if (kind.startsWith('image/')) return readCapped(req, MAX_PHOTO_BYTES);
 
   throw badRequest('Send the photo as multipart/form-data');
 }

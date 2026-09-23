@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 
 import type { AppEnv } from './env';
@@ -41,6 +42,16 @@ app.use('*', async (c, next) => {
     maxAge: 86400,
   })(c, next);
 });
+
+// Every JSON body is small (the largest, a contact with notes and 50 tags, is under 32 KB). Capping
+// them before anything reads a body stops a huge one from using up the isolate's memory, including
+// on the anonymous routes and Better Auth. Photo uploads have their own cap in routes/files.ts.
+const jsonBodyLimit = bodyLimit({
+  maxSize: 64 * 1024,
+  // The default throws an HTTPException, which onError would turn into a 500.
+  onError: (c) => c.json(errorBody('payload_too_large', 'Request body is too large'), 413),
+});
+app.use('*', (c, next) => (c.req.path === '/files' ? next() : jsonBodyLimit(c, next)));
 
 app.onError(onError);
 app.notFound((c) => c.json(errorBody('not_found', 'Not found'), 404));

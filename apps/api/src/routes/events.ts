@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { events, type EventRow } from '../db/schema';
 import type { AppEnv } from '../env';
 import { getDb, type DB } from '../lib/db';
-import { ApiError, badRequest, parseJson } from '../lib/errors';
+import { ApiError, badRequest, limit, parseJson, userKey } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
 import { toEvent } from '../lib/serialize';
@@ -47,6 +47,7 @@ eventsRoutes.get('/events', requireAuth, async (c) => {
  */
 eventsRoutes.post('/events', requireAuth, async (c) => {
   const userId = c.get('user').id;
+  await limit(c.env.WRITE_LIMITER, userKey(c, 'write', userId));
   const { name } = await parseJson(c, eventInputSchema);
   const db = getDb(c.env);
 

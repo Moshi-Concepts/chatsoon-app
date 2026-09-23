@@ -1,6 +1,7 @@
-import { blockSchema, profileUrl, reportSchema } from '@chatsoon/shared';
+import { blockSchema, optionalText, profileUrl, REPORT_REASONS, reportSchema } from '@chatsoon/shared';
 import { and, eq, inArray, or } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 
 import { blocks, connections, contacts, contactTags, profiles, reports, users } from '../db/schema';
 import type { AppEnv, AuthedUser, Env } from '../env';
@@ -8,12 +9,13 @@ import { chunk } from '../lib/contacts';
 import type { DB } from '../lib/db';
 import { getDb } from '../lib/db';
 import { sendEmail } from '../lib/email';
-import { badRequest, ipKey, limit, notFound, parseJson } from '../lib/errors';
+import { badRequest, ipKey, limit, notFound, parseJson, unauthorized } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { optionalAuth, requireAuth } from '../lib/middleware';
 import { ownsKey, userPrefix } from '../lib/signing';
 
-// POST   /reports          report a profile or user (anonymous allowed, from the public web page)
+// POST   /reports          report a profile or user (anonymous allowed, from the public web page),
+//                           or, signed in, a Connect form message in my contacts (contactId)
 // POST   /blocks           block a user: removes my linked contacts and their link to me
 // DELETE /blocks/:userId   unblock by user id or slug (the connection stays blocked until a new scan)
 //
@@ -50,23 +52,31 @@ interface ReportNotice {
   id: string;
   reason: string;
   details: string | null;
-  target: Target;
   reporterId: string | null;
+  /** Short name of what was reported, for the subject line. */
+  about: string;
+  /** What was reported, one fact per line. Never text a user wrote. */
+  targetLines: string[];
+}
+
+function userTargetLines(target: Target): string[] {
+  return [
+    `Target slug: ${target.slug ?? '(no profile)'}`,
+    ...(target.slug ? [`Target profile: ${profileUrl(target.slug)}`] : []),
+    `Target user id: ${target.userId}`,
+  ];
 }
 
 async function notifyReport(env: Env, r: ReportNotice) {
   if (!env.REPORTS_NOTIFY_EMAIL) return;
-  const who = r.target.slug ?? r.target.userId;
   await sendEmail(env, {
     to: env.REPORTS_NOTIFY_EMAIL,
-    subject: `Chatsoon report: ${r.reason} (${who})`,
-    // The reporter's free text goes last, so it can't pose as the fields above it.
+    subject: `Chatsoon report: ${r.reason} (${r.about})`,
+    // Free text (the reporter's, a Connect form sender's) goes last, so it can't pose as the fields above it.
     text: [
       `Report ${r.id}`,
       `Reason: ${r.reason}`,
-      `Target slug: ${r.target.slug ?? '(no profile)'}`,
-      ...(r.target.slug ? [`Target profile: ${profileUrl(r.target.slug)}`] : []),
-      `Target user id: ${r.target.userId}`,
+      ...r.targetLines,
       `Reporter: ${r.reporterId ?? 'anonymous'}`,
       `Received: ${new Date().toISOString()}`,
       '',
@@ -80,6 +90,9 @@ moderationRoutes.post('/reports', optionalAuth, async (c) => {
   const reporter = c.get('user') as AuthedUser | undefined;
   await limit(c.env.REPORT_LIMITER, reporter ? `report:user:${reporter.id}` : ipKey(c, 'report'));
 
+  const { contactId } = await parseJson(c, z.object({ contactId: z.unknown().optional() }));
+  if (contactId != null) return reportConnectMessage(c, reporter, await parseJson(c, contactReportSchema));
+
   const input = await parseJson(c, reportSchema);
   const db = getDb(c.env);
   const target = await resolveTarget(db, input);
@@ -89,8 +102,9 @@ moderationRoutes.post('/reports', optionalAuth, async (c) => {
     id: newId(),
     reason: input.reason,
     details: input.details ?? null,
-    target,
     reporterId: reporter?.id ?? null,
+    about: target.slug ?? target.userId,
+    targetLines: userTargetLines(target),
   };
   await db.insert(reports).values({
     id: notice.id,
@@ -100,11 +114,80 @@ moderationRoutes.post('/reports', optionalAuth, async (c) => {
     details: notice.details,
   });
 
+  sendReportNotice(c, notice);
+  return c.json({ ok: true }, 201);
+});
+
+function sendReportNotice(c: Context<AppEnv>, notice: ReportNotice) {
   c.executionCtx.waitUntil(
     notifyReport(c.env, notice).catch((err) => console.error('Report notification failed', notice.id, err)),
   );
-  return c.json({ ok: true }, 201);
+}
+
+/** A report about a Connect form message: a web_connect contact in the reporter's own list. */
+const contactReportSchema = z.object({
+  contactId: z.string().trim().min(1).max(100),
+  reason: z.enum(REPORT_REASONS),
+  details: optionalText(1000),
 });
+
+/**
+ * Connect form messages come from people without an account, so there is no profile to report or
+ * block. The owner reports the message itself. The report keeps a copy of what the sender wrote,
+ * so it survives the owner deleting the contact afterwards.
+ */
+async function reportConnectMessage(
+  c: Context<AppEnv>,
+  reporter: AuthedUser | undefined,
+  input: z.output<typeof contactReportSchema>,
+) {
+  if (!reporter) throw unauthorized();
+  const db = getDb(c.env);
+  const [contact] = await db
+    .select()
+    .from(contacts)
+    .where(
+      and(eq(contacts.id, input.contactId), eq(contacts.userId, reporter.id), eq(contacts.source, 'web_connect')),
+    )
+    .limit(1);
+  if (!contact) throw notFound('Contact not found');
+
+  const fields: [string, string | null][] = [
+    ['Name', contact.name],
+    ['Email', contact.email],
+    ['Phone', contact.phone],
+    ['Telegram', contact.telegram],
+    ['X', contact.xHandle],
+    ['LinkedIn', contact.linkedinUrl],
+    ['Website', contact.website],
+    ['Notes', contact.notes],
+  ];
+  const message = [
+    'Connect form message:',
+    ...fields.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`),
+    `Sent: ${contact.createdAt.toISOString()}`,
+  ].join('\n');
+
+  const notice: ReportNotice = {
+    id: newId(),
+    reason: input.reason,
+    details: `${message}\n\nFrom the reporter: ${input.details ?? '(none)'}`,
+    reporterId: reporter.id,
+    about: 'Connect form message',
+    targetLines: [`Target: Connect form message, web_connect contact ${contact.id} of user ${reporter.id}`],
+  };
+  await db.insert(reports).values({
+    id: notice.id,
+    reporterId: reporter.id,
+    targetUserId: null,
+    contactId: contact.id,
+    reason: notice.reason,
+    details: notice.details,
+  });
+
+  sendReportNotice(c, notice);
+  return c.json({ ok: true }, 201);
+}
 
 moderationRoutes.post('/blocks', requireAuth, async (c) => {
   const me = c.get('user').id;
@@ -134,10 +217,11 @@ moderationRoutes.post('/blocks', requireAuth, async (c) => {
         ),
       ),
     db.delete(contacts).where(myLinkedContacts).returning({ cardImageKey: contacts.cardImageKey }),
-    // They keep the card they saved for me, but no longer see me as a Chatsoon connection.
+    // They keep the card they saved for me, but no longer see me as a Chatsoon connection. The card
+    // remembers me, so a scan after an unblock links it again instead of adding a second card.
     db
       .update(contacts)
-      .set({ linkedUserId: null })
+      .set({ linkedUserId: null, unlinkedUserId: me })
       .where(and(eq(contacts.userId, them), eq(contacts.linkedUserId, me))),
   ]);
 

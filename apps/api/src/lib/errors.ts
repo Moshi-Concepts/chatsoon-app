@@ -63,6 +63,14 @@ export function ipKey(c: Context, scope = ''): string | null {
   return ip ? `${scope}:${ip}` : null;
 }
 
+/**
+ * Key for a per-user limit that, like ipKey, only applies behind Cloudflare (always there in
+ * production), so local dev and the test suite, which write in bulk, are not throttled.
+ */
+export function userKey(c: Context, scope: string, userId: string): string | null {
+  return clientIp(c) ? `${scope}:${userId}` : null;
+}
+
 export function clientIp(c: Context): string | null {
   return c.req.header('cf-connecting-ip') ?? null;
 }

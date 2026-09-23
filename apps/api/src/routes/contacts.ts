@@ -5,7 +5,7 @@ import {
   type ContactsResponse,
   type ExtractionStatus,
 } from '@chatsoon/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
@@ -13,7 +13,7 @@ import { contacts, tags, type ContactRow } from '../db/schema';
 import type { AppEnv } from '../env';
 import { getContact, loadContacts } from '../lib/contacts';
 import { getDb, type DB } from '../lib/db';
-import { badRequest, conflict, notFound, parseJson } from '../lib/errors';
+import { badRequest, conflict, limit, notFound, parseJson, userKey } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
 import { ownsKey, userPrefix } from '../lib/signing';
@@ -21,6 +21,9 @@ import { assertTagsOwned, contactTagWrites } from '../lib/tags';
 import { assertEventVisible, listVisibleEvents } from './events';
 
 export const contactsRoutes = new Hono<AppEnv>();
+
+/** Far more than anyone meets at events, and it keeps one account from filling the shared database. */
+export const MAX_CONTACTS_PER_USER = 10_000;
 
 // ---- Search ----
 
@@ -174,6 +177,7 @@ contactsRoutes.get('/contacts/:id', requireAuth, async (c) => {
  */
 contactsRoutes.post('/contacts', requireAuth, async (c) => {
   const userId = c.get('user').id;
+  await limit(c.env.WRITE_LIMITER, userKey(c, 'write', userId));
   const input = await parseJson(c, contactCreateSchema);
   const db = getDb(c.env);
 
@@ -188,6 +192,12 @@ contactsRoutes.post('/contacts', requireAuth, async (c) => {
   if (input.id) {
     const retry = await existingResponse(input.id);
     if (retry) return retry;
+  }
+
+  // After the retry check, so an offline retry of a saved contact still gets its 200.
+  const [owned] = await db.select({ n: sql<number>`count(*)` }).from(contacts).where(eq(contacts.userId, userId));
+  if ((owned?.n ?? 0) >= MAX_CONTACTS_PER_USER) {
+    throw conflict(`You have reached the limit of ${MAX_CONTACTS_PER_USER.toLocaleString('en')} contacts`);
   }
 
   const cardImageKey = input.cardImageKey || null;

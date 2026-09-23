@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env';
-import { createAuth, emailLimitKey } from '../src/lib/auth';
+import { createAuth, emailLimitKey, OTP_SENDS_PER_HOUR_MAX, REVIEWER_CHECKS_PER_DAY_MAX } from '../src/lib/auth';
 import { capturedEmails, sendEmail, signInCodeEmail } from '../src/lib/email';
 import { DEMO_USER_ID, SAMPLE_CONNECTION_USER_ID, ensureReviewerData } from '../src/lib/reviewer';
 import { call, signIn } from './helpers';
@@ -44,6 +44,24 @@ const linkedCount = (ownerId: string, linkedId: string) =>
 async function userIdFor(email: string): Promise<string | null> {
   const row = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first<{ id: string }>();
   return row?.id ?? null;
+}
+
+/** The newest stored sign-in code for an address: `<hash>:<wrong attempts>`. */
+async function storedOtpValue(email: string): Promise<string | null> {
+  const row = await env.DB.prepare(
+    'SELECT value FROM verifications WHERE identifier = ? ORDER BY created_at DESC LIMIT 1',
+  )
+    .bind(`sign-in-otp-${email}`)
+    .first<{ value: string }>();
+  return row?.value ?? null;
+}
+
+/** Sets a global counter kept by bumpCounter (lib/auth.ts), in every window. */
+async function setCounter(name: string, value: number) {
+  const { meta } = await env.DB.prepare('UPDATE verifications SET value = ? WHERE id LIKE ?')
+    .bind(String(value), `counter:${name}:%`)
+    .run();
+  expect(meta.changes).toBeGreaterThan(0);
 }
 
 /** Hard deletes an account the way DELETE /me ends up: the users row goes, everything cascades. */
@@ -178,6 +196,21 @@ describe('email OTP sign-in', () => {
     expect(emailsTo(email)).toHaveLength(0);
   });
 
+  it("doesn't keep the sign-in IP address or user agent on the session", async () => {
+    const email = 'session-privacy@example.com';
+    await sendCode(email);
+    const res = await verifyCode(email, lastCode(email)!, {
+      'cf-connecting-ip': '198.51.100.77',
+      'User-Agent': 'Chatsoon/1.0 (iPhone; iOS 19.0)',
+    });
+    expect(res.status).toBe(200);
+    const userId = await userIdFor(email);
+    const row = await env.DB.prepare('SELECT ip_address, user_agent FROM sessions WHERE user_id = ?')
+      .bind(userId)
+      .first();
+    expect(row).toEqual({ ip_address: null, user_agent: null });
+  });
+
   it('does not accept the reviewer code for other addresses', async () => {
     const email = 'not-the-reviewer@example.com';
     await sendCode(email);
@@ -211,7 +244,7 @@ describe('reviewer login', () => {
       .bind(userId)
       .first<{ display_name: string; headline: string; slug: string }>();
     expect(profile).toMatchObject({ display_name: 'App Reviewer', headline: 'Testing Chatsoon' });
-    expect(profile!.slug).toMatch(/^app-reviewer-[0-9a-f]{4}$/);
+    expect(profile!.slug).toMatch(/^app-reviewer-[0-9a-f]{8}$/);
 
     const tagNames = await env.DB.prepare('SELECT name FROM tags WHERE user_id = ?')
       .bind(userId)
@@ -358,6 +391,48 @@ describe('reviewer login', () => {
     expect(await linkedCount(userId, SAMPLE_CONNECTION_USER_ID)).toBe(0);
   });
 
+  it('lifts an earlier reviewer block on the demo scan profile at the next sign-in', async () => {
+    await deleteUserRows(REVIEWER_EMAIL);
+    const first = await signIn(REVIEWER_EMAIL, env.REVIEWER_CODE);
+    const scanDemo = (token: string) =>
+      call('/connections/scan', { method: 'POST', token, json: { slug: DEMO_PROFILE_SLUG } });
+    expect((await scanDemo(first.token)).status).toBe(200);
+    const demoCardsOfReviewer = () =>
+      count(
+        'SELECT count(*) AS n FROM contacts WHERE user_id = ?1 AND (linked_user_id = ?2 OR unlinked_user_id = ?2)',
+        DEMO_USER_ID,
+        first.userId,
+      );
+    expect(await demoCardsOfReviewer()).toBe(1);
+
+    // One reviewer blocks the demo profile and leaves the account as it is.
+    const blocked = await call('/blocks', { method: 'POST', token: first.token, json: { targetUserId: DEMO_USER_ID } });
+    expect(blocked.status).toBe(201);
+    expect((await scanDemo(first.token)).status).toBe(403);
+
+    // The next reviewer signs in and the documented scan works as a first connection.
+    const next = await signIn(REVIEWER_EMAIL, env.REVIEWER_CODE);
+    expect(next.userId).toBe(first.userId);
+    const res = await scanDemo(next.token);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { alreadyConnected: boolean; contact: { linkedUserId: string } };
+    expect(body.alreadyConnected).toBe(false);
+    expect(body.contact.linkedUserId).toBe(DEMO_USER_ID);
+    // The demo profile's card of the reviewer is linked again, not duplicated.
+    expect(await demoCardsOfReviewer()).toBe(1);
+    expect(await linkedCount(DEMO_USER_ID, first.userId)).toBe(1);
+
+    // A block on the connected sample profile stays.
+    await call('/blocks', { method: 'POST', token: next.token, json: { targetUserId: SAMPLE_CONNECTION_USER_ID } });
+    await signIn(REVIEWER_EMAIL, env.REVIEWER_CODE);
+    const mayaBlocks = await count(
+      'SELECT count(*) AS n FROM blocks WHERE blocker_id = ? AND blocked_id = ?',
+      first.userId,
+      SAMPLE_CONNECTION_USER_ID,
+    );
+    expect(mayaBlocks).toBe(1);
+  });
+
   it('recreates the sample data after the reviewer account is deleted', async () => {
     await deleteUserRows(REVIEWER_EMAIL);
     const before = await signIn(REVIEWER_EMAIL, env.REVIEWER_CODE);
@@ -450,19 +525,21 @@ describe('demo profile migration', () => {
 });
 
 describe('sign-in code rate limits', () => {
-  it('limits code requests per IP, loosely enough for a shared venue IP', { timeout: 30_000 }, async () => {
+  it('limits code requests per IP', { timeout: 30_000 }, async () => {
     await awayFromWindowEdge();
     const ip = { 'cf-connecting-ip': '203.0.113.10' };
-    // OTP_IP_LIMITER allows 30 a minute: a conference venue can put many attendees behind one IP.
-    for (let i = 0; i < 30; i++) expect((await sendCode(`ip-limit-${i}@example.com`, ip)).status).toBe(200);
+    // OTP_SEND_IP_LIMITER allows 10 a minute: every send mails a code to any address.
+    for (let i = 0; i < 10; i++) expect((await sendCode(`ip-limit-${i}@example.com`, ip)).status).toBe(200);
 
-    const blocked = await sendCode('ip-limit-30@example.com', ip);
+    const blocked = await sendCode('ip-limit-10@example.com', ip);
     expect(blocked.status).toBe(429);
     expect(await blocked.json()).toEqual({ error: { code: 'rate_limited', message: expect.any(String) } });
-    expect(emailsTo('ip-limit-30@example.com')).toHaveLength(0);
+    expect(emailsTo('ip-limit-10@example.com')).toHaveLength(0);
 
-    // Other clients are unaffected.
+    // Other clients are unaffected, and checking codes has its own, looser bucket (a venue IP).
     expect((await sendCode('ip-limit-6@example.com', { 'cf-connecting-ip': '203.0.113.11' })).status).toBe(200);
+    const code = lastCode('ip-limit-3@example.com')!;
+    expect((await verifyCode('ip-limit-3@example.com', code, ip)).status).toBe(200);
   });
 
   it('limits code requests per email across IPs, including address variants', { timeout: 30_000 }, async () => {
@@ -504,6 +581,83 @@ describe('sign-in code rate limits', () => {
     }
     const res = await verifyCode(REVIEWER_EMAIL, env.REVIEWER_CODE!, { 'cf-connecting-ip': '192.0.2.200' });
     expect(res.status).toBe(429);
+
+    // The wrong guesses never reached Better Auth, so they didn't use up the stored code's attempts:
+    // once the bucket empties, the fixed code works without a new send.
+    expect(await storedOtpValue(REVIEWER_EMAIL)).toMatch(/:0$/);
+    expect((await verifyCode(REVIEWER_EMAIL, env.REVIEWER_CODE!)).status).toBe(200);
+  });
+
+  it('answers a wrong reviewer code exactly like any other wrong code', async () => {
+    const email = 'plain-wrong@example.com';
+    await sendCode(email);
+    const plain = await verifyCode(email, otherCode(lastCode(email)!));
+
+    await sendCode(REVIEWER_EMAIL);
+    const reviewer = await verifyCode(REVIEWER_EMAIL, otherCode(env.REVIEWER_CODE!));
+    expect(reviewer.status).toBe(plain.status);
+    expect(await reviewer.json()).toEqual(await plain.json());
+    expect(await storedOtpValue(REVIEWER_EMAIL)).toMatch(/:0$/);
+  });
+
+  it('caps checks of the reviewer code per day across all locations', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await sendCode(REVIEWER_EMAIL);
+      expect((await verifyCode(REVIEWER_EMAIL, otherCode(env.REVIEWER_CODE!))).status).toBe(400);
+      await setCounter('reviewer-otp-checks', REVIEWER_CHECKS_PER_DAY_MAX);
+
+      // Past the budget even the right code is refused, so the check can't be used to guess.
+      const over = await verifyCode(REVIEWER_EMAIL, env.REVIEWER_CODE!);
+      expect(over.status).toBe(429);
+      expect((await verifyCode(REVIEWER_EMAIL, env.REVIEWER_CODE!)).status).toBe(429);
+      expect(errors.mock.calls.filter(([msg]) => String(msg).includes('Reviewer code checks'))).toHaveLength(1);
+
+      // Other addresses are unaffected.
+      expect((await sendCode('budget-bystander@example.com')).status).toBe(200);
+      const code = lastCode('budget-bystander@example.com')!;
+      expect((await verifyCode('budget-bystander@example.com', code)).status).toBe(200);
+    } finally {
+      await setCounter('reviewer-otp-checks', 0);
+      errors.mockRestore();
+    }
+    expect((await verifyCode(REVIEWER_EMAIL, env.REVIEWER_CODE!)).status).toBe(200);
+  });
+
+  it('stops mailing codes for the rest of the hour past the global cap', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect((await sendCode('cap-first@example.com')).status).toBe(200);
+      await setCounter('otp-sends', OTP_SENDS_PER_HOUR_MAX);
+
+      const over = await sendCode('cap-over@example.com');
+      expect(over.status).toBe(503);
+      expect(((await over.json()) as { error: { message: string } }).error.message).toMatch(/can't send sign-in codes/);
+      expect(emailsTo('cap-over@example.com')).toHaveLength(0);
+      expect((await sendCode('cap-over-2@example.com')).status).toBe(503);
+      // Logged once, for an alert.
+      expect(errors.mock.calls.filter(([msg]) => msg === 'OTP send circuit open')).toHaveLength(1);
+
+      // Nothing is mailed to the reviewer, so their sign-in still works.
+      expect((await sendCode(REVIEWER_EMAIL)).status).toBe(200);
+      expect((await verifyCode(REVIEWER_EMAIL, env.REVIEWER_CODE!)).status).toBe(200);
+    } finally {
+      await setCounter('otp-sends', 0);
+      errors.mockRestore();
+    }
+    expect((await sendCode('cap-after@example.com')).status).toBe(200);
+    expect(emailsTo('cap-after@example.com')).toHaveLength(1);
+  });
+
+  it('refuses sign-in codes for removed users in BANNED_EMAILS', async () => {
+    for (const email of ['Removed.User+again@example.com', 'other-removed@example.com']) {
+      const res = await sendCode(email);
+      expect(res.status, email).toBe(403);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe('forbidden');
+      expect(emailsTo(email)).toHaveLength(0);
+      expect((await verifyCode(email, '123456')).status).toBe(403);
+    }
+    expect((await sendCode('removed.user.not@example.com')).status).toBe(200);
   });
 
   it('normalises emails for limit keys', () => {

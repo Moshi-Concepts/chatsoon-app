@@ -6,10 +6,10 @@ import {
   type ExtractionStatus,
   type SEEDED_TAGS,
 } from '@chatsoon/shared';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 
-import { connections, contacts, contactTags, profiles, tags } from '../db/schema';
+import { blocks, connections, contacts, contactTags, profiles, tags } from '../db/schema';
 import type { Env } from '../env';
 import { getDb, type DB } from './db';
 import { newId, shortSuffix } from './ids';
@@ -205,7 +205,7 @@ async function freeSlug(db: DB, displayName: string): Promise<string> {
     const [taken] = await db.select({ userId: profiles.userId }).from(profiles).where(eq(profiles.slug, slug)).limit(1);
     if (!taken) return slug;
   }
-  // Five collisions in a row is practically impossible. An 8 char suffix can't clash with a 4 char one.
+  // Five collisions in a row is practically impossible. A 16 char suffix can't clash with an 8 char one.
   return makeSlug(displayName, `${shortSuffix()}${shortSuffix()}`);
 }
 
@@ -301,10 +301,16 @@ async function sampleContactWrites(env: Env, db: DB, userId: string): Promise<Ba
  * - the profile is created when missing, so a deleted account starts over;
  * - the samples are added when the account has no contacts at all, so the next reviewer always
  *   finds some, while a few deleted contacts stay deleted.
- * Everything is written in one atomic batch. Returns true when it wrote anything.
+ * Everything is written in one atomic batch. Returns true when it wrote any of it.
+ *
+ * It also lifts the reviewer's block on the profile the review notes say to scan (DEMO_USER_ID):
+ * Apple and Google share this account across reviews, and a block left by an earlier reviewer
+ * would make that scan fail. A block on the connected sample profile stays (see
+ * sampleContactWrites).
  */
 export async function ensureReviewerData(env: Env, userId: string): Promise<boolean> {
   const db = getDb(env);
+  await db.delete(blocks).where(and(eq(blocks.blockerId, userId), eq(blocks.blockedId, DEMO_USER_ID)));
   const [profile, [contactCount]] = await Promise.all([
     findProfileByUserId(db, userId),
     db.select({ n: sql<number>`count(*)` }).from(contacts).where(eq(contacts.userId, userId)),

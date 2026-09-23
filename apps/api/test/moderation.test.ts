@@ -212,6 +212,69 @@ describe('POST /reports', () => {
   });
 });
 
+describe('POST /reports for a Connect form message', () => {
+  const connectMessage = (ownerId: string) =>
+    addContact(ownerId, {
+      name: 'Pushy Sender',
+      email: 'pushy@example.org',
+      notes: 'Reply or else.\n\nContact: booth 9',
+      source: 'web_connect',
+    });
+
+  it('lets the owner report it, keeping a copy of what the sender wrote', async () => {
+    const owner = await user('rep-msg-owner@example.com', 'Message Owner');
+    const contactId = await connectMessage(owner.userId);
+
+    const res = await report(
+      { contactId, reason: 'harassment', details: 'Third one today' },
+      { token: owner.token },
+    );
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const [row, ...rest] = await db.select().from(reports).where(eq(reports.contactId, contactId));
+    expect(rest).toHaveLength(0);
+    expect(row).toMatchObject({ reporterId: owner.userId, targetUserId: null, reason: 'harassment', status: 'open' });
+    expect(row!.details).toContain('Name: Pushy Sender');
+    expect(row!.details).toContain('Email: pushy@example.org');
+    expect(row!.details).toContain('Notes: Reply or else.');
+    expect(row!.details).toContain('From the reporter: Third one today');
+
+    const mail = lastEmailTo(env.REPORTS_NOTIFY_EMAIL)!;
+    expect(mail.subject).toBe('Chatsoon report: harassment (Connect form message)');
+    expect(mail.text).toContain(`web_connect contact ${contactId} of user ${owner.userId}`);
+    expect(mail.text).toContain(`Reporter: ${owner.userId}`);
+    // What the sender wrote comes after the trusted fields.
+    expect(mail.text.indexOf('Pushy Sender')).toBeGreaterThan(mail.text.indexOf(`Reporter: ${owner.userId}`));
+
+    // The copy outlives the contact.
+    expect((await call(`/contacts/${contactId}`, { method: 'DELETE', token: owner.token })).status).toBe(204);
+    expect((await db.select().from(reports).where(eq(reports.id, row!.id)))[0]?.details).toContain('Pushy Sender');
+  });
+
+  it('needs a session, and only takes my own Connect form messages', async () => {
+    const owner = await user('rep-msg-mine@example.com', 'Mine Owner');
+    const other = await user('rep-msg-other@example.com', 'Other Owner');
+    const contactId = await connectMessage(owner.userId);
+    const manual = await addContact(owner.userId, { name: 'Typed In', source: 'manual' });
+
+    const anonymous = await report({ contactId, reason: 'spam' });
+    expect(anonymous.status).toBe(401);
+    for (const [id, token] of [
+      [contactId, other.token],
+      [manual, owner.token],
+      [crypto.randomUUID(), owner.token],
+    ] as const) {
+      const res = await report({ contactId: id, reason: 'spam' }, { token });
+      expect(res.status).toBe(404);
+      expect(await errorCode(res)).toBe('not_found');
+    }
+    const invalid = await report({ contactId, reason: 'not-a-reason' }, { token: owner.token });
+    expect(invalid.status).toBe(400);
+    expect(await db.select().from(reports).where(eq(reports.contactId, contactId))).toHaveLength(0);
+  });
+});
+
 describe('POST /blocks', () => {
   it('requires a session', async () => {
     const target = await user('blk-auth@example.com', 'Auth Target');
@@ -288,7 +351,7 @@ describe('POST /blocks', () => {
     expect(await db.select().from(contactTags).where(eq(contactTags.contactId, aOtherTagged))).toHaveLength(1);
 
     // B keeps a plain card for A, but it is no longer a Chatsoon connection.
-    expect(await byId(bCardForA)).toMatchObject({ name: 'Blocker A', linkedUserId: null });
+    expect(await byId(bCardForA)).toMatchObject({ name: 'Blocker A', linkedUserId: null, unlinkedUserId: a.userId });
     expect(await byId(bCardForC)).toMatchObject({ linkedUserId: c.userId });
   });
 

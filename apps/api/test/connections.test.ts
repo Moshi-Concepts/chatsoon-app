@@ -302,28 +302,43 @@ describe('POST /connections/scan', () => {
     expect(await connectionBetween(pia.userId, quin.userId)).toHaveLength(0);
   });
 
-  it('connects again after an unblock', async () => {
+  it('connects again after an unblock, relinking the card the blocked person kept', async () => {
     const tia = await person('scan-tia@example.com', 'Tia Tran');
     const uri = await person('scan-uri@example.com', 'Uri Upton');
     await scanOk(tia.token, uri.slug);
+    // Uri makes the card of Tia his own.
+    const [uriCard] = await contactsOf(uri.userId);
+    const edited = await call(`/contacts/${uriCard!.id}`, {
+      method: 'PUT',
+      token: uri.token,
+      json: { notes: 'Met at the booth' },
+    });
+    expect(edited.status).toBe(200);
 
-    // What POST /blocks leaves behind: a block row, a blocked connection, and no linked card for the blocker.
-    await block(tia.userId, uri.userId);
-    await env.DB.prepare("update connections set status = 'blocked' where user_a in (?1, ?2) and user_b in (?1, ?2)")
-      .bind(tia.userId, uri.userId)
-      .run();
-    await env.DB.prepare('delete from contacts where user_id = ? and linked_user_id = ?')
-      .bind(tia.userId, uri.userId)
-      .run();
+    const blocked = await call('/blocks', { method: 'POST', token: tia.token, json: { targetUserId: uri.userId } });
+    expect(blocked.status).toBe(201);
+    expect(await contactsOf(tia.userId)).toHaveLength(0);
+    expect(await contactsOf(uri.userId)).toMatchObject([{ id: uriCard!.id, linked_user_id: null }]);
     expect((await scan(uri.token, { slug: tia.slug })).status).toBe(404);
 
-    await env.DB.prepare('delete from blocks where blocker_id = ? and blocked_id = ?').bind(tia.userId, uri.userId).run();
+    expect((await call(`/blocks/${uri.userId}`, { method: 'DELETE', token: tia.token })).status).toBe(204);
     const again = await scanOk(tia.token, uri.slug);
     expect(again.alreadyConnected).toBe(false);
     expect(again.contact.linkedUserId).toBe(uri.userId);
     const [row, ...rest] = await connectionBetween(tia.userId, uri.userId);
     expect(rest).toHaveLength(0);
     expect(row!.status).toBe('accepted');
+
+    // Uri still has one card of Tia: the same one, linked again, with his notes.
+    expect(await contactsOf(uri.userId)).toMatchObject([
+      { id: uriCard!.id, linked_user_id: tia.userId, notes: 'Met at the booth' },
+    ]);
+    expect(await contactsOf(tia.userId)).toHaveLength(1);
+
+    // Scanning from his side after that changes nothing.
+    await scanOk(uri.token, tia.slug);
+    expect(await contactsOf(uri.userId)).toHaveLength(1);
+    expect(await contactsOf(tia.userId)).toHaveLength(1);
   });
 
   it('matches the slug case-insensitively', async () => {

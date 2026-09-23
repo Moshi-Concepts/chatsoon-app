@@ -59,6 +59,7 @@ export async function deleteUserData(env: Env, db: DB, userId: string, email: st
   await db.batch([
     // Other people keep the card they saved for me, but it is no longer a Chatsoon connection.
     db.update(contacts).set({ linkedUserId: null }).where(eq(contacts.linkedUserId, userId)),
+    db.update(contacts).set({ unlinkedUserId: null }).where(eq(contacts.unlinkedUserId, userId)),
     db.update(contacts).set({ eventId: null }).where(inArray(contacts.eventId, myEventIds())),
     db.update(connections).set({ eventId: null }).where(inArray(connections.eventId, myEventIds())),
     db

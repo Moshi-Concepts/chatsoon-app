@@ -133,7 +133,7 @@ describe('PUT /me/profile', () => {
       links: { x: '@peterbui', telegram: 'peterbui', linkedin: '', website: 'https://chatsoon.app' },
     });
     expect(profile.userId).toBe(userId);
-    expect(profile.slug).toMatch(/^peter-bui-[0-9a-f]{4}$/);
+    expect(profile.slug).toMatch(/^peter-bui-[0-9a-f]{8}$/);
     expect(profile.displayName).toBe('Péter Bùi');
     expect(profile.headline).toBe('Building Chatsoon');
     expect(profile.company).toBe('Moshi Concepts');
@@ -163,7 +163,7 @@ describe('PUT /me/profile', () => {
 
   it('keeps the slug when the name changes', async () => {
     const { token, userId, slug } = await signUpWithProfile('rename@example.com', 'Riley Reed');
-    expect(slug).toMatch(/^riley-reed-[0-9a-f]{4}$/);
+    expect(slug).toMatch(/^riley-reed-[0-9a-f]{8}$/);
 
     const renamed = await saveProfile(token, { displayName: 'Riley Reed-Smith' });
     expect(renamed.slug).toBe(slug);
