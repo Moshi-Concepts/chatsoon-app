@@ -12,7 +12,14 @@ export async function secureGet(key: string): Promise<string | null> {
       return null;
     }
   }
-  return SecureStore.getItemAsync(key);
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    // The Keystore couldn't decrypt the entry (seen after some Android OEM updates and restores).
+    // It would fail the same way on every launch, so drop it and let the user sign in again.
+    await SecureStore.deleteItemAsync(key).catch(() => undefined);
+    return null;
+  }
 }
 
 export async function secureSet(key: string, value: string): Promise<void> {
@@ -24,7 +31,11 @@ export async function secureSet(key: string, value: string): Promise<void> {
     }
     return;
   }
-  await SecureStore.setItemAsync(key, value);
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch {
+    // Keychain / Keystore unavailable: like blocked storage on web, the session lasts until the app closes.
+  }
 }
 
 export async function secureDelete(key: string): Promise<void> {
@@ -36,7 +47,11 @@ export async function secureDelete(key: string): Promise<void> {
     }
     return;
   }
-  await SecureStore.deleteItemAsync(key);
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    // Best effort: signing out must always finish.
+  }
 }
 
 /** Non-secret JSON storage (outbox, UI prefs). */

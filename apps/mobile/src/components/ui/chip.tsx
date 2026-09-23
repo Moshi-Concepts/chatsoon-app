@@ -22,6 +22,8 @@ export function Chip({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
+      // 36 + 4 + 4 = a 44pt target; with the usual 8pt gaps, neighbours' slop touches but never overlaps.
+      hitSlop={4}
       accessibilityRole={onPress ? 'button' : 'text'}
       accessibilityState={{ selected: !!selected }}
       style={({ pressed }) => [
@@ -46,7 +48,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.one,
     paddingHorizontal: Spacing.three,
-    height: 32,
+    height: 36,
     borderRadius: Radius.pill,
     borderWidth: 1,
   },

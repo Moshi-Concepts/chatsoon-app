@@ -22,6 +22,7 @@ import type {
   UploadResponse,
 } from '@chatsoon/shared';
 import { API_ORIGIN } from '@chatsoon/shared';
+import { File as FsFile } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || API_ORIGIN).replace(/\/+$/, '');
@@ -50,6 +51,9 @@ let onUnauthorized: (() => void) | null = null;
 export function setAuthToken(token: string | null) {
   authToken = token;
 }
+export function getAuthToken(): string | null {
+  return authToken;
+}
 export function setUnauthorizedHandler(handler: (() => void) | null) {
   onUnauthorized = handler;
 }
@@ -63,7 +67,40 @@ type RequestOpts = {
   asResponse?: boolean;
   /** Do not treat 401 as "session expired" (auth endpoints). */
   skipAuthHandler?: boolean;
+  /** Give up after this long (default DEFAULT_TIMEOUT_MS). */
+  timeoutMs?: number;
 };
+
+/**
+ * Native fetch has no timeout of its own (OkHttp and NSURLSession are set to wait forever), so a
+ * dead venue connection would leave a request, and the outbox behind it, hanging until a restart.
+ */
+const DEFAULT_TIMEOUT_MS = 30_000;
+/** Photo uploads on a weak signal, and card extraction (the server can take about 51 s). */
+const SLOW_TIMEOUT_MS = 120_000;
+
+const NETWORK_MESSAGE = 'No connection. Check your internet and try again.';
+
+/**
+ * True when fetch failed to reach the server. Anything else is a bug on this side (e.g. a body
+ * fetch can't encode) and must not be mistaken for being offline, which would park the outbox.
+ */
+function isTransportError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.name === 'AbortError') return true;
+  // expo/fetch wraps every native failure as "fetch failed: ..."; RN's own fetch (if ever enabled
+  // with EXPO_PUBLIC_USE_RN_FETCH) throws "Network request failed".
+  if (Platform.OS !== 'web') return err.message.startsWith('fetch failed') || err.message === 'Network request failed';
+  // Browsers throw a TypeError ("Failed to fetch", "Load failed", "NetworkError when attempting...").
+  return err instanceof TypeError;
+}
+
+/** Friendly text for an error response that isn't JSON (e.g. a Cloudflare error page). */
+function fallbackMessage(status: number): string {
+  if (status >= 500) return 'Something went wrong on our side. Please try again.';
+  if (status === 429) return 'Too many requests. Please wait a minute and try again.';
+  return 'Something went wrong. Please try again.';
+}
 
 async function request<T>(method: string, path: string, opts: RequestOpts = {}): Promise<T> {
   const url = new URL(API_URL + path);
@@ -77,38 +114,55 @@ async function request<T>(method: string, path: string, opts: RequestOpts = {}):
     body = JSON.stringify(opts.body);
   }
 
-  let res: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const timedOut = () =>
+    new ApiError(0, 'timeout', 'The connection is too slow right now. Check your internet and try again.');
   try {
-    // Bearer only: never send or store cookies, so the web app is not exposed to CSRF.
-    res = await fetch(url.toString(), { method, headers, body, credentials: 'omit' });
-  } catch {
-    throw new ApiError(0, 'network', 'No connection. Check your internet and try again.');
-  }
-
-  if (!res.ok) {
-    let code = 'internal';
-    let message = `Request failed (${res.status})`;
+    let res: Response;
     try {
-      const data = (await res.json()) as Partial<ApiErrorBody> & { message?: string; code?: string };
-      if (data.error) {
-        code = data.error.code;
-        message = data.error.message;
-      } else if (data.message) {
-        // Better Auth error shape
-        code = data.code ?? code;
-        message = data.message;
-      }
-    } catch {
-      // not JSON
+      // Bearer only: never send or store cookies, so the web app is not exposed to CSRF.
+      res = await fetch(url.toString(), { method, headers, body, credentials: 'omit', signal: controller.signal });
+    } catch (err) {
+      if (controller.signal.aborted) throw timedOut();
+      if (isTransportError(err)) throw new ApiError(0, 'network', NETWORK_MESSAGE);
+      throw err;
     }
-    if (res.status === 401 && !opts.skipAuthHandler && authToken) onUnauthorized?.();
-    throw new ApiError(res.status, code, message);
-  }
 
-  if (opts.asResponse) return res as unknown as T;
-  if (res.status === 204) return undefined as T;
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+    if (!res.ok) {
+      let code = 'internal';
+      let message = fallbackMessage(res.status);
+      try {
+        const data = (await res.json()) as Partial<ApiErrorBody> & { message?: string; code?: string };
+        if (data.error) {
+          code = data.error.code;
+          message = data.error.message;
+        } else if (data.message) {
+          // Better Auth error shape
+          code = data.code ?? code;
+          message = data.message;
+        }
+      } catch {
+        // not JSON
+      }
+      if (res.status === 401 && !opts.skipAuthHandler && authToken) onUnauthorized?.();
+      throw new ApiError(res.status, code, message);
+    }
+
+    if (opts.asResponse) return res as unknown as T;
+    if (res.status === 204) return undefined as T;
+    let text: string;
+    try {
+      text = await res.text();
+    } catch {
+      throw controller.signal.aborted ? timedOut() : new ApiError(0, 'network', NETWORK_MESSAGE);
+    }
+    // On Android an abort mid-body can still resolve text() with part of the body.
+    if (controller.signal.aborted) throw timedOut();
+    return (text ? JSON.parse(text) : undefined) as T;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export type UploadSource = {
@@ -126,10 +180,14 @@ async function upload(file: UploadSource, purpose: UploadPurpose): Promise<Uploa
     const blob = await (await fetch(file.uri)).blob();
     form.append('file', new Blob([blob], { type }), name);
   } else {
-    // React Native's FormData accepts { uri, name, type } for files.
-    form.append('file', { uri: file.uri, name, type } as unknown as Blob);
+    // Since SDK 57 the native global fetch is expo/fetch, whose multipart encoder rejects React
+    // Native's { uri, name, type } parts ("Unsupported FormDataPart implementation"). An
+    // expo-file-system File implements Blob (bytes(), name, type), so it is encoded as a file part
+    // named after the file. Only file:// URIs get here (persisted card photos, resized avatars).
+    // The server sniffs the image type from the bytes.
+    form.append('file', new FsFile(file.uri) as unknown as Blob, name);
   }
-  return request<UploadResponse>('POST', '/files', { raw: form, query: { purpose } });
+  return request<UploadResponse>('POST', '/files', { raw: form, query: { purpose }, timeoutMs: SLOW_TIMEOUT_MS });
 }
 
 export const api = {
@@ -156,7 +214,8 @@ export const api = {
   me: {
     get: () => request<Me>('GET', '/me'),
     updateProfile: (input: ProfileInput) => request<MyProfile>('PUT', '/me/profile', { body: input }),
-    deleteAccount: () => request<void>('DELETE', '/me'),
+    // Deleting every file and row can take a while; a client timeout must not cut it short.
+    deleteAccount: () => request<void>('DELETE', '/me', { timeoutMs: SLOW_TIMEOUT_MS }),
     /** CSV text of all contacts. */
     exportCsv: async (): Promise<string> => {
       const res = await request<Response>('GET', '/me/export.csv', { asResponse: true });
@@ -201,7 +260,10 @@ export const api = {
 
   extract: {
     card: (contactId: string, imageKey: string) =>
-      request<ExtractCardResponse>('POST', '/extract/card', { body: { contactId, imageKey } }),
+      request<ExtractCardResponse>('POST', '/extract/card', {
+        body: { contactId, imageKey },
+        timeoutMs: SLOW_TIMEOUT_MS,
+      }),
   },
 
   moderation: {

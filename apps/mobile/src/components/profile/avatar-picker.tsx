@@ -6,7 +6,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { showError } from '@/lib/dialogs';
-import { compressImage, pickPhoto, takePhoto, type LocalImage } from '@/lib/image';
+import { compressImage, pickPhoto, type LocalImage } from '@/lib/image';
 
 /** The profile photo: the R2 key to save and a URL to show. */
 export type AvatarValue = { key: string | null; url: string | null };
@@ -26,8 +26,10 @@ export type AvatarPickerProps = {
 };
 
 /**
- * Profile photo with take / choose / remove actions. A new photo is resized and uploaded straight
- * away (POST /files?purpose=avatar); the form saves the returned key with the profile.
+ * Profile photo with choose / remove actions. Only the system photo picker (no permission needed):
+ * the camera's purpose string covers QR codes and business cards, not profile photos. A new photo
+ * is resized and uploaded straight away (POST /files?purpose=avatar); the form saves the returned
+ * key with the profile.
  */
 export function AvatarPicker({
   name,
@@ -67,10 +69,6 @@ export function AvatarPicker({
     if (busy) return;
     void pickPhoto({ square: true }).then(upload, (err) => showError(err, "Couldn't open your photos"));
   };
-  const take = () => {
-    if (busy) return;
-    void takePhoto({ square: true }).then(upload, (err) => showError(err, "Couldn't open the camera"));
-  };
   const remove = () => {
     setPreview(null);
     onChange({ key: null, url: null });
@@ -96,43 +94,20 @@ export function AvatarPicker({
           </View>
         ) : null}
         <View style={[styles.badge, { backgroundColor: theme.primary, borderColor: theme.background }]}>
-          <Icon name="camera" size={16} color="onPrimary" />
+          <Icon name="pencil" size={14} color="onPrimary" />
         </View>
       </Pressable>
 
       <View style={styles.actions}>
-        {isWeb ? (
-          <Button
-            title={hasPhoto ? 'Upload new photo' : 'Upload photo'}
-            icon="image-outline"
-            variant="secondary"
-            size="sm"
-            fullWidth={false}
-            onPress={choose}
-            disabled={busy}
-          />
-        ) : (
-          <>
-            <Button
-              title="Take photo"
-              icon="camera-outline"
-              variant="secondary"
-              size="sm"
-              fullWidth={false}
-              onPress={take}
-              disabled={busy}
-            />
-            <Button
-              title="Choose photo"
-              icon="image-outline"
-              variant="secondary"
-              size="sm"
-              fullWidth={false}
-              onPress={choose}
-              disabled={busy}
-            />
-          </>
-        )}
+        <Button
+          title={isWeb ? (hasPhoto ? 'Upload new photo' : 'Upload photo') : hasPhoto ? 'Change photo' : 'Choose photo'}
+          icon="image-outline"
+          variant="secondary"
+          size="sm"
+          fullWidth={false}
+          onPress={choose}
+          disabled={busy}
+        />
       </View>
       {hasPhoto ? (
         <Button
@@ -164,5 +139,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Spacing.two },
-  remove: { alignSelf: 'center', marginTop: -Spacing.two },
+  // Leaves 8pt to the button above, so their 4pt hit slops don't overlap.
+  remove: { alignSelf: 'center', marginTop: -Spacing.one },
 });

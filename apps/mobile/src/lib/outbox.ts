@@ -88,6 +88,8 @@ let queryClient: QueryClient | null = null;
 const discarded = new Set<string>();
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryAt = 0;
+/** Network failures in a row: the backoff for retrying while the OS still reports a connection. */
+let networkFailures = 0;
 
 function emit() {
   for (const listener of listeners) listener();
@@ -238,10 +240,10 @@ async function complete(id: string, contact: Contact | null) {
 async function createContact(item: ContactOutboxItem): Promise<Contact | null> {
   const input: ContactCreateInput = { ...item.draft, cardImageKey: item.imageKey ?? item.draft.cardImageKey ?? null };
   try {
+    // A retry with the same id returns the existing contact (200). A 409 means another account owns
+    // the id: it falls through to onSendError, which marks the item failed and keeps the draft.
     return await api.contacts.create(input);
   } catch (err) {
-    // The id is already taken: the contact exists, so this step is done.
-    if (err instanceof ApiError && err.status === 409) return null;
     if (input.eventId && isUnknownEventError(err)) {
       // Keep the contact, drop the event it can no longer be tagged with.
       forgetEvent(input.eventId);
@@ -350,6 +352,11 @@ function onSendError(id: string, err: unknown): Outcome {
   }
   if (isNetworkError(err)) {
     patch(id, { status: 'queued', waiting: 'offline', error: undefined });
+    // The OS may still report a connection (weak venue signal, captive portal, a timeout), and then
+    // no network event comes when requests start working again: try again with backoff. If the
+    // device really is offline, runFlush returns without sending and the network listener takes over.
+    networkFailures += 1;
+    scheduleFlush(Date.now() + retryDelay(networkFailures));
     return 'offline';
   }
   if (err instanceof ApiError && err.status === 401) {
@@ -379,6 +386,7 @@ async function send(item: OutboxItem): Promise<Outcome> {
   try {
     if (item.kind === 'contact') await sendContact(item.id);
     else await sendConnect(item.id);
+    networkFailures = 0;
     return 'done';
   } catch (err) {
     return onSendError(item.id, err);
@@ -451,13 +459,33 @@ export async function enqueueContact(
     photo,
     stage: photo ? 'upload' : 'create',
   };
+  const previous = getItem(item.id);
   items = [...items.filter((i) => i.id !== item.id), item];
   emit();
   try {
     await persist();
   } catch (err) {
-    // Storage full or unavailable: it still sends from memory this session.
+    // Storage full (on web each queued photo is kept inline in localStorage) or unavailable. Don't
+    // keep an item that would vanish on reload: take it back out and tell the user, so what they
+    // see always matches what is saved.
     console.warn('Could not save the outbox', err);
+    const current = getContactItem(item.id);
+    if (current && (current.status === 'sending' || current.imageKey || current.created)) {
+      // A flush already started sending it while the write failed: let it finish from memory.
+      void flushOutbox();
+      return;
+    }
+    items = items.filter((i) => i.id !== item.id);
+    if (previous) items = [...items, previous];
+    emit();
+    const previousPhoto = previous?.kind === 'contact' ? previous.photo?.uri : undefined;
+    if (photo && photo.uri !== previousPhoto) void deleteLocalImage(photo.uri);
+    void flushOutbox();
+    throw new Error(
+      photo
+        ? "There's no room to keep another card on this device. Connect to send the cards waiting to sync, then try again."
+        : "Couldn't save this contact on this device. Try again.",
+    );
   }
   void flushOutbox();
 }
@@ -557,6 +585,7 @@ export async function clearOutbox(): Promise<void> {
   discarded.clear();
   if (retryTimer) clearTimeout(retryTimer);
   retryTimer = null;
+  networkFailures = 0;
   emit();
   writeChain = writeChain.then(() => removeKey(STORAGE_KEY)).catch(() => {});
   await writeChain;
@@ -597,7 +626,9 @@ export function OutboxSync(): null {
     queryClient = qc;
     void flushOutbox();
     const network = Network.addNetworkStateListener((state) => {
-      if (state.isConnected !== false) void flushOutbox();
+      if (state.isConnected === false) return;
+      networkFailures = 0;
+      void flushOutbox();
     });
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active') void flushOutbox();

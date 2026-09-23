@@ -1,12 +1,15 @@
 import type { Contact, ContactDraft } from '@chatsoon/shared';
 import { CARD_PLACEHOLDER_NAME, isEmail, normalizeHandle } from '@chatsoon/shared';
 import * as Haptics from 'expo-haptics';
+import { useNavigation } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Keyboard, Platform, StyleSheet, View, type TextInput } from 'react-native';
 
 import { Button, Icon, Screen, Section, Text, TextField } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { confirm } from '@/lib/dialogs';
 import { useEvents, useTags } from '@/lib/queries';
 
 import { EventPicker } from './event-picker';
@@ -176,6 +179,7 @@ export function ContactForm({
   autoFocusName: autoFocusNameProp,
 }: ContactFormProps) {
   const theme = useTheme();
+  const navigation = useNavigation();
   const tags = useTags();
   const events = useEvents();
 
@@ -198,6 +202,26 @@ export function ContactForm({
     for (const key of KEYS) if (!touched.has(key)) (merged as Record<Key, unknown>)[key] = initial[key];
     setValues(merged);
   }
+
+  // Untouched fields always follow the baseline, so only real edits count as unsaved changes.
+  const dirty = !sameValues(values, baseline);
+  usePreventRemove(dirty, ({ data }) => {
+    // A successful save navigates from inside onSubmit, while submittingRef is set: let it through.
+    // (Checked here, not in the hook's first argument, which only updates on the next render.)
+    if (submittingRef.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    void confirm({
+      title: 'Discard changes?',
+      message: "Your changes to this contact haven't been saved.",
+      confirmText: 'Discard',
+      cancelText: 'Keep editing',
+      destructive: true,
+    }).then((ok) => {
+      if (ok) navigation.dispatch(data.action);
+    });
+  });
 
   const refs = {
     name: useRef<TextInput>(null),

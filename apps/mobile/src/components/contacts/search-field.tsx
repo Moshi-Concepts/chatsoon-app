@@ -35,7 +35,8 @@ export function SearchField({
       {value ? (
         <Pressable
           onPress={() => onChangeText('')}
-          hitSlop={10}
+          // 18 + 13 + 13 = a 44pt target.
+          hitSlop={13}
           accessibilityRole="button"
           accessibilityLabel="Clear search">
           <Icon name="close-circle" size={18} color="textTertiary" />

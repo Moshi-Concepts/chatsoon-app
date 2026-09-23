@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
-import { api, setAuthToken, setUnauthorizedHandler } from './api';
+import { api, getAuthToken, setAuthToken, setUnauthorizedHandler } from './api';
 import { deleteExportedFiles } from './export';
 import { clearOutbox } from './outbox';
 import { getJson, secureDelete, secureGet, secureSet, setJson } from './storage';
@@ -33,8 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** Drops the token and cached data. Offline captures stay unless `wipe` is set. */
   const endSession = useCallback(
     async (wipe: boolean) => {
+      const token = getAuthToken();
       setAuthToken(null);
-      await secureDelete(TOKEN_KEY);
+      // After a 401, only drop the stored token if it is still ours: on web another tab may have
+      // signed in since, and its session must survive this tab's stale one.
+      if (wipe || (await secureGet(TOKEN_KEY)) === token) await secureDelete(TOKEN_KEY);
       if (wipe) {
         await clearOutbox();
         await setJson(OUTBOX_OWNER_KEY, null);
@@ -50,14 +54,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    secureGet(TOKEN_KEY).then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setStatus(token ? 'signedIn' : 'signedOut');
-    });
+    secureGet(TOKEN_KEY)
+      .then((token) => {
+        if (cancelled) return;
+        setAuthToken(token);
+        setStatus(token ? 'signedIn' : 'signedOut');
+      })
+      .catch(() => {
+        // Never leave the splash screen up: without a readable token, start signed out.
+        if (cancelled) return;
+        setAuthToken(null);
+        setStatus('signedOut');
+      });
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    // Web: tabs share localStorage but each keeps its own session and outbox in memory. When another
+    // tab signs in or out, reload so this tab can't act on (or send captures under) a stale session.
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === null || e.key === TOKEN_KEY || e.key === OUTBOX_OWNER_KEY) window.location.reload();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   useEffect(() => {

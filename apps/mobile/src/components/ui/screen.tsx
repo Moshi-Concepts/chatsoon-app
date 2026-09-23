@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { HeaderHeightContext } from 'expo-router/react-navigation';
+import { useContext, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -43,12 +44,20 @@ export function Screen({
   surface,
 }: ScreenProps) {
   const theme = useTheme();
+  // Keyboard coordinates are window-relative, but KeyboardAvoidingView measures itself relative to
+  // its parent, which sits below the navigator header. Top safe-area padding is already in its
+  // frame, so only the header needs adding. Context (not useHeaderHeight) so it can't throw outside a navigator.
+  const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const bg = surface ? theme.surface : theme.background;
   const inner = [styles.column, padded && styles.padded, contentStyle];
 
   return (
     <SafeAreaView edges={edges} style={[styles.flex, { backgroundColor: bg }]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        // Android too: edge-to-edge (SDK 57) means adjustResize no longer shrinks the window.
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
+        keyboardVerticalOffset={headerHeight}>
         {scroll ? (
           <ScrollView
             style={styles.flex}

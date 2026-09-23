@@ -46,6 +46,8 @@ export function Button({
       accessibilityRole="button"
       accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
       disabled={isDisabled}
+      // Small buttons are 36pt tall: reach a 44pt target (callers can still override).
+      hitSlop={size === 'sm' ? 4 : undefined}
       style={({ pressed }) => [
         styles.base,
         {

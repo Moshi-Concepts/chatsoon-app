@@ -30,6 +30,9 @@ export function useUpdateProfile() {
         me ? { ...me, profile } : me,
       );
       void qc.invalidateQueries({ queryKey: qk.me });
+      // Your own public page (/id/<slug>) may be open under the editor: refetch it rather than
+      // writing MyProfile into it (the public shape has fewer fields).
+      void qc.invalidateQueries({ queryKey: qk.profile(profile.slug) });
     },
   });
 }
