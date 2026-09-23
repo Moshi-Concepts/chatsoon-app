@@ -17,6 +17,10 @@ reminders and similar come later. Do not add them.
 - Mobile: colours only via `useTheme()`, never hex literals in screens. Use `showAlert` / `confirm` from `src/lib/dialogs.ts` (Alert.alert does nothing on web).
 - Mobile: data access through `src/lib/api.ts` and hooks in `src/lib/queries.ts`.
 - Expo APIs change every SDK. Check the types in `node_modules` or https://docs.expo.dev/versions/v57.0.0/ before using one. Install packages with `npx expo install` from `apps/mobile`.
+- Mobile env: local dev values (localhost API, Turnstile test key) go only in `apps/mobile/.env.development`, which
+  `expo start` reads. Production web values live in `apps/mobile/.env.production`. Never create `apps/mobile/.env` or
+  `.env.local`: `expo export` reads both, and dev values would ship to chatsoon.app.
+- Web deploys must be Production deployments: `wrangler pages deploy ... --branch main` (`pnpm deploy:web` does this).
 - Camera permission text is exactly: "Used to scan QR codes and photograph business cards". Never request photo library permission.
 
 ## Commands

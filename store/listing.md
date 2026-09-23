@@ -43,7 +43,7 @@ Meet people. Follow up. Chatsoon.
 
 Replace `[FIXED CODE]` with the `REVIEWER_CODE` secret you set on the Worker. Attach `store/reviewer-demo-qr.png`.
 
-> Sign in with review@chatsoon.app: tap "Send code", then enter code [FIXED CODE]. The account has sample contacts. To test the connect flow, scan the attached QR image of a second test profile with the in-app scanner (Add tab > Scan a QR code, or My QR tab > Scan someone), or open https://chatsoon.app/id/alex-rivera-demo in a browser and submit the Connect form. Card scanning: Add tab > Photograph a card or badge, then photograph any business card. Account deletion is in the Me tab > Delete account. Report and block are on every connected profile (open a contact connected via Chatsoon, or any public profile).
+> Sign in with review@chatsoon.app: tap "Send code", then enter code [FIXED CODE]. The account has sample contacts. To test the connect flow in the app, scan the attached QR image of a second test profile with the in-app scanner (Add tab > Scan a QR code, or My QR tab > Scan someone). To test the web Connect form that people without the app use, open Me tab > View my public page, fill in the Connect form on the page that opens and tap Send, then close the page and pull down to refresh Contacts: the new contact is there, and its details say "Connected on the web". (A form sent from someone else's page, such as https://chatsoon.app/id/alex-rivera-demo, goes to that person's contacts, as the page says.) Card scanning: Add tab > Photograph a card or badge, then photograph any business card. Account deletion is in the Me tab > Delete account. Deleting resets this review account: sign in again with the same email and code to get the sample data back. Report and block are on every connected profile (open a contact connected via Chatsoon, or any public profile).
 
 ## App Store Connect
 
@@ -51,36 +51,68 @@ Replace `[FIXED CODE]` with the `REVIEWER_CODE` secret you set on the Worker. At
 
 | Data type | Collected | Purpose |
 |---|---|---|
-| Contact Info > Name | Yes (profile display name) | App Functionality |
-| Contact Info > Email Address | Yes (sign-in) | App Functionality |
-| Contact Info > Phone Number | Only if the user adds it to a contact | App Functionality |
+| Contact Info > Name | Yes (profile display name, names of saved contacts) | App Functionality |
+| Contact Info > Email Address | Yes (sign-in, email addresses of saved contacts) | App Functionality |
+| Contact Info > Phone Number | Yes (phone numbers the user enters for saved contacts) | App Functionality |
+| Contact Info > Other User Contact Info | Yes (profile links: X, Telegram, LinkedIn, website, YouTube) | App Functionality |
+| Contacts > Contacts | Yes (saved contacts, connections, web Connect form submissions) | App Functionality |
 | User Content > Photos or Videos | Yes (profile photo, card photos) | App Functionality |
-| User Content > Other User Content | Yes (contacts, notes, tags, reports) | App Functionality |
+| User Content > Other User Content | Yes (profile headline, notes, tags, reports) | App Functionality |
 | Identifiers > User ID | Yes | App Functionality |
 
-Not collected: location, contacts (address book), browsing history, purchases, usage data, diagnostics, advertising data.
+Not collected: location, browsing history, purchases, usage data, diagnostics, advertising data. The device address
+book is never read (the app has no contacts permission), but the contact list users build in the app is declared
+above as Contacts.
 
 - Tracking: No.
 - Age rating questionnaire: no objectionable content categories. Answer "yes" to user-generated content (public
-  profiles, connect form) and note the report and block tools. Use whatever rating the questionnaire returns.
+  profiles, connect form) and note the report and block tools. After answering, choose **Override to Higher Age
+  Rating** and select 18+. The Terms and Privacy Policy set a minimum age of 18, and Apple requires the rating to meet
+  a minimum age set in the app's terms. This matches the Play target audience (18+). Set it before submitting:
+  treat it as fixed once App Review approves the app.
 - Export compliance: `ITSAppUsesNonExemptEncryption` is `false` in app.json (standard HTTPS only).
 - Sign in with Apple: not required (no third-party sign-in in 1.0).
-- Screenshots: iPhone 6.9" (1320x2868) and 6.5" (1284x2778), see `store/screenshots/`.
+- Screenshots: **not captured yet.** Capture 4-5 screens from the reviewer account (Contacts, a contact's details,
+  My QR, card review, Me) on an iPhone 6.9" simulator (iPhone 16 Pro Max class) running the EAS build, and save them
+  under `store/screenshots/ios/`. iPhone 6.9" (1320x2868) is required. 6.5" (1284x2778) is optional, because Apple
+  scales the 6.9" set down. iPad screenshots aren't needed (`supportsTablet` is false). App Store Connect won't let
+  the build be submitted without them.
 
 ## Google Play
 
 **Data safety form**
 
-- Data collected: Personal info (Name, Email address, Phone number*), Photos, Other user-generated content, App
-  activity: none, Device or other IDs: none (user ID is account data).
+Every type below is *Collected: Yes*, *Shared: No*, *Processed ephemerally: No*.
+
+| Data type | What it is | Required or optional | Purposes |
+|---|---|---|---|
+| Personal info > Name | Profile display name, names of saved contacts | Required | App functionality, Account management |
+| Personal info > Email address | Sign-in email, email addresses of saved contacts | Required | App functionality, Account management |
+| Personal info > User IDs | Account ID | Required | App functionality, Account management |
+| Personal info > Phone number | Phone numbers the user enters for saved contacts | Optional | App functionality |
+| Personal info > Other info | Profile headline, company, role and links | Optional | App functionality |
+| Photos and videos > Photos | Profile photo, card and badge photos | Optional | App functionality |
+| Contacts > Contacts | Saved contacts, connections, web Connect form submissions | Optional | App functionality |
+| App activity > Other user-generated content | Notes, tags, reports | Optional | App functionality; Fraud prevention, security, and compliance |
+| App info and performance > Diagnostics | Google ML Kit (see below): device and app info, performance metrics, API configuration, error codes | Required | Analytics |
+| Device or other IDs | Google ML Kit (see below): per-installation identifier | Required | Analytics |
+
+The last two rows come from Google ML Kit barcode scanning, which expo-camera bundles into the Android build for the
+QR scanner (`com.google.mlkit:barcode-scanning`). ML Kit sends this data to Google over HTTPS and Google doesn't share
+it with third parties. Check https://developers.google.com/ml-kit/android-data-disclosure on the day you fill in the
+form, because Google updates that list. The iOS build doesn't include ML Kit.
+
 - All data is encrypted in transit: Yes.
-- Users can request deletion: Yes, in the app (Me > Delete account) and via hello@chatsoon.app.
+- Users can request deletion: Yes, in the app (Me > Delete account), on the web (sign in at https://chatsoon.app,
+  then Me > Delete account) and by email to hello@chatsoon.app. Delete account URL:
+  https://chatsoon.app/support#how-do-i-delete-my-account
 - Data shared with third parties: No (processors acting on our behalf, such as Cloudflare, Anthropic and Resend,
   aren't "sharing" under Play's definition).
-- Purpose for all: App functionality, Account management.
 
-\* Only when the user adds it to a contact.
-
+- Graphics (**not made yet**, and required before any track, closed testing included, can roll out): app icon
+  512x512 32-bit PNG (export from `apps/mobile/assets/images/icon.png`); feature graphic 1024x500, JPEG or 24-bit PNG
+  with no alpha (brand colour #5146E5); at least 2 phone screenshots, 9:16, each side 320-3840 px (for example
+  1080x1920), from an Android emulator running the EAS build. Save them under `store/screenshots/android/`.
 - Content rating: IARC questionnaire, and mark "users can interact / share content" (public profiles, connect form).
 - Target audience: 18+.
 - Ads: No.

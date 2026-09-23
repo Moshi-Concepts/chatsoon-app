@@ -38,26 +38,61 @@ Check it: `https://api.chatsoon.app/health` returns `{"ok":true}`.
 
 ## 2. Cloudflare Pages: web app and public pages (chatsoon.app)
 
+Do step 4 (Turnstile) first: the web build needs its site key.
+
 ```bash
 npx wrangler pages project create chatsoon-web --production-branch main
 ```
 
-Build with the production env and deploy:
+The web build takes its values from `apps/mobile/.env.production` (both are public, so the file can be committed).
+Create it if it isn't there:
+
+```
+EXPO_PUBLIC_API_URL=https://api.chatsoon.app
+EXPO_PUBLIC_TURNSTILE_SITE_KEY=<site key from step 4>
+```
+
+`expo export` also reads `apps/mobile/.env.local` and `apps/mobile/.env`. `.env.local` wins over `.env.production`,
+so never put dev values in it or in `.env`. Local dev values belong in `apps/mobile/.env.development`, which only
+`expo start` reads: if you have an old `apps/mobile/.env` with `localhost:8787`, rename it to `.env.development`.
+Variables set in the shell win over every file. The syntax depends on the shell: Git Bash
+`export EXPO_PUBLIC_API_URL=https://api.chatsoon.app`, PowerShell `$env:EXPO_PUBLIC_API_URL="https://api.chatsoon.app"`,
+cmd `set EXPO_PUBLIC_API_URL=https://api.chatsoon.app`. In Git Bash, `set X=Y` exports nothing.
+
+Build and deploy from the repo root:
+
+```bash
+pnpm deploy:web
+```
+
+This rebuilds `apps/mobile/dist` from scratch. Never deploy a `dist` you didn't just build: the one from local testing
+was built with dev values. The build stops if the bundle still contains a localhost or LAN API URL or a Turnstile test key. The deploy
+passes `--branch main`, so it is a Production deployment whichever branch you have checked out. Without `--branch`,
+wrangler uses the current git branch, and anything other than `main` becomes a Preview that chatsoon.app never
+serves. The same steps by hand:
 
 ```bash
 cd apps/mobile
-set EXPO_PUBLIC_API_URL=https://api.chatsoon.app
-set EXPO_PUBLIC_TURNSTILE_SITE_KEY=<site key from step 4>
 pnpm run export:web
-npx wrangler pages deploy dist --project-name chatsoon-web
+npx wrangler pages deploy dist --project-name chatsoon-web --branch main
 ```
 
-(PowerShell: `$env:EXPO_PUBLIC_API_URL="https://api.chatsoon.app"` etc.)
+Confirm that the wrangler output, or Pages > chatsoon-web > Deployments, lists the deployment under Production,
+not Preview.
 
-In the Cloudflare dashboard, Pages > chatsoon-web > Custom domains: add `chatsoon.app` (and `www.chatsoon.app`
-with a redirect to the apex if you like). Then check:
+In the Cloudflare dashboard, Pages > chatsoon-web > Custom domains: add `chatsoon.app` only. Don't add
+`www.chatsoon.app` there: Pages would serve the whole app on www, and the API only accepts
+`https://chatsoon.app` (CORS and sign-in both fail from www). To send www to the apex instead:
+1. DNS: add a proxied record for `www`, for example `AAAA www 100::` with Proxy status on.
+2. Rules > Redirect Rules > Create rule (or the "Redirect from WWW to root" template): when
+   `http.host eq "www.chatsoon.app"`, dynamic redirect to `concat("https://chatsoon.app", http.request.uri.path)`,
+   status 301, Preserve query string on.
+
+Then check:
 - https://chatsoon.app/privacy, /terms and /support load as static pages
-- https://chatsoon.app/id/alex-rivera-demo shows the demo profile and Connect form
+- https://chatsoon.app/id/alex-rivera-demo shows the demo profile and Connect form, and the Turnstile check
+  above the "Send to Alex" button doesn't say "Testing only"
+- https://www.chatsoon.app/id/alex-rivera-demo redirects (301) to https://chatsoon.app/id/alex-rivera-demo
 
 ## 3. Resend (sign-in emails from hello@chatsoon.app)
 
@@ -69,7 +104,7 @@ with a redirect to the apex if you like). Then check:
 ## 4. Turnstile (spam protection on the public Connect form)
 
 Cloudflare dashboard > Turnstile > Add widget, hostname `chatsoon.app`, mode Managed. The **site key** goes into
-`EXPO_PUBLIC_TURNSTILE_SITE_KEY` when building the web app (step 2). The **secret** goes into `TURNSTILE_SECRET`.
+`EXPO_PUBLIC_TURNSTILE_SITE_KEY` in `apps/mobile/.env.production` (step 2). The **secret** goes into `TURNSTILE_SECRET`.
 
 ## 5. Universal links / App Links
 
@@ -114,4 +149,4 @@ All copy, privacy answers and reviewer notes are in [store/listing.md](store/lis
   wipes everything").
 - On a fresh install: sign in as `review@chatsoon.app` with the reviewer code. The sample contacts are there.
 - Scan the demo profile QR (`store/reviewer-demo-qr.png`) from the in-app scanner and you're connected with Alex Rivera.
-- Settings > Delete account works, and signing in again as the reviewer recreates the sample data.
+- Me > Delete account works, and signing in again as the reviewer recreates the sample data.

@@ -10,7 +10,7 @@
     "test": "pnpm --filter @chatsoon/shared run test && pnpm --filter @chatsoon/api run test",
     "build:web": "pnpm --filter @chatsoon/mobile run export:web",
     "deploy:api": "pnpm --filter @chatsoon/api run deploy",
-    "deploy:web": "pnpm run build:web && wrangler pages deploy apps/mobile/dist --project-name chatsoon-web"
+    "deploy:web": "pnpm run build:web && wrangler pages deploy apps/mobile/dist --project-name chatsoon-web --branch main"
   },
   "devDependencies": {
     "typescript": "~6.0.3"
