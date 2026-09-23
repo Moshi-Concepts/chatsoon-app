@@ -132,8 +132,12 @@ Card reading calls Claude Haiku (roughly a third of a US cent per card). The Wor
 - `EXTRACT_DAILY_TOTAL` (default 1000): card reads across all accounts per UTC day.
 - `EXTRACT_ENABLED`: set to `"false"` and redeploy to switch card reading off completely.
 
-When a cap is hit the card is saved and the app asks the person to type the details. Also set a monthly spend
-limit on the Anthropic side (see the console steps in the README section "Anthropic key").
+When a cap is hit the card is saved and the app asks the person to type the details. Also cap it on the Anthropic side:
+
+1. console.anthropic.com > Settings > Workspaces: create a workspace `chatsoon` used only by this Worker.
+2. In that workspace set a monthly spend limit (for example US$20) and low rate limits.
+3. Create the API key inside that workspace and put it in `ANTHROPIC_API_KEY`. Delete any key made outside it.
+4. Settings > Limits: set an organisation-wide monthly spend limit and a usage notification email.
 
 ## 5. Universal links / App Links
 
