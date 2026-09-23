@@ -422,3 +422,45 @@ describe('POST /extract/card', () => {
     expect(anon.status).toBe(401);
   });
 });
+
+describe('card extraction spend caps', () => {
+  const saved: Record<string, string | undefined> = {};
+  const vars = ['EXTRACT_ENABLED', 'EXTRACT_DAILY_PER_USER', 'EXTRACT_DAILY_TOTAL'] as const;
+  beforeEach(() => {
+    for (const v of vars) saved[v] = env[v];
+  });
+  afterEach(() => {
+    for (const v of vars) env[v] = saved[v];
+  });
+
+  it('stops calling Claude once a user reaches the daily limit', async () => {
+    env.EXTRACT_DAILY_PER_USER = '1';
+    const requests = mockAnthropic(claudeReply({ ...EMPTY_CARD, name: 'First Card' }));
+    const first = await createContact(bob.userId);
+    expect((await extract(bob, first, await uploadCard(bob))).status).toBe(200);
+
+    const second = await createContact(bob.userId);
+    const res = await extract(bob, second, await uploadCard(bob));
+    expect(res.status).toBe(502);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('extraction_failed');
+    expect((await contactRow(second)).extractionStatus).toBe('failed');
+    expect(requests).toHaveLength(1);
+  });
+
+  it('stops calling Claude once the whole app reaches the daily limit', async () => {
+    env.EXTRACT_DAILY_TOTAL = '0';
+    const requests = mockAnthropic(claudeReply(EMPTY_CARD));
+    const id = await createContact(alice.userId);
+    expect((await extract(alice, id, await uploadCard(alice))).status).toBe(502);
+    expect(requests).toHaveLength(0);
+  });
+
+  it('never calls Claude when the kill switch is off', async () => {
+    env.EXTRACT_ENABLED = 'false';
+    const requests = mockAnthropic(claudeReply(EMPTY_CARD));
+    const id = await createContact(alice.userId);
+    expect((await extract(alice, id, await uploadCard(alice))).status).toBe(502);
+    expect((await contactRow(id)).extractionStatus).toBe('failed');
+    expect(requests).toHaveLength(0);
+  });
+});

@@ -109,9 +109,12 @@ Then check:
   above the "Send to Alex" button doesn't say "Testing only"
 - https://www.chatsoon.app/id/alex-rivera-demo redirects (301) to https://chatsoon.app/id/alex-rivera-demo
 
-## 3. Resend (sign-in emails from hello@chatsoon.app)
+## 3. Resend (sign-in emails from hello@updates.chatsoon.app)
 
-1. resend.com > Domains > Add `chatsoon.app`. Add the DNS records it shows in Cloudflare DNS. Resend's DKIM
+The sending domain is `updates.chatsoon.app` (`EMAIL_FROM` in `apps/api/wrangler.jsonc`); replies go to
+`hello@chatsoon.app`.
+
+1. resend.com > Domains > Add `updates.chatsoon.app`. Add the DNS records it shows in Cloudflare DNS. Resend's DKIM
    record lives alongside your existing SPF/DKIM/DMARC. If you already have an SPF record, merge Resend's include
    into it rather than adding a second SPF record.
 2. Create an API key with sending access, then `wrangler secret put RESEND_API_KEY`.
@@ -120,6 +123,17 @@ Then check:
 
 Cloudflare dashboard > Turnstile > Add widget, hostname `chatsoon.app`, mode Managed. The **site key** goes into
 `EXPO_PUBLIC_TURNSTILE_SITE_KEY` in `apps/mobile/.env.production` (step 2). The **secret** goes into `TURNSTILE_SECRET`.
+
+## 4b. Claude API spend controls
+
+Card reading calls Claude Haiku (roughly a third of a US cent per card). The Worker checks these before every call:
+
+- `EXTRACT_DAILY_PER_USER` (default 30): card reads per account per UTC day.
+- `EXTRACT_DAILY_TOTAL` (default 1000): card reads across all accounts per UTC day.
+- `EXTRACT_ENABLED`: set to `"false"` and redeploy to switch card reading off completely.
+
+When a cap is hit the card is saved and the app asks the person to type the details. Also set a monthly spend
+limit on the Anthropic side (see the console steps in the README section "Anthropic key").
 
 ## 5. Universal links / App Links
 

@@ -40,13 +40,17 @@
     // Extra CORS origins, comma separated (dev servers). Empty in production.
     "EXTRA_ORIGINS": "",
     "EMAIL_PROVIDER": "resend",
-    "EMAIL_FROM": "Chatsoon <hello@chatsoon.app>",
+    "EMAIL_FROM": "Chatsoon <hello@updates.chatsoon.app>",
     "REPORTS_NOTIFY_EMAIL": "hello@chatsoon.app",
     // "true" lets review@chatsoon.app sign in with REVIEWER_CODE (secret).
     "REVIEWER_ENABLED": "true",
     // Comma separated emails of removed users. They can't request or use a sign-in code.
     "BANNED_EMAILS": "",
-    "EXTRACT_MODEL": "claude-haiku-4-5"
+    "EXTRACT_MODEL": "claude-haiku-4-5",
+    // Spend caps for Claude card extraction. "false" is the kill switch.
+    "EXTRACT_ENABLED": "true",
+    "EXTRACT_DAILY_PER_USER": "30",
+    "EXTRACT_DAILY_TOTAL": "1000"
   }
   // Secrets (wrangler secret put <NAME>):
   //   BETTER_AUTH_SECRET  RESEND_API_KEY  ANTHROPIC_API_KEY

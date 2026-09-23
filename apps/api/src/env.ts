@@ -27,6 +27,12 @@ export interface Env {
   /** Comma separated emails of removed users. Empty or unset: nobody. */
   BANNED_EMAILS?: string;
   EXTRACT_MODEL: string;
+  /** "false" turns card extraction off (kill switch). */
+  EXTRACT_ENABLED?: string;
+  /** Card extractions per account per UTC day. */
+  EXTRACT_DAILY_PER_USER?: string;
+  /** Card extractions across all accounts per UTC day. */
+  EXTRACT_DAILY_TOTAL?: string;
 
   // Secrets
   BETTER_AUTH_SECRET: string;

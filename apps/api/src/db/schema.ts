@@ -225,6 +225,18 @@ export const blocks = sqliteTable(
   (t) => [primaryKey({ columns: [t.blockerId, t.blockedId] }), index('blocks_blocked_idx').on(t.blockedId)],
 );
 
+/** Daily counters for paid calls (card extraction), keyed like 'extract:user:<id>:2026-09-24'. */
+export const usageCounters = sqliteTable(
+  'usage_counters',
+  {
+    key: text('key').primaryKey(),
+    /** UTC date, YYYY-MM-DD, so old rows can be swept. */
+    day: text('day').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [index('usage_counters_day_idx').on(t.day)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type ProfileRow = typeof profiles.$inferSelect;
 export type ContactRow = typeof contacts.$inferSelect;

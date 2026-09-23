@@ -10,6 +10,7 @@ import { getContact } from '../lib/contacts';
 import { type DB, getDb } from '../lib/db';
 import { ApiError, badRequest, limit, notFound, parseJson } from '../lib/errors';
 import { requireAuth } from '../lib/middleware';
+import { reserveExtraction } from '../lib/usage';
 import { ownsKey, userPrefix } from '../lib/signing';
 
 /** Contact fields the extractor may fill, besides the name. */
@@ -55,6 +56,17 @@ extractRoutes.post('/extract/card', requireAuth, async (c) => {
   // Card photos only, so a contact can never point at the profile avatar.
   if (!isCardKey(userId, imageKey)) throw badRequest('Unknown image');
   await limit(c.env.EXTRACT_LIMITER, `extract:${userId}`);
+
+  // Daily spend caps, checked before anything is sent to Claude. The app shows the review form.
+  const budget = await reserveExtraction(c.env, userId);
+  if (!budget.ok) {
+    await db.update(contacts).set({ extractionStatus: 'failed', cardImageKey: imageKey, updatedAt: new Date() }).where(mine);
+    const message =
+      budget.reason === 'user_limit'
+        ? "You've read a lot of cards today. Fill in this one yourself, and card reading is back tomorrow."
+        : "Card reading is paused right now. Fill in the details yourself.";
+    throw new ApiError(502, 'extraction_failed', message);
+  }
 
   const object = await c.env.FILES.get(imageKey);
   if (!object) {
