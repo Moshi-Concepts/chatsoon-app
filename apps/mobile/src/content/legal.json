@@ -88,7 +88,7 @@
         "heading": "Retention and deletion",
         "bullets": [
           "We keep your information for as long as your account is open.",
-          "You can delete your account at any time in the app: open the Me tab and tap Delete account. This immediately and permanently deletes your account, profile, contacts, notes, tags, connections and the files you uploaded, including profile and card photos. Your public profile link stops working straight away.",
+          "You can delete your account at any time: open the Me tab in the app, or sign in at https://chatsoon.app and open the Me tab, then tap Delete account. You can also email hello@chatsoon.app from the address you sign in with and we will delete it within 30 days. This immediately and permanently deletes your account, profile, contacts, notes, tags, connections and the files you uploaded, including profile and card photos. Your public profile link stops working straight away.",
           "Our database provider keeps backups for disaster recovery. Deleted data rolls off these backups automatically, within 30 days.",
           "Reports you made, reports made about you and your blocks are deleted with your account. Copies of reports already sent to our moderation inbox may be kept until we finish reviewing them.",
           "Contacts that other people saved about you, for example from your public profile or a connection, belong to their accounts and are not removed when you delete yours. You can ask them to remove it, or email us.",
@@ -213,7 +213,7 @@
       {
         "heading": "Termination",
         "paragraphs": [
-          "You can stop using Chatsoon and delete your account at any time: open the Me tab in the app and tap Delete account.",
+          "You can stop using Chatsoon and delete your account at any time: open the Me tab in the app, or sign in at https://chatsoon.app and open the Me tab, then tap Delete account. You can also email hello@chatsoon.app and ask us to delete it.",
           "We may suspend or end your account, or remove your content, at any time if you break these Terms, if the law requires it, or if we need to protect our users or Chatsoon. The sections of these Terms that by their nature should continue after your account ends, including the disclaimers and limitation of liability, will continue to apply."
         ]
       },
@@ -306,7 +306,13 @@
       {
         "heading": "How do I delete my account?",
         "paragraphs": [
-          "Open the Me tab, tap Delete account and confirm. This permanently deletes your account, profile, contacts, notes, tags, connections and photos straight away, and it can't be undone. Your public profile link stops working immediately. If you want to keep your contacts, export them first."
+          "Chatsoon is published by Moshi Concepts Inc. You can delete your Chatsoon account in any of these ways, even if you no longer have the app installed:"
+        ],
+        "bullets": [
+          "In the app: open the Me tab, tap Delete account and confirm.",
+          "Without the app: sign in at https://chatsoon.app with your email address, open the Me tab, tap Delete account and confirm.",
+          "By email: email hello@chatsoon.app from the address you sign in with and ask us to delete your account. We will delete it within 30 days.",
+          "Deleting your account permanently deletes your account, profile, contacts, notes, tags, connections and photos, and it can't be undone. Your public profile link stops working immediately. Backups roll off within 30 days, technical logs are kept no more than 30 days, and copies of reports already sent to our moderation inbox may be kept until we finish reviewing them. Contacts other people saved about you stay in their accounts. If you want to keep your contacts, export them first."
         ]
       },
       {

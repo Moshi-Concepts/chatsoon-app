@@ -13,7 +13,7 @@ import { CaptureSheet, StatusPanel } from '@/components/capture/status-panel';
 import { Avatar, Button, Chip, Text, TextField } from '@/components/ui';
 import { Colors, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { isNetworkError } from '@/lib/api';
+import { ApiError, isNetworkError } from '@/lib/api';
 import { useCurrentEvent } from '@/lib/current-event';
 import { roleLine } from '@/lib/format';
 import { openAppSettings } from '@/lib/image';
@@ -30,7 +30,8 @@ type SheetState =
   | { kind: 'connected'; contact: Contact; alreadyConnected: boolean }
   | { kind: 'queued' }
   | { kind: 'own' }
-  | { kind: 'error'; message: string }
+  /** `slug` is set when their profile page can resolve it (e.g. unblock them first). */
+  | { kind: 'error'; message: string; slug?: string }
   | { kind: 'unknown'; raw: string };
 
 function goToNewContact(draft: ContactDraft) {
@@ -40,6 +41,12 @@ function goToNewContact(draft: ContactDraft) {
 function close() {
   if (router.canGoBack()) router.back();
   else router.replace('/add');
+}
+
+/** Closes the scanner, then opens their profile on top of the app. */
+function openProfile(slug: string) {
+  close();
+  router.push({ pathname: '/id/[slug]', params: { slug } });
 }
 
 export default function ScanScreen() {
@@ -106,7 +113,12 @@ export default function ScanScreen() {
         return;
       }
       resultFeedback('error');
-      setSheet({ kind: 'error', message: err instanceof Error ? err.message : 'Please try again.' });
+      setSheet({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Please try again.',
+        // 403: I blocked them, or my profile is missing. Their profile page offers Unblock or Create my profile.
+        slug: err instanceof ApiError && err.status === 403 ? slug : undefined,
+      });
     }
   };
 
@@ -274,13 +286,16 @@ function ResultSheet({ sheet, onScanAgain }: { sheet: SheetState; onScanAgain: (
           <Button title="Scan again" onPress={onScanAgain} />
         </StatusPanel>
       );
-    case 'error':
+    case 'error': {
+      const { slug } = sheet;
       return (
         <StatusPanel icon="alert-circle-outline" tone="danger" title="Couldn't connect" message={sheet.message}>
-          <Button title="Scan again" onPress={onScanAgain} />
+          {slug ? <Button title="View profile" icon="person-outline" onPress={() => openProfile(slug)} /> : null}
+          <Button title="Scan again" variant={slug ? 'secondary' : 'primary'} onPress={onScanAgain} />
           <Button title="Close" variant="ghost" onPress={close} />
         </StatusPanel>
       );
+    }
     case 'unknown':
       return <UnknownCode raw={sheet.raw} onScanAgain={onScanAgain} />;
   }

@@ -1,4 +1,5 @@
-import { Redirect, router, Stack } from 'expo-router';
+import { isValidSlug } from '@chatsoon/shared';
+import { Redirect, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -16,19 +17,44 @@ import {
 import { Button, Card, Icon, Screen, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { showError } from '@/lib/dialogs';
+import { confirm, showError } from '@/lib/dialogs';
+import { useOutbox } from '@/lib/outbox';
 import { useMe, useUpdateProfile } from '@/lib/queries';
+
+/** `?next=/id/<slug>`: set up from a profile's "Create my profile", go back there to connect. Profile paths only. */
+function profileReturnPath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const match = /^\/id\/([a-z0-9-]+)$/.exec(value);
+  return match && isValidSlug(match[1]) ? value : null;
+}
 
 // First run: signed in, but no profile yet. The profile is what people get when they scan your QR.
 export default function OnboardingScreen() {
   const { status, signOut } = useAuth();
   const me = useMe();
   const update = useUpdateProfile();
+  const next = profileReturnPath(useLocalSearchParams<{ next?: string }>().next);
+  const { items: unsynced } = useOutbox();
 
   const [values, setValues] = useState(() => profileToForm(null));
   const [errors, setErrors] = useState<ProfileFormErrors>({});
   const [avatar, setAvatar] = useState<AvatarValue>({ key: null, url: null });
   const [uploading, setUploading] = useState(false);
+
+  // Signing out wipes captures that haven't synced, so warn first (same as the Me tab).
+  const confirmSignOut = async () => {
+    const pending = unsynced.length;
+    if (pending > 0) {
+      const ok = await confirm({
+        title: 'Sign out?',
+        message: `${pending} ${pending === 1 ? "contact hasn't" : "contacts haven't"} synced yet and will be lost if you sign out now.`,
+        confirmText: 'Sign out',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    await signOut();
+  };
 
   if (status === 'signedOut') return <Redirect href="/sign-in" />;
   if (!me.data) {
@@ -38,7 +64,7 @@ export default function OnboardingScreen() {
           error={me.error}
           onRetry={() => void me.refetch()}
           retrying={me.isFetching}
-          onSignOut={() => void signOut()}
+          onSignOut={() => void confirmSignOut()}
         />
       );
     }
@@ -60,7 +86,8 @@ export default function OnboardingScreen() {
     setErrors({});
     try {
       await update.mutateAsync(parsed.input);
-      router.replace('/contacts');
+      if (next) router.dismissTo(next);
+      else router.replace('/contacts');
     } catch (err) {
       update.reset();
       showError(err, "Couldn't create your profile");
@@ -86,7 +113,7 @@ export default function OnboardingScreen() {
               variant="captionStrong"
               color="primary"
               accessibilityRole="button"
-              onPress={saving ? undefined : () => void signOut()}>
+              onPress={saving ? undefined : () => void confirmSignOut()}>
               Not you?
             </Text>
           </Text>

@@ -1,4 +1,5 @@
 import { isValidSlug, type PublicProfile } from '@chatsoon/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Link, Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useState, type ReactNode } from 'react';
@@ -17,12 +18,15 @@ import { useAuth } from '@/lib/auth';
 import { useCurrentEvent } from '@/lib/current-event';
 import { confirm, showError } from '@/lib/dialogs';
 import { roleLine } from '@/lib/format';
-import { useBlock, useMe, usePublicProfile, useScanConnect, useUnblock } from '@/lib/queries';
+import { qk, useBlock, useMe, usePublicProfile, useScanConnect, useUnblock } from '@/lib/queries';
 
 // Public profile at chatsoon.app/id/<slug>. Universal links, app links and chatsoon://id/<slug> land here too.
 //   Signed out on the web: Connect form (Turnstile), vCard, report.
 //   Signed out in the app: sign in to connect, vCard, report.
-//   Signed in: connect (auto-accept), report and block, or "this is you" on your own profile.
+//   Signed in: connect (auto-accept), report and block, unblock someone I blocked, or "this is you" on your own profile.
+
+/** Where sign in and onboarding return to afterwards, so the person can still connect. */
+const returnHere = (p: PublicProfile) => ({ next: `/id/${p.slug}` });
 
 export default function PublicProfileScreen() {
   const params = useLocalSearchParams<{ slug: string }>();
@@ -151,9 +155,11 @@ function ProfileBody({ profile, signedIn }: { profile: PublicProfile; signedIn: 
 /** Signed in, in the app or on the web. */
 function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport: () => void }) {
   const theme = useTheme();
+  const qc = useQueryClient();
   const me = useMe();
   const scan = useScanConnect();
   const block = useBlock();
+  const unblock = useUnblock();
   const { eventId } = useCurrentEvent();
   const first = firstName(profile.displayName);
 
@@ -184,6 +190,43 @@ function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport
     );
   }
 
+  // The API refuses to connect with someone I blocked, so offer Unblock instead of Connect and Block.
+  if (profile.blockedByMe) {
+    const unblockUser = async () => {
+      const ok = await confirm({
+        title: `Unblock ${profile.displayName}?`,
+        message: `You'll be able to connect with ${first} again. They won't be told.`,
+        confirmText: 'Unblock',
+      });
+      if (!ok) return;
+      unblock.mutate(profile.slug, {
+        // Show Connect straight away; useUnblock also refetches the profile.
+        onSuccess: () => qc.setQueryData(qk.profile(profile.slug), { ...profile, blockedByMe: false }),
+        onError: (err) => showError(err, `Couldn't unblock ${first}`),
+      });
+    };
+    return (
+      <View style={styles.actions}>
+        <Card style={styles.signInCard}>
+          <Text variant="subheading">You blocked {first}</Text>
+          <Text variant="callout" color="textSecondary">
+            {first} can&apos;t see your profile or connect with you. Unblock {first} to connect again.
+          </Text>
+          <Button
+            title={`Unblock ${first}`}
+            icon="lock-open-outline"
+            variant="secondary"
+            loading={unblock.isPending}
+            onPress={() => void unblockUser()}
+          />
+        </Card>
+        <View style={styles.safety}>
+          <QuietAction icon="flag-outline" label="Report" accessibilityLabel={`Report ${profile.displayName}`} onPress={onReport} />
+        </View>
+      </View>
+    );
+  }
+
   const connect = () => {
     scan.mutate(
       { slug: profile.slug, eventId },
@@ -201,7 +244,7 @@ function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport
   const blockUser = async () => {
     const ok = await confirm({
       title: `Block ${profile.displayName}?`,
-      message: `${first} will be removed from your contacts and won't be able to connect with you. They won't be told.`,
+      message: `${first} will be removed from your contacts and won't be able to connect with you. They won't be told. You can unblock them later from their profile.`,
       confirmText: 'Block',
       destructive: true,
     });
@@ -224,7 +267,11 @@ function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport
           <Text variant="callout" color="textSecondary">
             Add your name first, so {first} gets your card when you connect.
           </Text>
-          <Button title="Create my profile" icon="person-circle-outline" onPress={() => router.push('/onboarding')} />
+          <Button
+            title="Create my profile"
+            icon="person-circle-outline"
+            onPress={() => router.push({ pathname: '/onboarding', params: returnHere(profile) })}
+          />
         </Card>
       ) : (
         <>
@@ -297,7 +344,11 @@ function SignedOutAppActions({ profile, onReport }: { profile: PublicProfile; on
         <Text variant="callout" color="textSecondary">
           Sign in to Chatsoon to swap cards with {first}. You&apos;ll both get each other&apos;s details.
         </Text>
-        <Button title="Sign in to connect" icon="log-in-outline" onPress={() => router.push('/sign-in')} />
+        <Button
+          title="Sign in to connect"
+          icon="log-in-outline"
+          onPress={() => router.push({ pathname: '/sign-in', params: returnHere(profile) })}
+        />
       </Card>
       <View style={styles.safety}>
         <QuietAction icon="flag-outline" label="Report profile" onPress={onReport} />

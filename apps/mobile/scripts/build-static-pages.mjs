@@ -6,7 +6,8 @@
 //
 // Usage: node scripts/build-static-pages.mjs [outDir]   (run after `expo export --platform web`)
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,11 +30,12 @@ const outDir = path.resolve(root, process.argv[2] ?? 'dist');
 const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-/** Escapes text and turns the support address into a mailto link. */
+/** Escapes text and turns the support address and the website address into links. */
 const rich = (s) =>
   escapeHtml(s)
     .split(escapeHtml(SUPPORT_EMAIL))
-    .join(`<a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>`);
+    .join(`<a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>`)
+    .replace(/https:\/\/chatsoon\.app(?:\/[\w\-/#]*)?/g, (url) => `<a href="${url}">${url}</a>`);
 
 const anchor = (heading) =>
   heading
@@ -157,6 +159,35 @@ ${doc.sections.map(renderSection).join('\n')}
 </html>
 `;
 }
+
+// Refuse to finish a web build that still carries local dev values: an API on localhost or a LAN
+// address (from .env), or one of Cloudflare's always-pass Turnstile test site keys. Metro caches
+// inlined EXPO_PUBLIC_* values per file, which is why export:web runs with --clear.
+// Set CHATSOON_ALLOW_DEV_BUILD=1 to skip this for a local test build.
+const DEV_VALUE =
+  /\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)[:/"'`]|\b[123]x0{20}[A-F]{2}\b/;
+
+async function assertProductionBundle() {
+  if (process.env.CHATSOON_ALLOW_DEV_BUILD === '1') return;
+  const jsDir = path.join(outDir, '_expo/static/js');
+  if (!existsSync(jsDir)) {
+    console.warn(`static pages: no web bundle in ${path.relative(root, jsDir)}, skipping the production env check`);
+    return;
+  }
+  const entries = await readdir(jsDir, { recursive: true });
+  for (const name of entries.filter((n) => n.endsWith('.js'))) {
+    const src = await readFile(path.join(jsDir, name), 'utf8');
+    const bad = src.match(DEV_VALUE);
+    if (bad) {
+      throw new Error(
+        `${name} contains the dev value "${bad[0]}". Set EXPO_PUBLIC_API_URL and EXPO_PUBLIC_TURNSTILE_SITE_KEY ` +
+          'to the production values and run "pnpm run export:web" again (it clears the Metro cache).',
+      );
+    }
+  }
+}
+
+await assertProductionBundle();
 
 const legal = JSON.parse(await readFile(path.join(root, 'src/content/legal.json'), 'utf8'));
 

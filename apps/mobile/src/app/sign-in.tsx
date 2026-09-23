@@ -1,5 +1,5 @@
-import { emailSchema, otpSchema } from '@chatsoon/shared';
-import { Redirect, router, Stack, useFocusEffect } from 'expo-router';
+import { emailSchema, isValidSlug, otpSchema } from '@chatsoon/shared';
+import { Redirect, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { BackHandler, Platform, StyleSheet, TextInput, View } from 'react-native';
 
@@ -14,6 +14,16 @@ const CODE_LENGTH = 6;
 const RESEND_COOLDOWN_MS = 30_000;
 
 type Step = 'email' | 'code';
+
+/**
+ * `?next=/id/<slug>`: a profile opened from a link sends people here to sign in, then back to it
+ * to connect. Only a profile path is accepted, so the param can't send anyone elsewhere.
+ */
+function profileReturnPath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const match = /^\/id\/([a-z0-9-]+)$/.exec(value);
+  return match && isValidSlug(match[1]) ? value : null;
+}
 
 /** Turns Better Auth / API errors into something a person can act on. */
 function authErrorMessage(err: unknown, step: Step): string {
@@ -41,6 +51,9 @@ function authErrorMessage(err: unknown, step: Step): string {
 
 export default function SignInScreen() {
   const { status, sendCode, verifyCode } = useAuth();
+  const next = profileReturnPath(useLocalSearchParams<{ next?: string }>().next);
+  // Coming from a profile in the app, show the header so there's a visible way back to it.
+  const withHeader = !!next && Platform.OS !== 'web';
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -148,7 +161,9 @@ export default function SignInScreen() {
       setTimeout(focusCode, 50);
       return;
     }
-    router.replace('/');
+    // Back to the profile underneath (or open it if it's gone), where Connect now shows.
+    if (next) router.dismissTo(next);
+    else router.replace('/');
   };
 
   const onCodeChange = (value: string) => {
@@ -177,8 +192,8 @@ export default function SignInScreen() {
   };
 
   return (
-    <Screen edges={['top', 'bottom']} contentStyle={styles.content}>
-      <Stack.Screen options={{ title: 'Sign in' }} />
+    <Screen edges={withHeader ? ['bottom'] : ['top', 'bottom']} contentStyle={styles.content}>
+      <Stack.Screen options={{ title: 'Sign in', headerShown: withHeader }} />
 
       <View style={styles.brand}>
         <Logo size={72} accessibilityLabel={null} />

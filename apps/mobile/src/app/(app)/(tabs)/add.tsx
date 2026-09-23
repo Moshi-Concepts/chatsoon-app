@@ -34,7 +34,7 @@ export default function AddScreen() {
           icon="id-card"
           tone="accent"
           title="Photograph a card or badge"
-          description="We read the details for you to check."
+          description="AI reads the details for you to check."
           onPress={() => router.push('/card')}
         />
         <CaptureOption
