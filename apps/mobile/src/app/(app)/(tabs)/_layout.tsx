@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router/js-tabs';
+import { Platform } from 'react-native';
 
 import { Icon } from '@/components/ui';
 import { useTheme } from '@/hooks/use-theme';
@@ -10,7 +11,12 @@ export default function TabsLayout() {
       screenOptions={{
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.textTertiary,
-        tabBarStyle: { backgroundColor: theme.surface, borderTopColor: theme.border },
+        tabBarStyle: {
+          backgroundColor: theme.surface,
+          borderTopColor: theme.border,
+          // Web has no bottom safe-area inset, so give the labels room below.
+          ...(Platform.OS === 'web' ? { height: 64, paddingTop: 6, paddingBottom: 8 } : null),
+        },
         headerStyle: { backgroundColor: theme.background },
         headerTitleStyle: { color: theme.text },
         headerShadowVisible: false,
