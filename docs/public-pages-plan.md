@@ -68,7 +68,7 @@ All paths are relative to the repo root, `D:\Claude\chatsoon-app`. Evidence file
 | D13 | A new workspace package, `apps/web` (`@chatsoon/web`), owns the renderer, Functions, build and deploy. Beats the performance analysis's approach of extending `build-static-pages.mjs`. | Keeps Worker types and `functions/` out of Metro and the mobile tsconfig (`include: **/*.ts`). Wrangler must run from that directory. | – |
 | D14 | Tokens move to `packages/shared/src/design.ts`, and theme.ts re-exports them. New text tokens: `primaryText`, `successText`, `dangerText`. Contrast values are the performance analysis's. | One source for the RN app and the CSS. Values verified above. | – |
 | D15 | No WebMCP annotations. | Weight 0, and they would invite automation of a form gated by Turnstile. | – |
-| D16 | Keep the Cloudflare Web Analytics beacon. | It only produces zero-weight insights, and it gives field Core Web Vitals. | **Yes.** Default: keep |
+| D16 | Cloudflare Web Analytics (RUM beacon): **removed by Peter on 25 Sep 2026.** Budgets allow no third-party requests before load, with no exceptions. | Nothing third-party loads before the page finishes. Field Core Web Vitals come from Search Console (CrUX) instead. | Done |
 | D17 | Wrap every generated mailto in `<!--email_off-->…<!--/email_off-->`. | Avoids the injected decoder script, with no dashboard change. | – |
 | D18 | Signed-in visitors to `/` still go to `/contacts`, now through an inline head script. | Same behaviour as `index.tsx:12`. | – |
 | D19 | Slugs stay as they are. | Printed QR codes, and the protection against guessing slugs. | – |
@@ -612,7 +612,7 @@ Order: D1, then D2 and D3 in parallel, with D4. Deploy the API (migration remote
     - document ≤14 KB gzipped;
     - script ≤10 KB gzipped (excluding SPA assets, which never load anonymously);
     - 0 fonts;
-    - 0 third-party requests before load, excluding `static.cloudflareinsights.com` and `/cdn-cgi/rum`;
+    - 0 third-party requests before load (the Cloudflare beacon was removed on 25 Sep 2026);
     - total ≤30 KB for home and ≤80 KB for the profile (the original avatar is about 50 KB).
   - **`lh-local.sh`:**
     - apply the local D1 migrations and the seed, which adds an opted-in fixture `lh-fixture-0000aaaa` with a headline, links, a booking link and a `'public'` phone;
@@ -709,7 +709,7 @@ Order: D1, then D2 and D3 in parallel, with D4. Deploy the API (migration remote
 | Lighthouse's agentic category is "under development" (N/A handling, the ard.json path, WebMCP weights) | A future score drop | Pinned 13.5.0 runner. Re-check on each PSI Lighthouse bump. The nested 404 already covers ard.json. |
 | A future edit spreads PublicProfile into the template, or passes raw JSON | Numbers leak into indexed HTML | Whitelisted DTO type, leak tests in both the API and web, API `robots.txt` Disallow, and tap-to-reveal. |
 | Dark and light results differ | Local runs pass, PSI fails, or the reverse | Token contrast test in both schemes; the runner asserts the emulated scheme. |
-| The Cloudflare beacon and Email Obfuscation are zone features | Zero-weight warnings; an extra script | email_off comments. The beacon is kept (D16). |
+| The Cloudflare beacon and Email Obfuscation are zone features | Zero-weight warnings; an extra script | email_off comments. The beacon was removed (D16). |
 | Turnstile loads only after interaction | First submit takes 1–3 s longer | Load on first focus; show "Checking you're human…"; Send stays enabled. |
 | Handoff edge cases: an expired token, blocked storage, or cross-tab sign-out on static pages | A slow page, or an anonymous view for a signed-in user | Acceptable. The SPA's 401 handler recovers. The header has a Sign in link. |
 | Unknown top-level paths stay soft 200 | Minor crawl noise | The SPA `+not-found` sets meta noindex. A root 404.html would mean maintaining a route list, which D3 rejects. |
