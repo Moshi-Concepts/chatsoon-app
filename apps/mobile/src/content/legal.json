@@ -1,7 +1,7 @@
 {
   "privacy": {
     "title": "Privacy Policy",
-    "updated": "24 September 2026",
+    "updated": "25 September 2026",
     "intro": "Chatsoon is a networking app for events, published by Moshi Concepts Inc. (\"we\", \"us\"). This policy explains what we collect when you use the Chatsoon apps for iOS and Android and the website at chatsoon.app, why we collect it, who processes it for us and the choices you have. The short version: we collect only what Chatsoon needs to work, we don't show ads, we don't track you across other apps or websites, and we never sell your data.",
     "sections": [
       {
@@ -17,7 +17,7 @@
         ],
         "bullets": [
           "Account: your email address. We use it to send you one-time sign-in codes, to identify your account and to let you know when someone sends you their details with the Connect form. Chatsoon doesn't use passwords.",
-          "Your public profile: the name, photo, headline, company, role and links (X, Telegram, LinkedIn, website, YouTube) you choose to publish.",
+          "Your public profile: the name, photo, headline, company, role and links (X, Telegram, LinkedIn, website, YouTube) you choose to publish, and, if you add them, your mobile number, WhatsApp and Signal details and who can see them.",
           "Your contacts: the people you add and what you record about them, such as their name, company, role, email, phone, social handles, notes, tags, priority and the event where you met.",
           "Card and badge photos: photos you take of business cards or event badges so Chatsoon can read the details for you.",
           "Connections: when you connect with another Chatsoon user by scanning their QR code, we record that you are connected and, if you set one, the event where you met.",
@@ -49,14 +49,15 @@
         "paragraphs": [
           "Your public profile is public. Anyone who scans your QR code or has your link, which looks like chatsoon.app/id/alex-rivera-7f3a, can see it and save it as a contact card. It shows only what you add to your profile: your name, photo, headline, role, company and links.",
           "Your email address is never shown on your public profile.",
-          "Your contacts, notes, tags and priorities are private to you. People you connect with see only your public profile.",
+          "Your contacts, notes, tags and priorities are private to you. If you add a mobile number, WhatsApp or Signal, you choose who can see them: people you connect with (Chatsoon users you connect with, and people who send you their details with the Connect form on your page), or anyone with your link. They're never shown to search engines. Tapping WhatsApp or Signal opens that app; Chatsoon doesn't send your details to WhatsApp or Signal.",
+          "People you connect with see your public profile and, if you added them, your phone and messaging details. If you let anyone with your link see them, blocking someone doesn't hide them from that person when they're signed out.",
           "Booking links you add (such as Calendly or Google Calendar) are shown on your public profile. When someone books, they do it on that service's page, under its own terms and privacy policy. Chatsoon doesn't see or store the booking."
         ]
       },
       {
         "heading": "Connecting with people",
         "paragraphs": [
-          "When two Chatsoon users connect by scanning a QR code in the app, each of them receives the other's public profile as a contact.",
+          "When two Chatsoon users connect by scanning a QR code in the app, each of them receives the other's public profile, including their mobile number if they added one, as a contact. That copy stays in their contacts if you later change or remove your number.",
           "When you fill in the Connect form on someone's public profile page, the name, email or handle and note you enter are sent to that profile's owner and saved in their contacts. Only share details you're happy for them to have. Once they have your details, the profile owner is responsible for how they use them. The form is protected by Cloudflare Turnstile, which checks that a person, not a bot, is sending it."
         ]
       },

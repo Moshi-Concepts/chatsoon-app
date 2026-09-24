@@ -1,5 +1,5 @@
-import type { LinkKey, MyProfile, ProfileInput } from '@chatsoon/shared';
-import { LINK_KEYS, profileInputSchema } from '@chatsoon/shared';
+import type { ContactVisibility, LinkKey, MyProfile, ProfileContactKey, ProfileInput } from '@chatsoon/shared';
+import { CONTACT_KEYS, changedKeys, LINK_KEYS, profileInputSchema } from '@chatsoon/shared';
 import * as Crypto from 'expo-crypto';
 import { useRef } from 'react';
 import { StyleSheet, View, type TextInput, type TextInputProps } from 'react-native';
@@ -8,6 +8,7 @@ import { Text, TextField, type IconName } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 
 import { BookingLinksEditor, type BookingLinkFormValue } from './booking-links-editor';
+import { ContactFields } from './contact-fields';
 
 export type ProfileFormValues = {
   displayName: string;
@@ -15,6 +16,8 @@ export type ProfileFormValues = {
   company: string;
   role: string;
   links: Record<LinkKey, string>;
+  contact: Record<ProfileContactKey, string>;
+  contactVisibility: ContactVisibility;
   bookingLinks: BookingLinkFormValue[];
 };
 
@@ -24,6 +27,8 @@ export type ProfileField =
   | 'company'
   | 'role'
   | LinkKey
+  | ProfileContactKey
+  | 'contactVisibility'
   | 'bookingLinks'
   | `bookingLinks.${number}.url`
   | `bookingLinks.${number}.label`;
@@ -31,6 +36,7 @@ export type ProfileFormErrors = Partial<Record<ProfileField, string>>;
 
 export function profileToForm(profile: MyProfile | null | undefined): ProfileFormValues {
   const links = profile?.links ?? {};
+  const contact = profile?.contact ?? {};
   return {
     displayName: profile?.displayName ?? '',
     headline: profile?.headline ?? '',
@@ -43,6 +49,13 @@ export function profileToForm(profile: MyProfile | null | undefined): ProfileFor
       website: links.website ?? '',
       youtube: links.youtube ?? '',
     },
+    // Old cached profiles (fetched before this field existed) have no contact: default to none, private.
+    contact: {
+      phone: contact.phone ?? '',
+      whatsapp: contact.whatsapp ?? '',
+      signal: contact.signal ?? '',
+    },
+    contactVisibility: profile?.contactVisibility ?? 'connections',
     // Old cached profiles (fetched before this field existed) have no bookingLinks: default to none.
     bookingLinks: (profile?.bookingLinks ?? []).map((link) => ({
       key: Crypto.randomUUID(),
@@ -63,6 +76,8 @@ export function sameProfileForm(a: ProfileFormValues, b: ProfileFormValues): boo
     a.company === b.company &&
     a.role === b.role &&
     LINK_KEYS.every((k) => a.links[k] === b.links[k]) &&
+    CONTACT_KEYS.every((k) => a.contact[k] === b.contact[k]) &&
+    a.contactVisibility === b.contactVisibility &&
     sameBookingLinks(a.bookingLinks, b.bookingLinks)
   );
 }
@@ -71,23 +86,37 @@ export function sameProfileForm(a: ProfileFormValues, b: ProfileFormValues): boo
  * Validates the form with the shared profileInputSchema. Text is trimmed and empty fields become
  * null, so clearing a field removes it. Links and booking links are left out unless `withLinks` is
  * set, which leaves the profile's current links (and booking links) untouched.
+ *
+ * `initial`, when given, is the form's last-saved values: links, contact and contactVisibility are
+ * then sent as only the keys that changed since (see `changedKeys`), never the whole object. This is
+ * the fix for the stale-cache bug where `initial` was captured once from a cache that could be behind
+ * a value saved from another device, and a full save would overwrite it with the stale one. Without
+ * `initial` (onboarding, which also passes `withLinks: false`), there's nothing to diff against.
  */
 export function parseProfileForm(
   values: ProfileFormValues,
   avatarKey: string | null,
-  { withLinks = true }: { withLinks?: boolean } = {},
+  { withLinks = true, initial }: { withLinks?: boolean; initial?: ProfileFormValues } = {},
 ): { ok: true; input: ProfileInput } | { ok: false; errors: ProfileFormErrors } {
   // A booking link row left completely blank (e.g. added, then not filled in) is dropped, not an error.
   const bookingRows = values.bookingLinks
     .map((link, index) => ({ link, index }))
     .filter(({ link }) => link.url.trim() || link.label.trim());
+  const links = withLinks ? (initial ? changedKeys(initial.links, values.links) : values.links) : undefined;
+  const contact = withLinks ? (initial ? changedKeys(initial.contact, values.contact) : values.contact) : undefined;
+  const contactVisibility =
+    withLinks && (!initial || initial.contactVisibility !== values.contactVisibility)
+      ? values.contactVisibility
+      : undefined;
   const result = profileInputSchema.safeParse({
     displayName: values.displayName,
     headline: values.headline,
     company: values.company,
     role: values.role,
-    links: withLinks ? values.links : undefined,
+    links,
     bookingLinks: withLinks ? bookingRows.map(({ link }) => ({ label: link.label, url: link.url })) : undefined,
+    contact,
+    contactVisibility,
     avatarKey,
   });
   if (result.success) return { ok: true, input: result.data };
@@ -96,7 +125,7 @@ export function parseProfileForm(
   for (const issue of result.error.issues) {
     const [head, sub, leaf] = issue.path;
     let field: ProfileField | undefined;
-    if (head === 'links') {
+    if (head === 'links' || head === 'contact') {
       if (typeof sub === 'string') field = sub as ProfileField;
     } else if (head === 'bookingLinks') {
       // ['bookingLinks', i, 'url' | 'label'] is a row error; ['bookingLinks'] alone (e.g. too many) is not.
@@ -181,14 +210,16 @@ export function ProfileFields({
   const headlineRef = useRef<TextInput>(null);
   const companyRef = useRef<TextInput>(null);
   const roleRef = useRef<TextInput>(null);
+  const mobileRef = useRef<TextInput>(null);
   const linkRefs = useRef<Partial<Record<LinkKey, TextInput | null>>>({});
 
   const set = <K extends 'displayName' | 'headline' | 'company' | 'role'>(key: K, value: string) =>
     onChange({ ...values, [key]: value });
   const setLink = (key: LinkKey, value: string) => onChange({ ...values, links: { ...values.links, [key]: value } });
 
+  // Focus order: role -> mobile -> WhatsApp -> Signal (inside ContactFields) -> first link.
   const afterRole = () => {
-    if (withLinks) linkRefs.current[LINK_KEYS[0]]?.focus();
+    if (withLinks) mobileRef.current?.focus();
     else onSubmit?.();
   };
 
@@ -263,6 +294,17 @@ export function ProfileFields({
 
       {withLinks ? (
         <>
+          <ContactFields
+            values={values.contact}
+            visibility={values.contactVisibility}
+            onChange={(contact) => onChange({ ...values, contact })}
+            onVisibilityChange={(contactVisibility) => onChange({ ...values, contactVisibility })}
+            errors={errors}
+            mobileRef={mobileRef}
+            onSubmit={() => linkRefs.current[LINK_KEYS[0]]?.focus()}
+            editable={editable}
+          />
+
           <View style={styles.group}>
             <GroupHeader
               title="Links"

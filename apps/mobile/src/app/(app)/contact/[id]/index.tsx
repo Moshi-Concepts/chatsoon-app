@@ -57,7 +57,8 @@ export default function ContactDetailScreen() {
 
   const tags = useTags();
   const events = useEvents();
-  // Linked contact: load their booking links live, so ones added after connecting still show up.
+  // Linked contact: load their booking links and contact details (WhatsApp, Signal, a newer phone)
+  // live, so anything added or changed after connecting still shows up.
   const linkedProfile = usePublicProfile(contact?.linkedSlug ?? undefined);
   // A card still in the outbox is being uploaded or read on this device.
   const outboxItem = useOutboxItem(id);
@@ -115,7 +116,10 @@ export default function ContactDetailScreen() {
   const eventName = c.eventId ? events.data?.find((e) => e.id === c.eventId)?.name : undefined;
   const added = relativeTime(c.createdAt);
   const metLine = eventName ? `Met at ${eventName} · ${added}` : `Added ${added}`;
-  const channels = contactChannels(c);
+  const linked = !!c.linkedUserId;
+  // WhatsApp and Signal (and a phone newer than the one copied at connect time) come live from the
+  // linked profile; a contact that isn't linked to a Chatsoon user has no live profile to read.
+  const channels = contactChannels(c, linked ? linkedProfile.data?.contact : undefined);
   const tagList = (tags.data ?? []).filter((t) => c.tagIds.includes(t.id));
   // Until the tag names load, go by the ids so the "add tags" hint doesn't flash.
   const hasTags = tags.data ? tagList.length > 0 : c.tagIds.length > 0;
@@ -123,7 +127,6 @@ export default function ContactDetailScreen() {
   // mid-way), so offer the review screen, where it can be retried, instead of a spinner.
   const reading = isReadingCard(c.extractionStatus) && (!outboxReady || outboxItem?.kind === 'contact');
   const review = needsReview(c.extractionStatus) || (isReadingCard(c.extractionStatus) && !reading);
-  const linked = !!c.linkedUserId;
   const profileSlug = c.linkedSlug;
   // Sent with the Connect form on my public page by someone without an account: there is no
   // profile to report or block, so the message itself can be reported.

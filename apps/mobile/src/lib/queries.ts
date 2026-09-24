@@ -120,7 +120,11 @@ export function useScanConnect() {
   return useMutation({
     mutationFn: ({ slug, eventId }: { slug: string; eventId?: string | null }) =>
       api.connections.scan(slug, eventId),
-    onSuccess: ({ contact }) => putContactInCache(qc, contact),
+    onSuccess: ({ contact }, vars) => {
+      putContactInCache(qc, contact);
+      // So a profile already open (e.g. behind the scanner) shows as unlocked, with `contact`, right away.
+      void qc.invalidateQueries({ queryKey: qk.profile(vars.slug) });
+    },
   });
 }
 

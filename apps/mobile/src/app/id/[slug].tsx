@@ -188,6 +188,13 @@ function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport
             <Text variant="caption" color="textSecondary">
               It&apos;s what people see when they scan your QR code. Your email is never shown.
             </Text>
+            {(profile.contactChannels ?? []).length ? (
+              <Text variant="caption" color="textSecondary">
+                {profile.contactVisibility === 'public'
+                  ? 'Your number is shown to anyone with your link.'
+                  : 'Your number is shown only to people you connect with.'}
+              </Text>
+            ) : null}
           </View>
         </View>
         <Button title="Edit profile" icon="create-outline" variant="secondary" onPress={() => router.push('/profile-edit')} />

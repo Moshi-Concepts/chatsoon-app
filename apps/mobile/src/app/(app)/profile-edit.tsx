@@ -78,7 +78,7 @@ function ProfileEditForm({ profile }: { profile: MyProfile }) {
 
   const save = async () => {
     if (update.isPending || uploading) return;
-    const parsed = parseProfileForm(values, avatar.key);
+    const parsed = parseProfileForm(values, avatar.key, { initial });
     if (!parsed.ok) {
       setErrors(parsed.errors);
       showAlert('Check your profile', Object.values(parsed.errors)[0]);

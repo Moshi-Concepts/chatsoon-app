@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { showError } from '@/lib/dialogs';
 
 import { BookingEmbed } from './booking-embed';
-import { embedDomain } from './booking-links-card';
+import { embedDomain } from './embed-domain';
 
 /** Modal sheet that loads a booking link: react-native-webview on native, an iframe on web. */
 export function BookingSheet({

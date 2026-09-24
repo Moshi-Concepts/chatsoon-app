@@ -3,6 +3,7 @@ import type {
   BlockInput,
   ChatsoonEvent,
   ConnectFormInput,
+  ConnectFormResponse,
   Contact,
   ContactCreateInput,
   ContactsResponse,
@@ -227,7 +228,7 @@ export const api = {
     get: (slug: string) => request<PublicProfile>('GET', `/id/${encodeURIComponent(slug)}`),
     vcardUrl: (slug: string) => `${API_URL}/id/${encodeURIComponent(slug)}/vcard`,
     connect: (slug: string, input: ConnectFormInput) =>
-      request<{ ok: true }>('POST', `/id/${encodeURIComponent(slug)}/connect`, { body: input }),
+      request<ConnectFormResponse>('POST', `/id/${encodeURIComponent(slug)}/connect`, { body: input }),
   },
 
   connections: {

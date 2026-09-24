@@ -1,4 +1,4 @@
-import { connectFormSchema, type ConnectFormInput } from '@chatsoon/shared';
+import { connectFormSchema, profileContactChannels, type ConnectFormInput } from '@chatsoon/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -9,6 +9,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError, api } from '@/lib/api';
 
+import { ContactPills } from './contact-pills';
 import { externalLinkProps } from './link-props';
 import { Turnstile, type TurnstileHandle } from './turnstile';
 
@@ -73,6 +74,7 @@ export function ConnectForm({
   };
 
   if (connect.isSuccess) {
+    const { contact, vcardUrl } = connect.data;
     return (
       <Card style={styles.success}>
         <View style={[styles.badge, { backgroundColor: theme.successSoft }]}>
@@ -81,6 +83,23 @@ export function ConnectForm({
         <Text variant="heading" align="center" accessibilityRole="alert">
           Sent. {firstName} now has your details.
         </Text>
+        {contact ? (
+          <View style={styles.successContact}>
+            <Text variant="bodyStrong" align="center">
+              Here&apos;s how to reach {firstName}:
+            </Text>
+            <ContactPills contact={contact} channels={profileContactChannels(contact)} firstName={firstName} />
+            <Button
+              title="Save contact"
+              icon="download-outline"
+              variant="secondary"
+              fullWidth={false}
+              style={styles.centreButton}
+              accessibilityHint="Downloads a contact card you can add to your phone's contacts"
+              {...externalLinkProps(vcardUrl ?? api.profiles.vcardUrl(slug))}
+            />
+          </View>
+        ) : null}
         <Text variant="callout" color="textSecondary" align="center" style={styles.successText}>
           Want your own profile and QR code for your next event? Chatsoon is free.
         </Text>
@@ -125,7 +144,7 @@ export function ConnectForm({
         ref={contactRef}
         label="Email or handle"
         placeholder="you@company.com or @handle"
-        hint={`Email, Telegram, X or LinkedIn. Only ${firstName} will see it.`}
+        hint={`Email, phone, Telegram, X or LinkedIn. Only ${firstName} will see it.`}
         value={contact}
         onChangeText={(v) => {
           setContact(v);
@@ -205,6 +224,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   success: { alignItems: 'center', gap: Spacing.three, padding: Spacing.six },
+  successContact: { alignItems: 'center', gap: Spacing.three, alignSelf: 'stretch' },
   successText: { maxWidth: 360 },
   centreButton: { alignSelf: 'center', marginTop: Spacing.two },
   badge: { width: 72, height: 72, borderRadius: Radius.xl, alignItems: 'center', justifyContent: 'center' },

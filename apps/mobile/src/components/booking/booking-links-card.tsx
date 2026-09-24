@@ -9,11 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { BookingSheet } from './booking-sheet';
-
-/** Domain sent to providers that need one (Calendly's embed_domain). The page's own host on web. */
-export function embedDomain(): string {
-  return Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.host : 'chatsoon.app';
-}
+import { embedDomain } from './embed-domain';
 
 function providerIcon(link: BookingLink): IconName {
   if (link.provider === 'google') return 'logo-google';

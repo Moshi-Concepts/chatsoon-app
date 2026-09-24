@@ -7,6 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { roleLine } from '@/lib/format';
 
+import { ContactPills } from './contact-pills';
 import { externalLinkProps } from './link-props';
 
 const LINKS: { key: LinkKey; label: string; icon: IconName }[] = [
@@ -63,6 +64,14 @@ export function ProfileCard({ profile }: { profile: PublicProfile }) {
         ) : null}
       </View>
 
+      {(profile.contactChannels ?? []).length && !profile.blockedByMe ? (
+        <ContactPills
+          contact={profile.contact}
+          channels={profile.contactChannels ?? []}
+          firstName={firstName(profile.displayName)}
+        />
+      ) : null}
+
       {links.length ? (
         <View style={styles.links}>
           {links.map((l) => (
@@ -76,7 +85,7 @@ export function ProfileCard({ profile }: { profile: PublicProfile }) {
         icon="download-outline"
         variant="secondary"
         accessibilityHint="Downloads a contact card you can add to your phone's contacts"
-        {...externalLinkProps(api.profiles.vcardUrl(profile.slug))}
+        {...externalLinkProps(profile.vcardUrl ?? api.profiles.vcardUrl(profile.slug))}
       />
     </Card>
   );

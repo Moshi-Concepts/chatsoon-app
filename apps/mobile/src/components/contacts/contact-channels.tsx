@@ -1,5 +1,5 @@
-import type { Contact } from '@chatsoon/shared';
-import { displayLink, toLinkUrl } from '@chatsoon/shared';
+import type { Contact, ProfileContact } from '@chatsoon/shared';
+import { contactUrl, displayContact, displayLink, parseIntlPhone, toLinkUrl } from '@chatsoon/shared';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { showAlert, showError } from '@/lib/dialogs';
 
 export type Channel = {
-  key: 'telegram' | 'email' | 'phone' | 'linkedin' | 'x' | 'website';
+  key: 'telegram' | 'email' | 'phone' | 'whatsapp' | 'signal' | 'linkedin' | 'x' | 'website';
   /** Quick action label, e.g. "Call". */
   action: string;
   /** Field label in the details list, e.g. "Phone". */
@@ -25,11 +25,12 @@ export type Channel = {
   url: string | null;
 };
 
-type ChannelSpec = Pick<Channel, 'key' | 'action' | 'label' | 'icon'> & {
+type ChannelSpec = Pick<Channel, 'action' | 'label' | 'icon'> & {
+  key: 'telegram' | 'email' | 'phone' | 'linkedin' | 'x' | 'website';
   field: 'telegram' | 'email' | 'phone' | 'linkedinUrl' | 'xHandle' | 'website';
 };
 
-/** Quick-action order. */
+/** Quick-action order for the fields that live on the contact record. */
 const SPECS: ChannelSpec[] = [
   { key: 'telegram', field: 'telegram', action: 'Telegram', label: 'Telegram', icon: 'paper-plane' },
   { key: 'email', field: 'email', action: 'Email', label: 'Email', icon: 'mail' },
@@ -39,21 +40,52 @@ const SPECS: ChannelSpec[] = [
   { key: 'website', field: 'website', action: 'Website', label: 'Website', icon: 'globe-outline' },
 ];
 
-/** Handles, email and phone copy as shown ("@peter"); web links copy as the full URL. */
-const COPY_AS_SHOWN = new Set<Channel['key']>(['telegram', 'x', 'email', 'phone']);
+type LiveSpec = Pick<Channel, 'action' | 'label' | 'icon'> & { key: 'whatsapp' | 'signal' };
+
+/** WhatsApp and Signal have no columns of their own on the contact record (D11: connecting only ever
+ * copies the phone) — they're always read live from the linked profile, placed right after Call. */
+const LIVE_SPECS: LiveSpec[] = [
+  { key: 'whatsapp', action: 'WhatsApp', label: 'WhatsApp', icon: 'logo-whatsapp' },
+  { key: 'signal', action: 'Signal', label: 'Signal', icon: 'chatbubble-ellipses' },
+];
+
+/**
+ * Handles, email and phone always copy as typed; web links copy as the full URL. WhatsApp and Signal
+ * copy as typed only when the saved value is a plain number: a link-only value (a wa.me/message link,
+ * a Signal username link) isn't useful as text, so those copy the URL instead.
+ */
+function copyAsShown(key: Channel['key'], value: string): boolean {
+  if (key === 'whatsapp' || key === 'signal') return parseIntlPhone(value) !== null;
+  return key === 'telegram' || key === 'x' || key === 'email' || key === 'phone';
+}
 
 /**
  * Every contact detail the contact has, in quick-action order. Values that can't be turned into a
  * link are still listed (with `url: null`) so nothing the user saved disappears.
+ *
+ * `live` is the linked profile's own contact details (`linked ? linkedProfile.data?.contact :
+ * undefined`). Phone falls back to it when the contact record has none set yet; WhatsApp and Signal
+ * are never copied onto the contact record, so they come from `live` alone.
  */
-export function contactChannels(contact: Contact): Channel[] {
+export function contactChannels(contact: Contact, live?: ProfileContact): Channel[] {
   const channels: Channel[] = [];
   for (const { field, ...spec } of SPECS) {
-    const value = contact[field]?.trim();
-    if (!value) continue;
-    const url = toLinkUrl(spec.key, value);
-    const display = displayLink(spec.key, value) ?? value;
-    channels.push({ ...spec, display, copy: url && !COPY_AS_SHOWN.has(spec.key) ? url : display, url });
+    const raw = spec.key === 'phone' ? contact.phone || live?.phone : contact[field];
+    const value = raw?.trim();
+    if (value) {
+      const url = toLinkUrl(spec.key, value);
+      const display = displayLink(spec.key, value) ?? value;
+      channels.push({ ...spec, display, copy: url && !copyAsShown(spec.key, value) ? url : display, url });
+    }
+    if (spec.key !== 'phone') continue;
+    for (const liveSpec of LIVE_SPECS) {
+      const lv = live?.[liveSpec.key]?.trim();
+      if (!lv) continue;
+      const lUrl = contactUrl(liveSpec.key, lv);
+      if (!lUrl) continue;
+      const lDisplay = displayContact(liveSpec.key, lv) ?? lv;
+      channels.push({ ...liveSpec, display: lDisplay, copy: copyAsShown(liveSpec.key, lv) ? lDisplay : lUrl, url: lUrl });
+    }
   }
   return channels;
 }
