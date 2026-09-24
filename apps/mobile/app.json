@@ -12,7 +12,9 @@
       "bundleIdentifier": "app.chatsoon",
       "buildNumber": "1",
       "supportsTablet": false,
-      "associatedDomains": ["applinks:chatsoon.app"],
+      "associatedDomains": [
+        "applinks:chatsoon.app"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "Used to scan QR codes and photograph business cards",
         "ITSAppUsesNonExemptEncryption": false
@@ -28,7 +30,9 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.CAMERA"],
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -43,8 +47,17 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "chatsoon.app", "pathPrefix": "/id/" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https",
+              "host": "chatsoon.app",
+              "pathPrefix": "/id/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -83,7 +96,12 @@
           "microphonePermission": false
         }
       ],
-      ["expo-secure-store", { "faceIDPermission": false }],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       "expo-sharing"
     ],
     "experiments": {
@@ -91,7 +109,11 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "56432523-112e-472e-9ecc-bdfacbb6b023"
+      }
+    },
+    "owner": "moshiconcepts"
   }
 }
