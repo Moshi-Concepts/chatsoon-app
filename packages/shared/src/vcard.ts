@@ -12,8 +12,9 @@ import {
   toLinkUrl,
   type SocialProfile,
 } from './links';
+import { CONTACT_LABELS, contactUrl } from './profile-contact';
 import type { ContactDraft } from './qr';
-import type { ProfileLinks } from './types';
+import type { ProfileContact, ProfileLinks } from './types';
 
 // vCard 3.0 writer (RFC 2426) and a lenient reader for vCard 2.1, 3.0 and 4.0 (RFC 6350) and MECARD.
 // Pure string code: no TextEncoder/TextDecoder, so it runs the same in Hermes and Workers.
@@ -26,6 +27,8 @@ export interface VCardProfile {
   links?: ProfileLinks;
   profileUrl: string;
   bookingLinks?: { label: string; url: string }[];
+  /** Phone, WhatsApp and Signal. Only values that pass contactUrl are written. */
+  contact?: ProfileContact;
 }
 
 const CRLF = '\r\n';
@@ -112,6 +115,10 @@ export function buildVCard(p: VCardProfile): string {
   const headline = cleanText(p.headline ?? '');
   if (headline) lines.push(`NOTE:${escapeText(headline)}`);
 
+  const contact = p.contact ?? {};
+  const phone = contactUrl('phone', contact.phone);
+  if (phone) lines.push(`TEL;TYPE=CELL:${phone.replace(/^tel:/i, '')}`);
+
   // URIs are not TEXT values, so they aren't escaped. The profile URL comes first: it's the card's own link.
   // The item group gives it a 'Chatsoon' label in iOS and Google Contacts; other readers ignore X-ABLabel.
   const profileUrl = cleanText(p.profileUrl);
@@ -138,6 +145,18 @@ export function buildVCard(p: VCardProfile): string {
   if (linkedin) lines.push(`X-SOCIALPROFILE;TYPE=linkedin:${linkedin}`);
   const youtube = toLinkUrl('youtube', links.youtube);
   if (youtube) lines.push(`X-SOCIALPROFILE;TYPE=youtube:${youtube}`);
+
+  // WhatsApp and Signal as item pairs, continuing the booking links' item counter (not restarting it).
+  const whatsapp = contactUrl('whatsapp', contact.whatsapp);
+  if (whatsapp) {
+    lines.push(`item${item}.URL:${whatsapp}`, `item${item}.X-ABLabel:${CONTACT_LABELS.whatsapp}`);
+    item++;
+  }
+  const signal = contactUrl('signal', contact.signal);
+  if (signal) {
+    lines.push(`item${item}.URL:${signal}`, `item${item}.X-ABLabel:${CONTACT_LABELS.signal}`);
+    item++;
+  }
 
   lines.push('END:VCARD');
   return lines.map(foldLine).join(CRLF) + CRLF;

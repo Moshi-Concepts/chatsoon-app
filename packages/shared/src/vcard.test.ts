@@ -122,6 +122,57 @@ describe('buildVCard', () => {
     expect(vcard).not.toMatch(/item3\.|example\.com|Stale/);
   });
 
+  it('writes TEL right after NOTE, and skips it when the phone is invalid', () => {
+    const lines = physicalLines(buildVCard({ ...peter, contact: { phone: '+61 491 570 156' } }));
+    expect(lines).toContain('TEL;TYPE=CELL:+61491570156');
+    expect(lines.indexOf('TEL;TYPE=CELL:+61491570156')).toBe(
+      lines.indexOf('NOTE:Building Chatsoon. Cardano and Midnight.') + 1,
+    );
+    expect(buildVCard({ ...peter, contact: { phone: '000' } })).not.toMatch(/TEL/);
+  });
+
+  it('leaves existing fixtures without `contact` unchanged: no TEL, wa.me or signal.me', () => {
+    const vcard = buildVCard(peter);
+    expect(vcard).not.toMatch(/TEL|wa\.me|signal\.me/);
+  });
+
+  it('adds WhatsApp and Signal as item pairs after X-SOCIALPROFILE, continuing the booking links counter', () => {
+    const lines = physicalLines(
+      buildVCard({
+        ...peter,
+        bookingLinks: [
+          { label: 'Crypto chat', url: 'https://calendly.com/chatwithpete/crypto-chat' },
+          { label: '30 min', url: 'https://calendly.com/chatwithpete/30min' },
+        ],
+        contact: { phone: '+61 491 570 156', whatsapp: '+61 491 570 156', signal: '+61 491 570 156' },
+      }),
+    );
+    expect(lines).toContain('item2.URL:https://calendly.com/chatwithpete/crypto-chat');
+    expect(lines).toContain('item3.URL:https://calendly.com/chatwithpete/30min');
+    expect(lines).toContain('item4.URL:https://wa.me/61491570156');
+    expect(lines).toContain('item4.X-ABLabel:WhatsApp');
+    expect(lines).toContain('item5.URL:https://signal.me/#p/+61491570156');
+    expect(lines).toContain('item5.X-ABLabel:Signal');
+    // Every item group name (item1..item5) is used exactly once for a URL and once for a label.
+    const groups = lines.map((l) => /^item(\d+)\./.exec(l)?.[1]).filter((g): g is string => !!g);
+    for (const g of new Set(groups)) expect(groups.filter((x) => x === g)).toHaveLength(2);
+    expect(new Set(groups)).toEqual(new Set(['1', '2', '3', '4', '5']));
+  });
+
+  it('omits WhatsApp or Signal when the stored value is invalid, without leaving a gap in numbering', () => {
+    const vcard = buildVCard({ ...peter, links: {}, contact: { whatsapp: 'not a number', signal: '+61 491 570 156' } });
+    expect(vcard).not.toMatch(/WhatsApp/);
+    expect(vcard).toContain('item2.URL:https://signal.me/#p/+61491570156');
+    expect(vcard).toContain('item2.X-ABLabel:Signal');
+  });
+
+  it('round-trips the phone through parseVCard and keeps the website', () => {
+    const vcard = buildVCard({ ...peter, contact: { phone: '+61 491 570 156' } });
+    const draft = parseVCard(vcard);
+    expect(draft.phone).toBe('+61491570156');
+    expect(draft.website).toBe('https://moshiconcepts.com');
+  });
+
   it('never includes an email address, even when one is typed into a link field', () => {
     const vcard = buildVCard({
       ...peter,

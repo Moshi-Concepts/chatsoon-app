@@ -23,6 +23,14 @@ export interface BookingLink {
   provider: BookingProvider;
 }
 
+export type ProfileContactKey = 'phone' | 'whatsapp' | 'signal';
+
+/** Phone and messaging details, stored as typed. `contactUrl` (profile-contact.ts) normalises them. */
+export type ProfileContact = Partial<Record<ProfileContactKey, string>>;
+
+/** Who can see a profile's `contact` fields. Defaults to 'connections' (private by default). */
+export type ContactVisibility = 'connections' | 'public';
+
 export interface PublicProfile {
   slug: string;
   displayName: string;
@@ -36,6 +44,17 @@ export interface PublicProfile {
   bookingLinks: BookingLink[];
   /** Only on GET /id/:slug when signed in: true if I have blocked this person (the page offers Unblock). */
   blockedByMe?: boolean;
+  /**
+   * Keys with a usable value, in CONTACT_KEYS order. Never values. Optional only because profiles cached
+   * by older builds lack it; the API always sends it.
+   */
+  contactChannels?: ProfileContactKey[];
+  /** Optional only because profiles cached by older builds lack it; the API always sends it. */
+  contactVisibility?: ContactVisibility;
+  /** Present only when this viewer may see it (owner, or allowed by contactVisibility). Usable values only, except for the owner. */
+  contact?: ProfileContact;
+  /** Signed, time-limited URL to /id/:slug/vcard. Present only alongside `contact` on a 'connections' profile. */
+  vcardUrl?: string;
 }
 
 export interface MyProfile extends PublicProfile {
@@ -137,6 +156,12 @@ export interface ScanConnectResponse {
   /** The other person's card, now in my contacts. */
   contact: Contact;
   alreadyConnected: boolean;
+}
+/** POST /id/:slug/connect. `contact` is sent when the owner has at least one usable channel. */
+export interface ConnectFormResponse {
+  ok: true;
+  contact?: ProfileContact;
+  vcardUrl?: string;
 }
 export interface ExtractCardResponse {
   contact: Contact;

@@ -10,6 +10,8 @@ import {
 } from './booking';
 import { REPORT_REASONS } from './constants';
 import { hasObjectionableText } from './moderation';
+import { CONTACT_HINTS, CONTACT_MAX, contactUrl } from './profile-contact';
+import type { ProfileContactKey } from './types';
 
 /** Optional free text: trims, turns '' into null, caps length. */
 export const optionalText = (max: number) =>
@@ -80,6 +82,23 @@ export const bookingLinksSchema = z
     });
   });
 
+/** One contact value: '' removes it, empty string and null both clear the field. Must parse with contactUrl. */
+const contactValue = (key: ProfileContactKey) =>
+  z
+    .string()
+    .trim()
+    .max(CONTACT_MAX[key], CONTACT_HINTS[key])
+    .refine(clean, OFFENSIVE)
+    .refine((v) => v === '' || contactUrl(key, v) !== null, CONTACT_HINTS[key])
+    .transform((v) => (v === '' ? null : v))
+    .nullable()
+    .optional();
+
+/** Phone, WhatsApp and Signal, each independently optional. Unknown keys (e.g. a future 'wechat') are stripped. */
+export const contactInputSchema = z
+  .object({ phone: contactValue('phone'), whatsapp: contactValue('whatsapp'), signal: contactValue('signal') })
+  .partial();
+
 export const profileInputSchema = z.object({
   displayName: z.string().trim().min(1, 'Name is required').max(80).refine(clean, OFFENSIVE),
   headline: publicText(120),
@@ -90,6 +109,9 @@ export const profileInputSchema = z.object({
   avatarKey: z.string().max(300).nullable().optional(),
   /** undefined keeps the current links; an array (including []) replaces them. */
   bookingLinks: bookingLinksSchema.optional(),
+  /** undefined keeps the current values; each key is merged independently, like links. */
+  contact: contactInputSchema.optional(),
+  contactVisibility: z.enum(['connections', 'public']).optional(),
 });
 export type ProfileInput = z.input<typeof profileInputSchema>;
 

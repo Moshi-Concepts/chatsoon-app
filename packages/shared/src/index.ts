@@ -3,6 +3,7 @@ export * from './constants';
 export * from './schemas';
 export * from './slug';
 export * from './links';
+export * from './profile-contact';
 export * from './booking';
 export * from './moderation';
 export * from './qr';
