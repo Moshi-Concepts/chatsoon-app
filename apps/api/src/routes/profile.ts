@@ -34,7 +34,7 @@ const LINK_HINTS: Record<LinkKey, string> = {
 
 type ProfileValues = Pick<
   ProfileRow,
-  'displayName' | 'headline' | 'company' | 'role' | 'links' | 'avatarKey'
+  'displayName' | 'headline' | 'company' | 'role' | 'links' | 'avatarKey' | 'bookingLinks'
 >;
 
 export const profileRoutes = new Hono<AppEnv>();
@@ -90,6 +90,8 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
     role: keep(input.role, existing?.role ?? null),
     links: JSON.stringify(mergeLinks(existing ? parseLinks(existing.links) : {}, input.links)),
     avatarKey: keep(avatarKey, existing?.avatarKey ?? null),
+    // undefined keeps the current booking links; an array (including []) replaces the whole list.
+    bookingLinks: input.bookingLinks === undefined ? (existing?.bookingLinks ?? '[]') : JSON.stringify(input.bookingLinks),
   };
 
   let row: ProfileRow;

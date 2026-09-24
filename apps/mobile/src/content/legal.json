@@ -49,7 +49,8 @@
         "paragraphs": [
           "Your public profile is public. Anyone who scans your QR code or has your link, which looks like chatsoon.app/id/alex-rivera-7f3a, can see it and save it as a contact card. It shows only what you add to your profile: your name, photo, headline, role, company and links.",
           "Your email address is never shown on your public profile.",
-          "Your contacts, notes, tags and priorities are private to you. People you connect with see only your public profile."
+          "Your contacts, notes, tags and priorities are private to you. People you connect with see only your public profile.",
+          "Booking links you add (such as Calendly or Google Calendar) are shown on your public profile. When someone books, they do it on that service's page, under its own terms and privacy policy. Chatsoon doesn't see or store the booking."
         ]
       },
       {

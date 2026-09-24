@@ -1,3 +1,4 @@
+import { parseBookingUrl } from './booking';
 import { APP_NAME, COPYRIGHT } from './constants';
 import {
   cleanText,
@@ -24,6 +25,7 @@ export interface VCardProfile {
   role?: string | null;
   links?: ProfileLinks;
   profileUrl: string;
+  bookingLinks?: { label: string; url: string }[];
 }
 
 const CRLF = '\r\n';
@@ -115,6 +117,14 @@ export function buildVCard(p: VCardProfile): string {
   const profileUrl = cleanText(p.profileUrl);
   if (/^https?:\/\/[^\s<>"`\\]+$/i.test(profileUrl)) {
     lines.push(`item1.URL:${profileUrl}`, `item1.X-ABLabel:${escapeText(APP_NAME)}`);
+  }
+
+  // One item pair per booking link, right after the profile URL. Only re-parsing links are trusted.
+  let item = 2;
+  for (const link of p.bookingLinks ?? []) {
+    if (!parseBookingUrl(link.url)) continue;
+    lines.push(`item${item}.URL:${link.url}`, `item${item}.X-ABLabel:${escapeText(link.label)}`);
+    item++;
   }
 
   const links = p.links ?? {};

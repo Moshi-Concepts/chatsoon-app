@@ -36,6 +36,13 @@
       "when": 1790206604715,
       "tag": "0004_usage_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790236482948,
+      "tag": "0005_booking_links",
+      "breakpoints": true
     }
   ]
 }

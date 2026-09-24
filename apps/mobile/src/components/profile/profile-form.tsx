@@ -1,10 +1,13 @@
 import type { LinkKey, MyProfile, ProfileInput } from '@chatsoon/shared';
 import { LINK_KEYS, profileInputSchema } from '@chatsoon/shared';
+import * as Crypto from 'expo-crypto';
 import { useRef } from 'react';
 import { StyleSheet, View, type TextInput, type TextInputProps } from 'react-native';
 
 import { Text, TextField, type IconName } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+
+import { BookingLinksEditor, type BookingLinkFormValue } from './booking-links-editor';
 
 export type ProfileFormValues = {
   displayName: string;
@@ -12,9 +15,18 @@ export type ProfileFormValues = {
   company: string;
   role: string;
   links: Record<LinkKey, string>;
+  bookingLinks: BookingLinkFormValue[];
 };
 
-export type ProfileField = 'displayName' | 'headline' | 'company' | 'role' | LinkKey;
+export type ProfileField =
+  | 'displayName'
+  | 'headline'
+  | 'company'
+  | 'role'
+  | LinkKey
+  | 'bookingLinks'
+  | `bookingLinks.${number}.url`
+  | `bookingLinks.${number}.label`;
 export type ProfileFormErrors = Partial<Record<ProfileField, string>>;
 
 export function profileToForm(profile: MyProfile | null | undefined): ProfileFormValues {
@@ -31,7 +43,17 @@ export function profileToForm(profile: MyProfile | null | undefined): ProfileFor
       website: links.website ?? '',
       youtube: links.youtube ?? '',
     },
+    // Old cached profiles (fetched before this field existed) have no bookingLinks: default to none.
+    bookingLinks: (profile?.bookingLinks ?? []).map((link) => ({
+      key: Crypto.randomUUID(),
+      label: link.label,
+      url: link.url,
+    })),
   };
+}
+
+function sameBookingLinks(a: BookingLinkFormValue[], b: BookingLinkFormValue[]): boolean {
+  return a.length === b.length && a.every((link, i) => link.label === b[i]?.label && link.url === b[i]?.url);
 }
 
 export function sameProfileForm(a: ProfileFormValues, b: ProfileFormValues): boolean {
@@ -40,34 +62,54 @@ export function sameProfileForm(a: ProfileFormValues, b: ProfileFormValues): boo
     a.headline === b.headline &&
     a.company === b.company &&
     a.role === b.role &&
-    LINK_KEYS.every((k) => a.links[k] === b.links[k])
+    LINK_KEYS.every((k) => a.links[k] === b.links[k]) &&
+    sameBookingLinks(a.bookingLinks, b.bookingLinks)
   );
 }
 
 /**
  * Validates the form with the shared profileInputSchema. Text is trimmed and empty fields become
- * null, so clearing a field removes it. Links are left out unless `withLinks` is set.
+ * null, so clearing a field removes it. Links and booking links are left out unless `withLinks` is
+ * set, which leaves the profile's current links (and booking links) untouched.
  */
 export function parseProfileForm(
   values: ProfileFormValues,
   avatarKey: string | null,
   { withLinks = true }: { withLinks?: boolean } = {},
 ): { ok: true; input: ProfileInput } | { ok: false; errors: ProfileFormErrors } {
+  // A booking link row left completely blank (e.g. added, then not filled in) is dropped, not an error.
+  const bookingRows = values.bookingLinks
+    .map((link, index) => ({ link, index }))
+    .filter(({ link }) => link.url.trim() || link.label.trim());
   const result = profileInputSchema.safeParse({
     displayName: values.displayName,
     headline: values.headline,
     company: values.company,
     role: values.role,
     links: withLinks ? values.links : undefined,
+    bookingLinks: withLinks ? bookingRows.map(({ link }) => ({ label: link.label, url: link.url })) : undefined,
     avatarKey,
   });
   if (result.success) return { ok: true, input: result.data };
 
   const errors: ProfileFormErrors = {};
   for (const issue of result.error.issues) {
-    const [head, sub] = issue.path;
-    const field = (head === 'links' ? sub : head) as ProfileField;
-    if (typeof field === 'string' && !errors[field]) errors[field] = issue.message;
+    const [head, sub, leaf] = issue.path;
+    let field: ProfileField | undefined;
+    if (head === 'links') {
+      if (typeof sub === 'string') field = sub as ProfileField;
+    } else if (head === 'bookingLinks') {
+      // ['bookingLinks', i, 'url' | 'label'] is a row error; ['bookingLinks'] alone (e.g. too many) is not.
+      // i counts sent rows only, so map it back to the form row.
+      const row = typeof sub === 'number' ? bookingRows[sub]?.index : undefined;
+      field =
+        row !== undefined && typeof leaf === 'string'
+          ? (`bookingLinks.${row}.${leaf}` as ProfileField)
+          : 'bookingLinks';
+    } else if (typeof head === 'string') {
+      field = head as ProfileField;
+    }
+    if (field && !errors[field]) errors[field] = issue.message;
   }
   return { ok: false, errors };
 }
@@ -220,44 +262,62 @@ export function ProfileFields({
       </View>
 
       {withLinks ? (
-        <View style={styles.group}>
-          <GroupHeader
-            title="Links"
-            hint="Handles or full links both work. They show on your public profile so people can find you."
+        <>
+          <View style={styles.group}>
+            <GroupHeader
+              title="Links"
+              hint="Handles or full links both work. They show on your public profile so people can find you."
+            />
+            {LINK_KEYS.map((key, i) => {
+              const field = LINK_FIELDS[key];
+              const last = i === LINK_KEYS.length - 1;
+              const next = LINK_KEYS[i + 1];
+              return (
+                <TextField
+                  key={key}
+                  ref={(el) => {
+                    linkRefs.current[key] = el;
+                  }}
+                  label={field.label}
+                  icon={field.icon}
+                  placeholder={field.placeholder}
+                  value={values.links[key]}
+                  onChangeText={(v) => setLink(key, v)}
+                  error={errors[key]}
+                  keyboardType={field.keyboardType}
+                  autoComplete={field.autoComplete ?? 'off'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  returnKeyType={last ? 'done' : 'next'}
+                  submitBehavior={last ? 'blurAndSubmit' : 'submit'}
+                  onSubmitEditing={() => (next ? linkRefs.current[next]?.focus() : onSubmit?.())}
+                  maxLength={field.maxLength}
+                  editable={editable}
+                />
+              );
+            })}
+          </View>
+
+          <BookingLinksEditor
+            links={values.bookingLinks}
+            onChange={(bookingLinks) => onChange({ ...values, bookingLinks })}
+            errors={bookingLinkRowErrors(errors, values.bookingLinks.length)}
+            listError={errors.bookingLinks}
+            editable={editable}
           />
-          {LINK_KEYS.map((key, i) => {
-            const field = LINK_FIELDS[key];
-            const last = i === LINK_KEYS.length - 1;
-            const next = LINK_KEYS[i + 1];
-            return (
-              <TextField
-                key={key}
-                ref={(el) => {
-                  linkRefs.current[key] = el;
-                }}
-                label={field.label}
-                icon={field.icon}
-                placeholder={field.placeholder}
-                value={values.links[key]}
-                onChangeText={(v) => setLink(key, v)}
-                error={errors[key]}
-                keyboardType={field.keyboardType}
-                autoComplete={field.autoComplete ?? 'off'}
-                autoCapitalize="none"
-                autoCorrect={false}
-                spellCheck={false}
-                returnKeyType={last ? 'done' : 'next'}
-                submitBehavior={last ? 'blurAndSubmit' : 'submit'}
-                onSubmitEditing={() => (next ? linkRefs.current[next]?.focus() : onSubmit?.())}
-                maxLength={field.maxLength}
-                editable={editable}
-              />
-            );
-          })}
-        </View>
+        </>
       ) : null}
     </View>
   );
+}
+
+/** Per-row `{ url, label }` errors for BookingLinksEditor, read out of the flat ProfileFormErrors map. */
+function bookingLinkRowErrors(errors: ProfileFormErrors, count: number): { url?: string; label?: string }[] {
+  return Array.from({ length: count }, (_, i) => ({
+    url: errors[`bookingLinks.${i}.url` as ProfileField],
+    label: errors[`bookingLinks.${i}.label` as ProfileField],
+  }));
 }
 
 function GroupHeader({ title, hint }: { title: string; hint?: string }) {

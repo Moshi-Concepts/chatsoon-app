@@ -124,6 +124,7 @@ describe('GET /id/:slug', () => {
       role: 'Head of Partnerships',
       links: OWNER_LINKS,
       avatarUrl: null,
+      bookingLinks: [],
     });
     expect(profile).not.toHaveProperty('email');
     expect(profile).not.toHaveProperty('userId');
@@ -245,6 +246,30 @@ describe('GET /id/:slug/vcard', () => {
   it('returns 404 for an unknown slug', async () => {
     const res = await call('/id/nobody-here-0000/vcard');
     expect(res.status).toBe(404);
+  });
+
+  it('adds a labelled item pair per booking link, after the profile url', async () => {
+    const pete = await signUpWithProfile('vcard-booking@example.com', 'Pete Booker');
+    await call('/me/profile', {
+      method: 'PUT',
+      token: pete.token,
+      json: {
+        displayName: 'Pete Booker',
+        bookingLinks: [
+          { url: 'https://calendly.com/chatwithpete/crypto-chat?back=1&month=2026-09' },
+          { url: 'https://calendly.com/chatwithpete/30min?back=1&month=2026-09' },
+        ],
+      },
+    });
+
+    const res = await call(`/id/${pete.slug}/vcard`);
+    expect(res.status).toBe(200);
+    const lines = (await res.text()).split('\r\n');
+    // item1 is the profile url itself; the booking links follow from item2.
+    expect(lines).toContain('item2.URL:https://calendly.com/chatwithpete/crypto-chat');
+    expect(lines).toContain('item2.X-ABLabel:Crypto chat');
+    expect(lines).toContain('item3.URL:https://calendly.com/chatwithpete/30min');
+    expect(lines).toContain('item3.X-ABLabel:30 min');
   });
 });
 

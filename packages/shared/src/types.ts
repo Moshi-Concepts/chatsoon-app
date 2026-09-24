@@ -6,6 +6,23 @@ export type LinkKey = 'x' | 'telegram' | 'linkedin' | 'website' | 'youtube';
 /** Profile links. Values are stored as the user typed them, normalised to full URLs by `toLinkUrl`. */
 export type ProfileLinks = Partial<Record<LinkKey, string>>;
 
+export type BookingProvider =
+  | 'calendly'
+  | 'google'
+  | 'calcom'
+  | 'hubspot'
+  | 'microsoft'
+  | 'zoom'
+  | 'savvycal'
+  | 'tidycal';
+
+/** One booking link on a profile: the label the user chose and the provider `parseBookingUrl` detected. */
+export interface BookingLink {
+  label: string;
+  url: string;
+  provider: BookingProvider;
+}
+
 export interface PublicProfile {
   slug: string;
   displayName: string;
@@ -15,6 +32,8 @@ export interface PublicProfile {
   links: ProfileLinks;
   /** Signed, time-limited URL to the avatar in R2, or null. */
   avatarUrl: string | null;
+  /** Booking links shown on the "Book a meeting" card, in display order. Always present, possibly empty. */
+  bookingLinks: BookingLink[];
   /** Only on GET /id/:slug when signed in: true if I have blocked this person (the page offers Unblock). */
   blockedByMe?: boolean;
 }

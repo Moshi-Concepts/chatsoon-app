@@ -5,6 +5,7 @@ import { Link, Stack, router, useLocalSearchParams, useNavigation } from 'expo-r
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
+import { BookingLinksCard } from '@/components/booking';
 import { ReportDialog } from '@/components/moderation/report-dialog';
 import { Button, Card, EmptyState, Icon, Screen, Text, type IconName } from '@/components/ui';
 import { ConnectForm } from '@/components/web/connect-form';
@@ -135,6 +136,10 @@ function ProfileBody({ profile, signedIn }: { profile: PublicProfile; signedIn: 
   return (
     <View style={styles.body}>
       <ProfileCard profile={profile} />
+      {/* ?. because a profile cached by an older build has no bookingLinks. */}
+      {profile.bookingLinks?.length && !profile.blockedByMe ? (
+        <BookingLinksCard links={profile.bookingLinks} ownerName={profile.displayName} />
+      ) : null}
       {signedIn ? (
         <MemberActions profile={profile} onReport={openReport} />
       ) : Platform.OS === 'web' ? (

@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+import {
+  BOOKING_LABEL_MAX,
+  BOOKING_URL_HINT,
+  BOOKING_URL_MAX,
+  MAX_BOOKING_LINKS,
+  parseBookingUrl,
+  suggestBookingLabel,
+} from './booking';
 import { REPORT_REASONS } from './constants';
 import { hasObjectionableText } from './moderation';
 
@@ -41,6 +49,37 @@ export const linksSchema = z
   })
   .partial();
 
+/** One booking link as submitted: url must be a supported booking link; an empty label is filled in. */
+export const bookingLinkInputSchema = z
+  .object({
+    url: z
+      .string()
+      .trim()
+      .min(1, BOOKING_URL_HINT)
+      .max(BOOKING_URL_MAX, BOOKING_URL_HINT)
+      .refine(clean, OFFENSIVE)
+      .refine((v) => parseBookingUrl(v) !== null, BOOKING_URL_HINT),
+    label: z.string().trim().max(BOOKING_LABEL_MAX).refine(clean, OFFENSIVE).nullable().optional(),
+  })
+  .transform((v) => {
+    const url = parseBookingUrl(v.url)!.url;
+    return { url, label: v.label || suggestBookingLabel(url) };
+  });
+
+/** Up to MAX_BOOKING_LINKS links, in display order. Duplicate canonical URLs are rejected. */
+export const bookingLinksSchema = z
+  .array(bookingLinkInputSchema)
+  .max(MAX_BOOKING_LINKS, 'Add up to 5 booking links')
+  .superRefine((links, ctx) => {
+    const seen = new Set<string>();
+    links.forEach((link, i) => {
+      if (seen.has(link.url)) {
+        ctx.addIssue({ code: 'custom', message: "You've added this booking link already", path: [i, 'url'] });
+      }
+      seen.add(link.url);
+    });
+  });
+
 export const profileInputSchema = z.object({
   displayName: z.string().trim().min(1, 'Name is required').max(80).refine(clean, OFFENSIVE),
   headline: publicText(120),
@@ -49,6 +88,8 @@ export const profileInputSchema = z.object({
   links: linksSchema.optional(),
   /** R2 key returned by POST /files?purpose=avatar. Must belong to the caller. null removes the avatar. */
   avatarKey: z.string().max(300).nullable().optional(),
+  /** undefined keeps the current links; an array (including []) replaces them. */
+  bookingLinks: bookingLinksSchema.optional(),
 });
 export type ProfileInput = z.input<typeof profileInputSchema>;
 

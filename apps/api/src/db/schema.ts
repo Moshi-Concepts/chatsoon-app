@@ -92,6 +92,8 @@ export const profiles = sqliteTable('profiles', {
   role: text('role'),
   /** JSON ProfileLinks */
   links: text('links').notNull().default('{}'),
+  /** JSON array of { label, url }, in display order. See lib/serialize.ts parseBookingLinks. */
+  bookingLinks: text('booking_links').notNull().default('[]'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

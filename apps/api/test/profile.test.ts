@@ -1,4 +1,4 @@
-import { SEEDED_TAGS, type ApiErrorBody, type Me, type MyProfile } from '@chatsoon/shared';
+import { BOOKING_URL_HINT, SEEDED_TAGS, type ApiErrorBody, type BookingLink, type Me, type MyProfile } from '@chatsoon/shared';
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
@@ -352,5 +352,109 @@ describe('PUT /me/profile', () => {
       .bind(userId)
       .first<{ avatar_key: string | null }>();
     expect(row?.avatar_key).toBeNull();
+  });
+
+  describe('booking links', () => {
+    const PETE_LINKS: BookingLink[] = [
+      { url: 'https://calendly.com/chatwithpete/crypto-chat', label: 'Crypto chat', provider: 'calendly' },
+      { url: 'https://calendly.com/chatwithpete/30min', label: '30 min', provider: 'calendly' },
+    ];
+
+    it('saves canonical urls, labels and provider, visible from PUT, GET /me and GET /id/:slug', async () => {
+      const { token, slug } = await signUpWithProfile('booking-pete@example.com', 'Pete Booker');
+      const saved = await saveProfile(token, {
+        displayName: 'Pete Booker',
+        bookingLinks: [
+          { url: 'https://calendly.com/chatwithpete/crypto-chat?back=1&month=2026-09' },
+          { url: 'https://calendly.com/chatwithpete/30min?back=1&month=2026-09' },
+        ],
+      });
+      expect(saved.bookingLinks).toEqual(PETE_LINKS);
+      expect((await getMe(token)).profile?.bookingLinks).toEqual(PETE_LINKS);
+
+      const pub = (await (await call(`/id/${slug}`)).json()) as { bookingLinks: BookingLink[] };
+      expect(pub.bookingLinks).toEqual(PETE_LINKS);
+    });
+
+    it('keeps booking links when the field is left out, and clears them with []', async () => {
+      const { token } = await signUpWithProfile('booking-keep@example.com', 'Casey Keep');
+      await saveProfile(token, { displayName: 'Casey Keep', bookingLinks: [{ url: PETE_LINKS[1]!.url }] });
+
+      const kept = await saveProfile(token, { displayName: 'Casey Keep' });
+      expect(kept.bookingLinks).toEqual([PETE_LINKS[1]]);
+
+      const cleared = await saveProfile(token, { displayName: 'Casey Keep', bookingLinks: [] });
+      expect(cleared.bookingLinks).toEqual([]);
+    });
+
+    it('returns [] for a new profile that never set booking links', async () => {
+      const { token } = await signUpWithProfile('booking-none@example.com', 'Nora None');
+      expect((await getMe(token)).profile?.bookingLinks).toEqual([]);
+    });
+
+    it('rejects an unsupported booking url with the hint message, and saves nothing', async () => {
+      const { token } = await signUpWithProfile('booking-bad-url@example.com', 'Uma Unsupported');
+      const res = await putProfile(token, {
+        displayName: 'Uma Unsupported',
+        bookingLinks: [{ url: 'https://example.com/book' }],
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as ApiErrorBody;
+      expect(body.error.code).toBe('bad_request');
+      expect(body.error.message).toContain(BOOKING_URL_HINT);
+      expect((await getMe(token)).profile?.bookingLinks).toEqual([]);
+    });
+
+    it('rejects more than 5 booking links', async () => {
+      const { token } = await signUpWithProfile('booking-max@example.com', 'Max Links');
+      const bookingLinks = Array.from({ length: 6 }, (_, i) => ({ url: `https://cal.com/max/event-${i}` }));
+      const res = await putProfile(token, { displayName: 'Max Links', bookingLinks });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as ApiErrorBody).error.message).toContain('Add up to 5 booking links');
+    });
+
+    it('rejects duplicate booking links (same canonical url)', async () => {
+      const { token } = await signUpWithProfile('booking-dup@example.com', 'Dana Dup');
+      const res = await putProfile(token, {
+        displayName: 'Dana Dup',
+        bookingLinks: [{ url: 'https://calendly.com/dana/intro' }, { url: 'https://calendly.com/dana/intro?month=2026-09' }],
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as ApiErrorBody).error.message).toContain("You've added this booking link already");
+    });
+
+    it('rejects an offensive label', async () => {
+      const { token } = await signUpWithProfile('booking-offensive@example.com', 'Olive Offensive');
+      const res = await putProfile(token, {
+        displayName: 'Olive Offensive',
+        bookingLinks: [{ url: 'https://cal.com/olive', label: 'fuck off' }],
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as ApiErrorBody).error.message).toContain('Please remove offensive language');
+    });
+
+    it('drops a stored link whose url no longer parses, on read', async () => {
+      const { token, userId, slug } = await signUpWithProfile('booking-stale@example.com', 'Stan Stale');
+      await saveProfile(token, { displayName: 'Stan Stale', bookingLinks: [{ url: 'https://calendly.com/stan/chat' }] });
+      // A row from before a provider's rules tightened, or one edited directly: not something the API would write.
+      await env.DB.prepare('update profiles set booking_links = ? where user_id = ?')
+        .bind(
+          JSON.stringify([
+            { label: 'Chat with Stan', url: 'https://calendly.com/stan/chat' },
+            { label: 'Gone', url: 'https://not-a-booking-host.example/x' },
+          ]),
+          userId,
+        )
+        .run();
+
+      const me = await getMe(token);
+      expect(me.profile?.bookingLinks).toEqual([
+        { label: 'Chat with Stan', url: 'https://calendly.com/stan/chat', provider: 'calendly' },
+      ]);
+      const pub = (await (await call(`/id/${slug}`)).json()) as { bookingLinks: BookingLink[] };
+      expect(pub.bookingLinks).toEqual([
+        { label: 'Chat with Stan', url: 'https://calendly.com/stan/chat', provider: 'calendly' },
+      ]);
+    });
   });
 });

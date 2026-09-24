@@ -1,9 +1,10 @@
-import type { Contact } from '@chatsoon/shared';
+import { parseBookingUrl, suggestBookingLabel, type BookingLink, type Contact } from '@chatsoon/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { BookingLinksCard } from '@/components/booking';
 import { CardPhoto } from '@/components/contacts/card-photo';
 import { ChannelList, contactChannels, QuickActions } from '@/components/contacts/contact-channels';
 import { HeaderTextButton } from '@/components/contacts/header-button';
@@ -25,6 +26,7 @@ import {
   useContact,
   useDeleteContact,
   useEvents,
+  usePublicProfile,
   useTags,
 } from '@/lib/queries';
 
@@ -55,6 +57,8 @@ export default function ContactDetailScreen() {
 
   const tags = useTags();
   const events = useEvents();
+  // Linked contact: load their booking links live, so ones added after connecting still show up.
+  const linkedProfile = usePublicProfile(contact?.linkedSlug ?? undefined);
   // A card still in the outbox is being uploaded or read on this device.
   const outboxItem = useOutboxItem(id);
   const outboxReady = useOutboxReady();
@@ -124,6 +128,11 @@ export default function ContactDetailScreen() {
   // Sent with the Connect form on my public page by someone without an account: there is no
   // profile to report or block, so the message itself can be reported.
   const connectMessage = !linked && c.source === 'web_connect';
+  // No linked user: a card or QR photographed with a Calendly (or similar) link as the website.
+  const websiteBooking = !linked && c.website ? parseBookingUrl(c.website) : null;
+  const websiteBookingLink: BookingLink | null = websiteBooking
+    ? { label: suggestBookingLabel(websiteBooking.url), url: websiteBooking.url, provider: websiteBooking.provider }
+    : null;
   // `frozen` stays set after a successful delete or block, so nothing re-enables while the screen closes.
   const busy = !!frozen || deleteContact.isPending || block.isPending;
 
@@ -245,6 +254,12 @@ export default function ContactDetailScreen() {
       ) : null}
 
       <QuickActions channels={channels} />
+
+      {linked ? (
+        linkedProfile.data ? <BookingLinksCard links={linkedProfile.data.bookingLinks} ownerName={c.name} /> : null
+      ) : websiteBookingLink ? (
+        <BookingLinksCard links={[websiteBookingLink]} ownerName={c.name} />
+      ) : null}
 
       {c.cardImageUrl ? <CardPhoto uri={c.cardImageUrl} name={c.name} /> : null}
 

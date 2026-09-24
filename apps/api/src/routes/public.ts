@@ -10,7 +10,7 @@ import { ApiError, badRequest, clientIp, ipKey, limit, notFound, parseJson } fro
 import { newId } from '../lib/ids';
 import { optionalAuth } from '../lib/middleware';
 import { contactFieldsFromConnectValue, findProfileBySlug, hasBlocked } from '../lib/profiles';
-import { parseLinks, toPublicProfile } from '../lib/serialize';
+import { parseBookingLinks, parseLinks, toPublicProfile } from '../lib/serialize';
 import { verifyTurnstile } from '../lib/turnstile';
 
 export const publicRoutes = new Hono<AppEnv>();
@@ -63,6 +63,7 @@ publicRoutes.get('/id/:slug/vcard', optionalAuth, async (c) => {
     role: profile.role,
     links: parseLinks(profile.links),
     profileUrl: `${c.env.WEB_ORIGIN}${PROFILE_PATH_PREFIX}${profile.slug}`,
+    bookingLinks: parseBookingLinks(profile.bookingLinks),
   });
   setCacheHeaders(c);
   // Slugs are [a-z0-9-] only, so the filename needs no escaping.

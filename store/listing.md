@@ -125,3 +125,22 @@ form, because Google updates that list. The iOS build doesn't include ML Kit.
 - **Closed testing requirement:** if the Play developer account is a personal account created after November 2023,
   upload to closed testing on 24 September and recruit 12 testers the same day. The 14 day clock ends around
   8 October, then apply for production. Until then Android users use https://chatsoon.app.
+
+## 1.1 update: booking links
+
+Use these only for the 1.1 submission (the build with booking links). 1.0 doesn't have the feature, so its listing
+and notes must not mention it.
+
+**What's New in 1.1**
+
+> Book meetings straight from someone's profile. Add your Calendly, Google Calendar or other booking links, and
+> people can pick a time with you without leaving the app.
+
+**Description:** add this block after ORGANISE EVERYONE.
+
+> SCHEDULE TIME
+> Add booking links like Calendly or Google Calendar to your profile, so people can book time with you without leaving Chatsoon.
+
+**Reviewer notes:** add this sentence at the end.
+
+> To see booking links: Me tab > Edit profile > Booking links, paste https://calendly.com/chatwithpete/30min, save, then tap View my public page and tap the booking link to open the booking page in the app.

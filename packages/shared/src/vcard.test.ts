@@ -90,6 +90,38 @@ describe('buildVCard', () => {
     expect(vcard.match(/^(?:item\d+\.)?URL:.*$/gm)).toEqual(['item1.URL:https://chatsoon.app/id/alex-rivera-demo']);
   });
 
+  it('adds one item pair per booking link right after the profile URL, numbered from item2', () => {
+    const lines = physicalLines(
+      buildVCard({
+        ...peter,
+        links: {},
+        bookingLinks: [
+          { label: 'Crypto chat', url: 'https://calendly.com/chatwithpete/crypto-chat' },
+          { label: '30 min', url: 'https://calendly.com/chatwithpete/30min' },
+        ],
+      }),
+    );
+    expect(lines).toContain('item1.URL:https://chatsoon.app/id/peter-bui-7f3a');
+    expect(lines).toContain('item2.URL:https://calendly.com/chatwithpete/crypto-chat');
+    expect(lines).toContain('item2.X-ABLabel:Crypto chat');
+    expect(lines).toContain('item3.URL:https://calendly.com/chatwithpete/30min');
+    expect(lines).toContain('item3.X-ABLabel:30 min');
+  });
+
+  it('escapes a booking label and skips a link that no longer parses', () => {
+    const vcard = buildVCard({
+      ...peter,
+      links: {},
+      bookingLinks: [
+        { label: 'Sales, EMEA; APAC', url: 'https://cal.com/peter/30min' },
+        { label: 'Stale', url: 'https://example.com/gone' },
+      ],
+    });
+    expect(vcard).toContain('item2.URL:https://cal.com/peter/30min');
+    expect(vcard).toContain('item2.X-ABLabel:Sales\\, EMEA\\; APAC');
+    expect(vcard).not.toMatch(/item3\.|example\.com|Stale/);
+  });
+
   it('never includes an email address, even when one is typed into a link field', () => {
     const vcard = buildVCard({
       ...peter,

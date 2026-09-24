@@ -1,0 +1,1 @@
+ALTER TABLE `profiles` ADD `booking_links` text DEFAULT '[]' NOT NULL;

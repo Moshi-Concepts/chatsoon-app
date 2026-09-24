@@ -1,4 +1,17 @@
-import type { ChatsoonEvent, Contact, ContactSource, ExtractionStatus, MyProfile, ProfileLinks, PublicProfile, Tag } from '@chatsoon/shared';
+import {
+  MAX_BOOKING_LINKS,
+  parseBookingUrl,
+  suggestBookingLabel,
+  type BookingLink,
+  type ChatsoonEvent,
+  type Contact,
+  type ContactSource,
+  type ExtractionStatus,
+  type MyProfile,
+  type ProfileLinks,
+  type PublicProfile,
+  type Tag,
+} from '@chatsoon/shared';
 
 import type { ContactRow, EventRow, ProfileRow, TagRow } from '../db/schema';
 import type { Env } from '../env';
@@ -16,6 +29,37 @@ export function parseLinks(json: string | null | undefined): ProfileLinks {
   }
 }
 
+/**
+ * Re-parses each stored link's URL, dropping any that no longer parse (a provider dropped or the
+ * rules changed) and adding the provider. Keeps the stored label, or suggests one when it's missing.
+ */
+export function parseBookingLinks(json: string | null | undefined): BookingLink[] {
+  if (!json) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  const links: BookingLink[] = [];
+  for (const item of parsed) {
+    if (links.length >= MAX_BOOKING_LINKS) break;
+    if (!item || typeof item !== 'object') continue;
+    const { url, label } = item as { url?: unknown; label?: unknown };
+    if (typeof url !== 'string') continue;
+    const canonical = parseBookingUrl(url);
+    if (!canonical) continue;
+    links.push({
+      label: typeof label === 'string' && label ? label : suggestBookingLabel(canonical.url),
+      url: canonical.url,
+      provider: canonical.provider,
+    });
+  }
+  return links;
+}
+
 export async function toPublicProfile(env: Env, row: ProfileRow): Promise<PublicProfile> {
   return {
     slug: row.slug,
@@ -26,6 +70,7 @@ export async function toPublicProfile(env: Env, row: ProfileRow): Promise<Public
     links: parseLinks(row.links),
     // Public pages get a longer-lived URL so shared links keep their photo.
     avatarUrl: row.avatarKey ? await signedFileUrl(env, row.avatarKey, 7 * 24 * 3600) : null,
+    bookingLinks: parseBookingLinks(row.bookingLinks),
   };
 }
 
