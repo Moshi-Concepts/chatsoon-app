@@ -1,16 +1,25 @@
 User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
-Disallow: /contacts
+Disallow: /contacts$
 Disallow: /contact/
-Disallow: /add
-Disallow: /qr
-Disallow: /me
-Disallow: /scan
-Disallow: /card
+Disallow: /add$
+Disallow: /qr$
+Disallow: /me$
+Disallow: /scan$
+Disallow: /card$
 Disallow: /card-review/
-Disallow: /tags
-Disallow: /profile-edit
-Disallow: /onboarding
-Disallow: /sign-in
+Disallow: /tags$
+Disallow: /profile-edit$
+Disallow: /onboarding$
+
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: CCBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: meta-externalagent
+User-agent: Bytespider
+Disallow: /id/
 
 Sitemap: https://chatsoon.app/sitemap.xml

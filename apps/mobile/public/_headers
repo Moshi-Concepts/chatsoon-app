@@ -22,6 +22,48 @@
 /id/*
   X-Robots-Tag: noindex
 
+# Signed-in-only app routes. robots.txt already disallows crawling these, but this header is a
+# stronger signal for a route that gets crawled anyway (a stray link, a redirect), since the SPA
+# shell it serves has no real content for a crawler that doesn't run JavaScript.
+/sign-in
+  X-Robots-Tag: noindex
+
+/onboarding
+  X-Robots-Tag: noindex
+
+/contacts
+  X-Robots-Tag: noindex
+
+/contact/*
+  X-Robots-Tag: noindex
+
+/add
+  X-Robots-Tag: noindex
+
+/qr
+  X-Robots-Tag: noindex
+
+/me
+  X-Robots-Tag: noindex
+
+/scan
+  X-Robots-Tag: noindex
+
+/card
+  X-Robots-Tag: noindex
+
+/card-review/*
+  X-Robots-Tag: noindex
+
+/tags
+  X-Robots-Tag: noindex
+
+/profile-edit
+  X-Robots-Tag: noindex
+
+/llms.txt
+  Cache-Control: public, max-age=3600
+
 # Hashed bundles from `expo export` never change.
 /_expo/static/*
   Cache-Control: public, max-age=31536000, immutable

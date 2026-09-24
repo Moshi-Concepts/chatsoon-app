@@ -14,4 +14,12 @@ describe('health and auth', () => {
     const data = (await res.json()) as { user: { email: string } };
     expect(data.user.email).toBe('health@example.com');
   });
+
+  it('serves a disallow-all robots.txt', async () => {
+    const res = await call('/robots.txt');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/^text\/plain/);
+    const body = await res.text();
+    expect(body).toContain('Disallow: /');
+  });
 });

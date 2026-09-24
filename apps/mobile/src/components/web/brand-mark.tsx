@@ -15,7 +15,7 @@ export function BrandMark({ size = 32 }: { size?: number }) {
         source={icon}
         style={{ width: size, height: size, borderRadius: size * 0.26 }}
         contentFit="cover"
-        alt=""
+        accessibilityLabel=""
       />
       <Text style={[styles.word, { fontSize: size * 0.6, lineHeight: size * 0.75 }]}>{APP_NAME}</Text>
     </View>

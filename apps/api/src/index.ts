@@ -58,6 +58,8 @@ app.notFound((c) => c.json(errorBody('not_found', 'Not found'), 404));
 
 app.get('/', (c) => c.json({ name: 'chatsoon-api', ok: true }));
 app.get('/health', (c) => c.json({ ok: true }));
+// Nothing on api.chatsoon.app is meant for search engines; the public pages live on chatsoon.app.
+app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n', 200, { 'Cache-Control': 'public, max-age=86400' }));
 
 app.on(['GET', 'POST'], '/auth/*', otpRateLimit, (c) => createAuth(c.env, c.executionCtx).handler(c.req.raw));
 

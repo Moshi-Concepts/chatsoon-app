@@ -104,7 +104,8 @@ function LockedPill({ contactKey }: { contactKey: ProfileContactKey }) {
   const theme = useTheme();
   return (
     <View
-      style={[styles.pill, styles.locked, { backgroundColor: theme.surfaceAlt }]}
+      // The lock icon and tertiary text mark it as locked. No opacity: faded text fails contrast checks.
+      style={[styles.pill, { backgroundColor: theme.surfaceAlt }]}
       accessibilityLabel={`${CONTACT_LABELS[contactKey]}, hidden until you connect`}>
       <Icon name="lock-closed-outline" size={16} color="textTertiary" />
       <Text variant="captionStrong" color="textTertiary" numberOfLines={1}>
@@ -126,5 +127,4 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     maxWidth: 220,
   },
-  locked: { opacity: 0.6 },
 });

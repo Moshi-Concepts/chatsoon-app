@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Link, Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { BookingLinksCard } from '@/components/booking';
 import { ReportDialog } from '@/components/moderation/report-dialog';
@@ -107,8 +107,13 @@ function describe(p: PublicProfile): string {
 
 function ProfileLoading() {
   const theme = useTheme();
+  // On web, fill the viewport so the footer starts below the fold and can't cause a layout shift
+  // once the profile (or the not-found state) replaces this placeholder.
+  const { height } = useWindowDimensions();
   return (
-    <View style={styles.loading} accessibilityLabel="Loading profile">
+    <View
+      style={[styles.loading, Platform.OS === 'web' && { minHeight: height }]}
+      accessibilityLabel="Loading profile">
       <ActivityIndicator size="large" color={theme.primary} />
     </View>
   );

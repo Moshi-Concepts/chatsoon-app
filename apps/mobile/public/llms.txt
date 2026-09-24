@@ -1,0 +1,13 @@
+# Chatsoon
+
+> Chatsoon is a networking CRM for events. Share a digital business card with a QR code, scan business cards and event badges with AI, and keep notes, tags and follow-ups for everyone you meet. Free on the web at chatsoon.app; iPhone and Android apps are coming soon. Made by Moshi Concepts Inc.
+
+## Product
+
+- [Chatsoon home](https://chatsoon.app/): what Chatsoon does and how connecting works
+- [Support and FAQ](https://chatsoon.app/support): getting started, connecting, card scanning, exporting contacts, deleting an account
+
+## Policies
+
+- [Privacy policy](https://chatsoon.app/privacy)
+- [Terms of use](https://chatsoon.app/terms)
