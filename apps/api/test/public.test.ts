@@ -1,4 +1,4 @@
-import type { ApiErrorBody, PublicProfile } from '@chatsoon/shared';
+import type { ApiErrorBody, ConnectFormResponse, PublicProfile } from '@chatsoon/shared';
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +44,18 @@ async function contactsOf(userId: string) {
 
 async function block(blockerId: string, blockedId: string) {
   await env.DB.prepare('insert into blocks (blocker_id, blocked_id) values (?, ?)').bind(blockerId, blockedId).run();
+}
+
+async function putProfile(token: string, json: unknown) {
+  const res = await call('/me/profile', { method: 'PUT', token, json });
+  expect(res.status, await res.clone().text()).toBe(200);
+  return res;
+}
+
+/** Flips one hex character so a signature or key stops matching, without ever landing back on itself. */
+function tamper(hex: string): string {
+  const last = hex.at(-1) ?? '0';
+  return hex.slice(0, -1) + (last === '0' ? '1' : '0');
 }
 
 // Turnstile siteverify is stubbed so tests never depend on the network. `turnstilePasses`
@@ -125,6 +137,8 @@ describe('GET /id/:slug', () => {
       links: OWNER_LINKS,
       avatarUrl: null,
       bookingLinks: [],
+      contactChannels: [],
+      contactVisibility: 'connections',
     });
     expect(profile).not.toHaveProperty('email');
     expect(profile).not.toHaveProperty('userId');
@@ -220,6 +234,87 @@ describe('GET /id/:slug', () => {
   });
 });
 
+describe('contact on GET /id/:slug (§2, §3 of the plan)', () => {
+  /** A fresh profile with one usable channel, at the given visibility (default 'connections'). */
+  async function ownerWithPhone(email: string, name: string, visibility: 'connections' | 'public' = 'connections') {
+    const person = await signUpWithProfile(email, name);
+    await putProfile(person.token, {
+      displayName: name,
+      contact: { phone: '+61 491 570 156' },
+      contactVisibility: visibility,
+    });
+    return person;
+  }
+
+  it('gives an anonymous viewer of a connections profile no contact or vcardUrl, and no digits anywhere', async () => {
+    const person = await ownerWithPhone('contact-conn-anon@example.com', 'Cara Connections');
+    const res = await call(`/id/${person.slug}`);
+    expect(res.headers.get('cache-control')).toBe('public, max-age=60');
+    const text = await res.text();
+    expect(text).not.toContain('491570156');
+    expect(text).not.toContain('491 570 156');
+
+    const body = JSON.parse(text) as PublicProfile;
+    expect(body).not.toHaveProperty('contact');
+    expect(body).not.toHaveProperty('vcardUrl');
+    expect(body.contactChannels).toEqual(['phone']);
+    expect(body.contactVisibility).toBe('connections');
+  });
+
+  it('gives an anonymous viewer of a public profile the contact, dropping a legacy invalid value written straight to D1', async () => {
+    const person = await ownerWithPhone('contact-pub-anon@example.com', 'Priya Public', 'public');
+    // A hand-edited row: a bare Signal username, which never passes contactUrl.
+    await env.DB.prepare('update profiles set contact = ? where user_id = ?')
+      .bind(JSON.stringify({ phone: '+61 491 570 156', signal: 'peter.42' }), person.userId)
+      .run();
+
+    const body = (await (await call(`/id/${person.slug}`)).json()) as PublicProfile;
+    expect(body.contact).toEqual({ phone: '+61 491 570 156' });
+    expect(body.contactChannels).toEqual(['phone']);
+    // vcardUrl only ever accompanies a 'connections' profile: a public one's plain vcard already has it.
+    expect(body).not.toHaveProperty('vcardUrl');
+  });
+
+  it('gives a signed-in stranger no contact', async () => {
+    const person = await ownerWithPhone('contact-stranger-owner@example.com', 'Sol Stranger');
+    const stranger = await signUpWithProfile('contact-stranger@example.com', 'Sam Stranger');
+    const body = (await (await call(`/id/${person.slug}`, { token: stranger.token })).json()) as PublicProfile;
+    expect(body).not.toHaveProperty('contact');
+    expect(body).not.toHaveProperty('vcardUrl');
+  });
+
+  it('gives an accepted connection the contact and a signed vcardUrl, cached private, no-store', async () => {
+    const person = await ownerWithPhone('contact-friend-owner@example.com', 'Fay Owner');
+    const friend = await signUpWithProfile('contact-friend@example.com', 'Fern Friend');
+    expect((await call('/connections/scan', { method: 'POST', token: friend.token, json: { slug: person.slug } })).status).toBe(200);
+
+    const res = await call(`/id/${person.slug}`, { token: friend.token });
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    const body = (await res.json()) as PublicProfile;
+    expect(body.contact).toEqual({ phone: '+61 491 570 156' });
+    expect(body.vcardUrl).toMatch(new RegExp(`/id/${person.slug}/vcard\\?exp=\\d+&sig=[0-9a-f]{64}$`));
+  });
+
+  it('takes the contact away once the viewer blocks the owner', async () => {
+    const person = await ownerWithPhone('contact-blockee-owner@example.com', 'Bo Owner');
+    const friend = await signUpWithProfile('contact-blocker-friend@example.com', 'Bea Friend');
+    await call('/connections/scan', { method: 'POST', token: friend.token, json: { slug: person.slug } });
+    const before = (await (await call(`/id/${person.slug}`, { token: friend.token })).json()) as PublicProfile;
+    expect(before.contact).toEqual({ phone: '+61 491 570 156' });
+
+    await block(friend.userId, person.userId);
+    const after = (await (await call(`/id/${person.slug}`, { token: friend.token })).json()) as PublicProfile;
+    expect(after).not.toHaveProperty('contact');
+    expect(after).not.toHaveProperty('vcardUrl');
+  });
+
+  it('gives the owner their own contact viewing their own profile', async () => {
+    const person = await ownerWithPhone('contact-self-owner@example.com', 'Selma Self');
+    const body = (await (await call(`/id/${person.slug}`, { token: person.token })).json()) as PublicProfile;
+    expect(body.contact).toEqual({ phone: '+61 491 570 156' });
+  });
+});
+
 describe('GET /id/:slug/vcard', () => {
   it('downloads a vCard named after the slug', async () => {
     const res = await call(`/id/${owner.slug}/vcard`);
@@ -270,6 +365,77 @@ describe('GET /id/:slug/vcard', () => {
     expect(lines).toContain('item2.X-ABLabel:Crypto chat');
     expect(lines).toContain('item3.URL:https://calendly.com/chatwithpete/30min');
     expect(lines).toContain('item3.X-ABLabel:30 min');
+  });
+
+  it('has no TEL, wa.me or signal.me for an anonymous viewer of a connections profile, and is never indexed', async () => {
+    const person = await signUpWithProfile('vcard-conn@example.com', 'Vera VcardPrivate');
+    await putProfile(person.token, {
+      displayName: 'Vera VcardPrivate',
+      contact: { phone: '+61 491 570 156', whatsapp: '+61 491 570 156', signal: '+61 491 570 156' },
+    });
+
+    const res = await call(`/id/${person.slug}/vcard`);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    const text = await res.text();
+    expect(text).not.toMatch(/^TEL/m);
+    expect(text).not.toContain('wa.me');
+    expect(text).not.toContain('signal.me');
+  });
+
+  it('has TEL and the item pairs for an anonymous viewer of a public profile', async () => {
+    const person = await signUpWithProfile('vcard-pub@example.com', 'Priya VcardPublic');
+    await putProfile(person.token, {
+      displayName: 'Priya VcardPublic',
+      contact: { phone: '+61 491 570 156', whatsapp: '+61 491 570 156', signal: '+61 491 570 156' },
+      contactVisibility: 'public',
+    });
+
+    const text = await (await call(`/id/${person.slug}/vcard`)).text();
+    expect(text).toContain('TEL;TYPE=CELL:+61491570156');
+    const lines = text.split('\r\n');
+    expect(lines.some((l) => /^item\d+\.URL:https:\/\/wa\.me\/61491570156$/.test(l))).toBe(true);
+    expect(lines.some((l) => /^item\d+\.URL:https:\/\/signal\.me\/#p\/\+61491570156$/.test(l))).toBe(true);
+    expect(text).toContain('X-ABLabel:WhatsApp');
+    expect(text).toContain('X-ABLabel:Signal');
+  });
+
+  it('has TEL and Cache-Control: private, no-store for the signed URL GET /id/:slug hands back', async () => {
+    const owner = await signUpWithProfile('vcard-signed-owner@example.com', 'Sian Signed');
+    await putProfile(owner.token, { displayName: 'Sian Signed', contact: { phone: '+61 491 570 156' } });
+    const friend = await signUpWithProfile('vcard-signed-friend@example.com', 'Fern SignedFriend');
+    await call('/connections/scan', { method: 'POST', token: friend.token, json: { slug: owner.slug } });
+
+    const profile = (await (await call(`/id/${owner.slug}`, { token: friend.token })).json()) as PublicProfile;
+    const vcardUrl = new URL(profile.vcardUrl!);
+    const res = await call(vcardUrl.pathname + vcardUrl.search);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(await res.text()).toContain('TEL;TYPE=CELL:+61491570156');
+  });
+
+  it('returns 200 with no TEL for a tampered signature, an expired exp, or another slug\'s signature', async () => {
+    const owner = await signUpWithProfile('vcard-tamper-owner@example.com', 'Tam Tamper');
+    await putProfile(owner.token, { displayName: 'Tam Tamper', contact: { phone: '+61 491 570 156' } });
+    const other = await signUpWithProfile('vcard-tamper-other@example.com', 'Ossy Other');
+    const friend = await signUpWithProfile('vcard-tamper-friend@example.com', 'Fin TamperFriend');
+    await call('/connections/scan', { method: 'POST', token: friend.token, json: { slug: owner.slug } });
+
+    const profile = (await (await call(`/id/${owner.slug}`, { token: friend.token })).json()) as PublicProfile;
+    const vcardUrl = new URL(profile.vcardUrl!);
+    const exp = vcardUrl.searchParams.get('exp')!;
+    const sig = vcardUrl.searchParams.get('sig')!;
+
+    const tampered = await call(`/id/${owner.slug}/vcard?exp=${exp}&sig=${tamper(sig)}`);
+    expect(tampered.status).toBe(200);
+    expect(await tampered.text()).not.toMatch(/^TEL/m);
+
+    const expiredExp = Math.floor(Date.now() / 1000) - 10;
+    const expired = await call(`/id/${owner.slug}/vcard?exp=${expiredExp}&sig=${sig}`);
+    expect(expired.status).toBe(200);
+    expect(await expired.text()).not.toMatch(/^TEL/m);
+
+    const wrongSlug = await call(`/id/${other.slug}/vcard?exp=${exp}&sig=${sig}`);
+    expect(wrongSlug.status).toBe(200);
+    expect(await wrongSlug.text()).not.toMatch(/^TEL/m);
   });
 });
 
@@ -497,6 +663,33 @@ describe('POST /id/:slug/connect', () => {
     expect(statuses.at(-1)).toBe(429);
     // Other visitors are unaffected.
     expect((await connect(person.slug, form(), { ip: '198.51.100.24' })).status).toBe(201);
+  });
+
+  it('returns the contact and a signed vcardUrl for a connections owner with a phone', async () => {
+    const person = await signUpWithProfile('connect-contact-conn@example.com', 'Connie Contact');
+    await putProfile(person.token, { displayName: 'Connie Contact', contact: { phone: '+61 491 570 156' } });
+
+    const res = await connect(person.slug, form());
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as ConnectFormResponse;
+    expect(body.contact).toEqual({ phone: '+61 491 570 156' });
+    expect(body.vcardUrl).toMatch(new RegExp(`/id/${person.slug}/vcard\\?exp=\\d+&sig=[0-9a-f]{64}$`));
+  });
+
+  it('returns exactly {ok:true} for an owner with no usable channel', async () => {
+    const person = await signUpWithProfile('connect-contact-none@example.com', 'Nolan None');
+    const res = await connect(person.slug, form());
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it('still fails a bad captcha with 403, even for an owner with a phone', async () => {
+    const person = await signUpWithProfile('connect-contact-captcha@example.com', 'Cass Captcha');
+    await putProfile(person.token, { displayName: 'Cass Captcha', contact: { phone: '+61 491 570 156' } });
+    turnstilePasses = false;
+    const res = await connect(person.slug, form());
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as ApiErrorBody).error.code).toBe('captcha_failed');
   });
 });
 

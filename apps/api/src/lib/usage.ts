@@ -43,3 +43,17 @@ export async function reserveExtraction(env: Env, userId: string): Promise<Extra
   }
   return { ok: true };
 }
+
+/** Daily cap on new connections per user (issue #3 D12): connecting auto-accepts, so an unchecked
+ * throwaway account could otherwise collect numbers at SCAN_LIMITER's per-minute rate all day. */
+export const NEW_CONNECTIONS_PER_DAY = 100;
+
+/**
+ * Reserves one new connection for `userId` today. True while today's count is still within the
+ * cap, false from the 101st on. No sweep here: the extraction sweep above already deletes every
+ * key's old rows once a day, this counter included.
+ */
+export async function reserveNewConnection(env: Env, userId: string): Promise<boolean> {
+  const day = today();
+  return (await bump(env, `connect:user:${userId}:${day}`, day)) <= NEW_CONNECTIONS_PER_DAY;
+}

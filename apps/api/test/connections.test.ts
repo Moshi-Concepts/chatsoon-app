@@ -54,6 +54,17 @@ async function privateEvent(createdBy: string, name: string) {
   return id;
 }
 
+/** Seeds today's new-connections counter for `userId`, as if they'd already made `count` of them. */
+async function seedConnectionCount(userId: string, count: number) {
+  const day = new Date().toISOString().slice(0, 10);
+  await env.DB.prepare(
+    `insert into usage_counters (key, day, count) values (?, ?, ?)
+     on conflict (key) do update set count = excluded.count`,
+  )
+    .bind(`connect:user:${userId}:${day}`, day, count)
+    .run();
+}
+
 /** Signs up and fills in company, role and links. */
 async function person(email: string, name: string, extra: Record<string, unknown> = {}) {
   const s = await signUpWithProfile(email, name);
@@ -201,16 +212,24 @@ describe('POST /connections/scan', () => {
     const gus = await person('scan-gus@example.com', 'Gus Grant', { company: 'Grant & Co' });
 
     const { contact } = await scanOk(fay.token, gus.slug);
+    // Gus has no phone yet: the card is created with an empty one.
+    expect(contact.phone).toBeNull();
     // Fay edits her copy: renames Gus, changes the company, adds a note.
     await env.DB.prepare('update contacts set name = ?, company = ?, notes = ? where id = ?')
       .bind('Gus (sponsor)', 'Grant Holdings', 'Wants a booth', contact.id)
       .run();
 
-    // Gus later fills in more of his profile and changes his company.
+    // Gus later fills in more of his profile, changes his company, and adds a phone number.
     const put = await call('/me/profile', {
       method: 'PUT',
       token: gus.token,
-      json: { displayName: 'Gus Grant', company: 'New Co', role: 'CMO', links: { telegram: 'gus_tg' } },
+      json: {
+        displayName: 'Gus Grant',
+        company: 'New Co',
+        role: 'CMO',
+        links: { telegram: 'gus_tg' },
+        contact: { phone: '+61 491 570 100' },
+      },
     });
     expect(put.status).toBe(200);
 
@@ -223,7 +242,23 @@ describe('POST /connections/scan', () => {
       notes: 'Wants a booth',
       role: 'CMO',
       telegram: 'gus_tg',
+      // The card's phone was empty, so the refresh filled it in.
+      phone: '+61 491 570 100',
     });
+
+    // Fay now edits her copy's phone by hand.
+    await env.DB.prepare('update contacts set phone = ? where id = ?').bind('+61 400 000 000', contact.id).run();
+    // Gus changes his number again.
+    const putAgain = await call('/me/profile', {
+      method: 'PUT',
+      token: gus.token,
+      json: { displayName: 'Gus Grant', contact: { phone: '+61 491 570 200' } },
+    });
+    expect(putAgain.status).toBe(200);
+
+    const third = await scanOk(fay.token, gus.slug);
+    // Fay's edited phone is not empty, so the refresh leaves it alone.
+    expect(third.contact.phone).toBe('+61 400 000 000');
     expect(await contactsOf(fay.userId)).toHaveLength(1);
   });
 
@@ -372,6 +407,61 @@ describe('POST /connections/scan', () => {
       linkedinUrl: 'https://www.linkedin.com/in/zed-zane',
       website: null,
     });
+  });
+
+  it('copies the phone as typed, even when the profile keeps it to connections only', async () => {
+    const amy = await person('scan-amy@example.com', 'Amy Archer');
+    const ben = await person('scan-ben@example.com', 'Ben Bell', {
+      contact: { phone: '+61 491 570 156' },
+      // Default visibility, spelled out: the phone is copied on connect whatever this is set to.
+      contactVisibility: 'connections',
+    });
+
+    const { contact } = await scanOk(amy.token, ben.slug);
+    expect(contact.phone).toBe('+61 491 570 156');
+  });
+
+  it('gives a legacy invalid phone as null', async () => {
+    const cai = await person('scan-cai@example.com', 'Cai Chen');
+    const dot = await person('scan-dot@example.com', 'Dot Diaz');
+    // Stored before contact validation existed.
+    await env.DB.prepare('update profiles set contact = ? where user_id = ?')
+      .bind(JSON.stringify({ phone: '000' }), dot.userId)
+      .run();
+
+    const { contact } = await scanOk(cai.token, dot.slug);
+    expect(contact.phone).toBeNull();
+  });
+
+  it('never lets WhatsApp or Signal values onto the card as website or notes', async () => {
+    const eve = await person('scan-eve@example.com', 'Eve Ellis', {
+      contact: { whatsapp: 'https://wa.me/61491570156', signal: '+61 491 570 156' },
+    });
+    const flo = await person('scan-flo@example.com', 'Flo Ford');
+
+    const { contact } = await scanOk(flo.token, eve.slug);
+    expect(contact.website).toBeNull();
+    expect(contact.notes).toBeNull();
+    expect(contact.phone).toBeNull();
+    expect(JSON.stringify(contact)).not.toContain('wa.me');
+    expect(JSON.stringify(contact)).not.toContain('signal.me');
+  });
+
+  it('caps new connections at 100 a day, but never for re-scanning an existing connection', async () => {
+    const gia = await person('scan-gia@example.com', 'Gia Grey');
+    const hank = await person('scan-hank@example.com', 'Hank Hale');
+    // An existing connection, made before the cap is hit.
+    await scanOk(gia.token, hank.slug);
+    await seedConnectionCount(gia.userId, 100);
+
+    const ivo = await person('scan-ivo@example.com', 'Ivo Ibsen');
+    const capped = await scan(gia.token, { slug: ivo.slug });
+    expect(capped.status).toBe(429);
+    expect(((await capped.json()) as ApiErrorBody).error.code).toBe('rate_limited');
+    expect(await contactsOf(ivo.userId)).toHaveLength(0);
+
+    const again = await scanOk(gia.token, hank.slug);
+    expect(again.alreadyConnected).toBe(true);
   });
 
   it('creates one card each when two people scan each other at the same time', async () => {

@@ -1,4 +1,13 @@
-import { BOOKING_URL_HINT, SEEDED_TAGS, type ApiErrorBody, type BookingLink, type Me, type MyProfile } from '@chatsoon/shared';
+import {
+  BOOKING_URL_HINT,
+  CONTACT_HINTS,
+  SEEDED_TAGS,
+  type ApiErrorBody,
+  type BookingLink,
+  type Me,
+  type MyProfile,
+  type ProfileContactKey,
+} from '@chatsoon/shared';
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
@@ -455,6 +464,112 @@ describe('PUT /me/profile', () => {
       expect(pub.bookingLinks).toEqual([
         { label: 'Chat with Stan', url: 'https://calendly.com/stan/chat', provider: 'calendly' },
       ]);
+    });
+  });
+
+  describe('contact (phone, WhatsApp, Signal)', () => {
+    it('round trips through PUT and GET /me, stored as typed', async () => {
+      const { token } = await signUpWithProfile('contact-roundtrip@example.com', 'Cara Roundtrip');
+      const contact = { phone: '+61 491 570 156', whatsapp: 'https://wa.me/61491570156', signal: '+61 491 570 156' };
+      const saved = await saveProfile(token, { displayName: 'Cara Roundtrip', contact, contactVisibility: 'public' });
+      expect(saved.contact).toEqual(contact);
+      expect(saved.contactVisibility).toBe('public');
+      expect(saved.contactChannels).toEqual(['phone', 'whatsapp', 'signal']);
+
+      const me = await getMe(token);
+      expect(me.profile?.contact).toEqual(contact);
+      expect(me.profile?.contactVisibility).toBe('public');
+      expect(me.profile?.contactChannels).toEqual(['phone', 'whatsapp', 'signal']);
+    });
+
+    it('keeps contact and contactVisibility through the exact 1.0 body, and through displayName alone', async () => {
+      const { token } = await signUpWithProfile('contact-1-0@example.com', 'Ivy OneZero');
+      await saveProfile(token, {
+        displayName: 'Ivy OneZero',
+        contact: { phone: '+61 491 570 156' },
+        contactVisibility: 'public',
+      });
+
+      const full1_0 = await saveProfile(token, {
+        displayName: 'Ivy OneZero',
+        headline: 'Hi',
+        company: 'Acme',
+        role: 'Founder',
+        links: { x: null, telegram: 't_user', linkedin: null, website: null, youtube: null },
+        avatarKey: null,
+      });
+      expect(full1_0.contact).toEqual({ phone: '+61 491 570 156' });
+      expect(full1_0.contactVisibility).toBe('public');
+
+      const nameOnly = await saveProfile(token, { displayName: 'Ivy OneZero' });
+      expect(nameOnly.contact).toEqual({ phone: '+61 491 570 156' });
+      expect(nameOnly.contactVisibility).toBe('public');
+    });
+
+    it('removes only the targeted key, with null or with an empty string', async () => {
+      const { token } = await signUpWithProfile('contact-remove@example.com', 'Remy Remove');
+      await saveProfile(token, {
+        displayName: 'Remy Remove',
+        contact: { phone: '+61 491 570 156', whatsapp: '+61 491 570 156' },
+      });
+
+      const removedByNull = await saveProfile(token, { displayName: 'Remy Remove', contact: { phone: null } });
+      expect(removedByNull.contact).toEqual({ whatsapp: '+61 491 570 156' });
+
+      await saveProfile(token, { displayName: 'Remy Remove', contact: { phone: '+61 491 570 156' } });
+      const removedByEmpty = await saveProfile(token, { displayName: 'Remy Remove', contact: { phone: '' } });
+      expect(removedByEmpty.contact).toEqual({ whatsapp: '+61 491 570 156' });
+    });
+
+    it('rejects each bad value with its hint, saves nothing, and leaves GET /me unchanged', async () => {
+      const { token } = await signUpWithProfile('contact-bad@example.com', 'Bailey Bad');
+      await saveProfile(token, { displayName: 'Bailey Bad', contact: { phone: '+61 491 570 156' } });
+
+      const bad: [ProfileContactKey, string][] = [
+        ['phone', '0491 570 156'],
+        ['whatsapp', 'chat.whatsapp.com/AbC'],
+        ['signal', 'peter.42'],
+      ];
+      for (const [key, value] of bad) {
+        const res = await putProfile(token, { displayName: 'Bailey Bad', contact: { [key]: value } });
+        expect(res.status, `${key}: ${value}`).toBe(400);
+        const body = (await res.json()) as ApiErrorBody;
+        expect(body.error.code).toBe('bad_request');
+        expect(body.error.message).toContain(CONTACT_HINTS[key]);
+      }
+
+      const me = await getMe(token);
+      expect(me.profile?.contact).toEqual({ phone: '+61 491 570 156' });
+    });
+
+    it('rejects an unknown contactVisibility value', async () => {
+      const { token } = await signUpWithProfile('contact-visibility-bad@example.com', 'Val Visibility');
+      const res = await putProfile(token, { displayName: 'Val Visibility', contactVisibility: 'everyone' });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as ApiErrorBody).error.code).toBe('bad_request');
+    });
+
+    it('defaults a new profile to connections visibility with no channels', async () => {
+      const { token } = await signUpWithProfile('contact-new@example.com', 'Nadia New');
+      const me = await getMe(token);
+      expect(me.profile?.contactVisibility).toBe('connections');
+      expect(me.profile?.contactChannels).toEqual([]);
+      expect(me.profile?.contact).toEqual({});
+    });
+
+    it('never exposes contact digits to an anonymous viewer of a connections profile', async () => {
+      const { token, slug } = await signUpWithProfile('contact-private@example.com', 'Percy Private');
+      await saveProfile(token, { displayName: 'Percy Private', contact: { phone: '+61 491 570 156' } });
+
+      const res = await call(`/id/${slug}`);
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).not.toContain('491570156');
+      expect(text).not.toContain('491 570 156');
+      const body = JSON.parse(text) as Record<string, unknown>;
+      expect(body).not.toHaveProperty('contact');
+      expect(body.contactChannels).toEqual(['phone']);
+      expect(body.contactVisibility).toBe('connections');
     });
   });
 });

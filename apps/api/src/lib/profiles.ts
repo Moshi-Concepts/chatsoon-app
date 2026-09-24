@@ -5,6 +5,7 @@ import {
   isValidSlug,
   isXHandle,
   normalizeHandle,
+  parseIntlPhone,
   parseSocialUrl,
   toLinkUrl,
   type LinkKey,
@@ -13,7 +14,7 @@ import { and, eq, or, sql } from 'drizzle-orm';
 
 import { blocks, profiles, type ContactRow, type ProfileRow } from '../db/schema';
 import type { DB } from './db';
-import { parseLinks } from './serialize';
+import { parseContact, parseLinks } from './serialize';
 import { ownsKey, userPrefix } from './signing';
 
 // ---------------------------------------------------------------------------
@@ -106,13 +107,16 @@ const LINK_KIND: Partial<Record<ContactLinkField, LinkKey>> = {
 
 export type ProfileContactFields = Pick<
   ContactRow,
-  'name' | 'company' | 'role' | 'telegram' | 'xHandle' | 'linkedinUrl' | 'website'
+  'name' | 'company' | 'role' | 'telegram' | 'xHandle' | 'linkedinUrl' | 'website' | 'phone'
 >;
 
 /**
  * The card a user gets when they connect with this profile. Links are copied only when they make
  * a working link (the same rule the public page uses), handles without '@' or URL, and LinkedIn and
- * website as full URLs. YouTube has no contact field.
+ * website as full URLs. The phone is copied only when it's a valid international number, whatever
+ * the profile's contact visibility (issue #3 D11): the recipient gets a working Call button with no
+ * update, while WhatsApp and Signal are read live from the linked profile instead. YouTube has no
+ * contact field.
  */
 export function contactFieldsFromProfile(row: ProfileRow): ProfileContactFields {
   const links = parseLinks(row.links);
@@ -121,6 +125,7 @@ export function contactFieldsFromProfile(row: ProfileRow): ProfileContactFields 
     const h = normalizeHandle(text(value) ?? '');
     return valid(h) ? h : null;
   };
+  const raw = parseContact(row.contact).phone ?? '';
   return {
     name: row.displayName,
     company: row.company,
@@ -129,6 +134,7 @@ export function contactFieldsFromProfile(row: ProfileRow): ProfileContactFields 
     xHandle: handle(links.x, isXHandle),
     linkedinUrl: fits('linkedinUrl', toLinkUrl('linkedin', text(links.linkedin))),
     website: fits('website', toLinkUrl('website', text(links.website))),
+    phone: parseIntlPhone(raw) ? fits('phone', cleanText(raw)) : null,
   };
 }
 

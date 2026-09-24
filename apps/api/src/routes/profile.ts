@@ -5,7 +5,6 @@ import {
   toLinkUrl,
   type LinkKey,
   type Me,
-  type ProfileLinks,
 } from '@chatsoon/shared';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -17,7 +16,7 @@ import { ApiError, badRequest, parseJson, unauthorized } from '../lib/errors';
 import { shortSuffix } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
 import { findProfileByUserId, isAvatarKey } from '../lib/profiles';
-import { parseLinks, toMyProfile } from '../lib/serialize';
+import { parseContact, parseLinks, toMyProfile } from '../lib/serialize';
 import { seedDefaultTags } from '../lib/tags';
 
 /** Slug suffixes are random; a collision is rare, five in a row is practically impossible. */
@@ -34,7 +33,15 @@ const LINK_HINTS: Record<LinkKey, string> = {
 
 type ProfileValues = Pick<
   ProfileRow,
-  'displayName' | 'headline' | 'company' | 'role' | 'links' | 'avatarKey' | 'bookingLinks'
+  | 'displayName'
+  | 'headline'
+  | 'company'
+  | 'role'
+  | 'links'
+  | 'avatarKey'
+  | 'bookingLinks'
+  | 'contact'
+  | 'contactVisibility'
 >;
 
 export const profileRoutes = new Hono<AppEnv>();
@@ -88,10 +95,12 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
     headline: keep(input.headline, existing?.headline ?? null),
     company: keep(input.company, existing?.company ?? null),
     role: keep(input.role, existing?.role ?? null),
-    links: JSON.stringify(mergeLinks(existing ? parseLinks(existing.links) : {}, input.links)),
+    links: JSON.stringify(mergeByKey(existing ? parseLinks(existing.links) : {}, input.links)),
     avatarKey: keep(avatarKey, existing?.avatarKey ?? null),
     // undefined keeps the current booking links; an array (including []) replaces the whole list.
     bookingLinks: input.bookingLinks === undefined ? (existing?.bookingLinks ?? '[]') : JSON.stringify(input.bookingLinks),
+    contact: JSON.stringify(mergeByKey(existing ? parseContact(existing.contact) : {}, input.contact)),
+    contactVisibility: keep(input.contactVisibility, existing?.contactVisibility ?? 'connections'),
   };
 
   let row: ProfileRow;
@@ -125,11 +134,17 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
   return c.json(await toMyProfile(c.env, row));
 });
 
-/** Per key: undefined keeps the current link, null removes it, a string sets it. */
-function mergeLinks(current: ProfileLinks, patch: Partial<Record<LinkKey, string | null>> | undefined): ProfileLinks {
+/**
+ * Per key: undefined keeps the current value, null removes it, a string sets it. Used for both
+ * `links` and `contact`, whose input schemas both turn '' into null before it reaches here.
+ */
+function mergeByKey<K extends string>(
+  current: Partial<Record<K, string>>,
+  patch: Partial<Record<K, string | null>> | undefined,
+): Partial<Record<K, string>> {
   if (!patch) return current;
-  const next: ProfileLinks = { ...current };
-  for (const [key, value] of Object.entries(patch) as [LinkKey, string | null | undefined][]) {
+  const next: Partial<Record<K, string>> = { ...current };
+  for (const [key, value] of Object.entries(patch) as [K, string | null | undefined][]) {
     if (value === undefined) continue;
     if (value === null) delete next[key];
     else next[key] = value;

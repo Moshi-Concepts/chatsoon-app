@@ -1,13 +1,18 @@
 import {
+  CONTACT_KEYS,
+  contactUrl,
   MAX_BOOKING_LINKS,
   parseBookingUrl,
+  profileContactChannels,
   suggestBookingLabel,
   type BookingLink,
   type ChatsoonEvent,
   type Contact,
   type ContactSource,
+  type ContactVisibility,
   type ExtractionStatus,
   type MyProfile,
+  type ProfileContact,
   type ProfileLinks,
   type PublicProfile,
   type Tag,
@@ -60,8 +65,42 @@ export function parseBookingLinks(json: string | null | undefined): BookingLink[
   return links;
 }
 
-export async function toPublicProfile(env: Env, row: ProfileRow): Promise<PublicProfile> {
-  return {
+/** Keeps only CONTACT_KEYS whose stored value is a string. Drops anything else a hand-edited row might carry. */
+export function parseContact(json: string | null | undefined): ProfileContact {
+  if (!json) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== 'object') return {};
+  const record = parsed as Record<string, unknown>;
+  const contact: ProfileContact = {};
+  for (const key of CONTACT_KEYS) {
+    const value = record[key];
+    if (typeof value === 'string') contact[key] = value;
+  }
+  return contact;
+}
+
+/**
+ * `contactChannels` and `contactVisibility` are always included. `contact` (usable values only) is
+ * added only when `opts.contact` is set — the caller (routes/public.ts) decides who may see it, per
+ * §2 of the plan: the owner, a 'public' profile, or an accepted connection. `vcardUrl` is added only
+ * when the caller passes one in, since it's only ever offered alongside `contact`.
+ */
+export async function toPublicProfile(
+  env: Env,
+  row: ProfileRow,
+  opts: { contact?: boolean; vcardUrl?: string } = {},
+): Promise<PublicProfile> {
+  const contact = parseContact(row.contact);
+  // Anything other than the exact 'public' string reads back as 'connections': a bad value in the
+  // column (a bug, or a row edited by hand) must never fall open.
+  const contactVisibility: ContactVisibility = row.contactVisibility === 'public' ? 'public' : 'connections';
+
+  const profile: PublicProfile = {
     slug: row.slug,
     displayName: row.displayName,
     headline: row.headline,
@@ -71,11 +110,26 @@ export async function toPublicProfile(env: Env, row: ProfileRow): Promise<Public
     // Public pages get a longer-lived URL so shared links keep their photo.
     avatarUrl: row.avatarKey ? await signedFileUrl(env, row.avatarKey, 7 * 24 * 3600) : null,
     bookingLinks: parseBookingLinks(row.bookingLinks),
+    contactChannels: profileContactChannels(contact),
+    contactVisibility,
   };
+
+  if (opts.contact) {
+    const usable: ProfileContact = {};
+    for (const key of CONTACT_KEYS) {
+      if (contactUrl(key, contact[key])) usable[key] = contact[key];
+    }
+    profile.contact = usable;
+  }
+  if (opts.vcardUrl) profile.vcardUrl = opts.vcardUrl;
+
+  return profile;
 }
 
+/** The owner's own view: raw stored values (including legacy invalid ones), so they can fix them. */
 export async function toMyProfile(env: Env, row: ProfileRow): Promise<MyProfile> {
-  return { ...(await toPublicProfile(env, row)), userId: row.userId, avatarKey: row.avatarKey };
+  const profile = await toPublicProfile(env, row);
+  return { ...profile, userId: row.userId, avatarKey: row.avatarKey, contact: parseContact(row.contact) };
 }
 
 export async function toContact(

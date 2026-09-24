@@ -6,10 +6,11 @@ import { connections, contacts, events, type ProfileRow } from '../db/schema';
 import type { AppEnv } from '../env';
 import { getContact } from '../lib/contacts';
 import { getDb, type DB } from '../lib/db';
-import { ApiError, badRequest, forbidden, limit, notFound, parseJson } from '../lib/errors';
+import { ApiError, badRequest, forbidden, limit, notFound, parseJson, rateLimited } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
 import { contactFieldsFromProfile, findProfileBySlug, findProfileByUserId, hasBlocked } from '../lib/profiles';
+import { reserveNewConnection } from '../lib/usage';
 
 export const connectionsRoutes = new Hono<AppEnv>();
 
@@ -45,6 +46,13 @@ connectionsRoutes.post('/connections/scan', requireAuth, async (c) => {
     .where(and(eq(connections.userA, userA), eq(connections.userB, userB)))
     .limit(1);
   const alreadyConnected = existing?.status === 'accepted';
+
+  // Connecting auto-accepts, so this cap is what stands between a throwaway account and scanning
+  // (or being scanned by) an unlimited number of profiles in a day. Re-scanning someone already
+  // connected never counts against it.
+  if (!alreadyConnected && !(await reserveNewConnection(c.env, me))) {
+    throw rateLimited("You've connected with a lot of people today. Try again tomorrow.");
+  }
 
   // One transaction: the connection row plus a card in each list. Plain D1 statements,
   // because drizzle's batch cannot run the raw insert-if-missing below.
@@ -101,8 +109,8 @@ function linkedContactStatements(
   ).bind(ownerId, other.userId);
   const insertIfMissing = DB.prepare(
     `insert into contacts
-       (id, user_id, linked_user_id, name, company, role, telegram, x_handle, linkedin_url, website, event_id, source)
-     select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'app_connect'
+       (id, user_id, linked_user_id, name, company, role, telegram, x_handle, linkedin_url, website, event_id, source, phone)
+     select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'app_connect', ?12
      where not exists (select 1 from contacts where user_id = ?2 and linked_user_id = ?3)`,
   ).bind(
     newId(),
@@ -116,6 +124,7 @@ function linkedContactStatements(
     f.linkedinUrl,
     f.website,
     eventId,
+    f.phone,
   );
   const refresh = DB.prepare(
     `update contacts set
@@ -125,6 +134,7 @@ function linkedContactStatements(
        x_handle = coalesce(nullif(x_handle, ''), ?6),
        linkedin_url = coalesce(nullif(linkedin_url, ''), ?7),
        website = coalesce(nullif(website, ''), ?8),
+       phone = coalesce(nullif(phone, ''), ?11),
        event_id = coalesce(event_id, ?9),
        updated_at = ?10
      where user_id = ?1 and linked_user_id = ?2`,
@@ -139,6 +149,7 @@ function linkedContactStatements(
     f.website,
     eventId,
     Date.now(),
+    f.phone,
   );
   return [relink, insertIfMissing, refresh];
 }

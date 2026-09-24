@@ -94,6 +94,10 @@ export const profiles = sqliteTable('profiles', {
   links: text('links').notNull().default('{}'),
   /** JSON array of { label, url }, in display order. See lib/serialize.ts parseBookingLinks. */
   bookingLinks: text('booking_links').notNull().default('[]'),
+  /** JSON ProfileContact (phone, WhatsApp, Signal), stored as typed. See lib/serialize.ts parseContact. */
+  contact: text('contact').notNull().default('{}'),
+  /** ContactVisibility. Anything other than 'public' is treated as 'connections' on read (fail closed). */
+  contactVisibility: text('contact_visibility').notNull().default('connections'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

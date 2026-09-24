@@ -1,8 +1,17 @@
-import { buildVCard, cleanText, connectFormSchema, PROFILE_PATH_PREFIX, type PublicProfile } from '@chatsoon/shared';
+import {
+  buildVCard,
+  cleanText,
+  connectFormSchema,
+  profileContactChannels,
+  PROFILE_PATH_PREFIX,
+  type ConnectFormResponse,
+  type ProfileContact,
+  type PublicProfile,
+} from '@chatsoon/shared';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 
-import { contacts, users, type ProfileRow } from '../db/schema';
+import { connections, contacts, users, type ProfileRow } from '../db/schema';
 import type { AppEnv, AuthedUser, Env } from '../env';
 import { getDb, type DB } from '../lib/db';
 import { sendEmail } from '../lib/email';
@@ -10,7 +19,8 @@ import { ApiError, badRequest, clientIp, ipKey, limit, notFound, parseJson } fro
 import { newId } from '../lib/ids';
 import { optionalAuth } from '../lib/middleware';
 import { contactFieldsFromConnectValue, findProfileBySlug, hasBlocked } from '../lib/profiles';
-import { parseBookingLinks, parseLinks, toPublicProfile } from '../lib/serialize';
+import { parseBookingLinks, parseContact, parseLinks, toPublicProfile } from '../lib/serialize';
+import { signedVcardUrl, verifyVcardSignature } from '../lib/signing';
 import { verifyTurnstile } from '../lib/turnstile';
 
 export const publicRoutes = new Hono<AppEnv>();
@@ -44,18 +54,65 @@ function setCacheHeaders(c: Context<AppEnv>) {
   c.header('Vary', 'Authorization, Cookie', { append: true });
 }
 
+/**
+ * Whether `viewer` may see this profile's phone and messaging details (§2 of the plan): the owner
+ * always can; a 'public' profile is open to anyone; otherwise a signed-in viewer needs an accepted
+ * connection row and must not have blocked the owner. The owner having blocked the viewer never
+ * reaches here: visibleProfile already turns that into a 404. Anything other than the exact 'public'
+ * string reads as 'connections', the same fail-closed rule toPublicProfile applies.
+ */
+async function canSeeContact(
+  db: DB,
+  viewer: AuthedUser | undefined,
+  profile: ProfileRow,
+  blockedByMe: boolean,
+): Promise<boolean> {
+  if (viewer?.id === profile.userId) return true;
+  if (profile.contactVisibility === 'public') return true;
+  if (!viewer || blockedByMe) return false;
+  const [userA, userB] = viewer.id < profile.userId ? [viewer.id, profile.userId] : [profile.userId, viewer.id];
+  const [row] = await db
+    .select({ status: connections.status })
+    .from(connections)
+    .where(and(eq(connections.userA, userA), eq(connections.userB, userB)))
+    .limit(1);
+  return row?.status === 'accepted';
+}
+
+/** The owner's usable contact values, or null when they have none (whatever the visibility). */
+function usableContact(contact: ProfileContact): ProfileContact | null {
+  const channels = profileContactChannels(contact);
+  if (channels.length === 0) return null;
+  const usable: ProfileContact = {};
+  for (const key of channels) usable[key] = contact[key];
+  return usable;
+}
+
 publicRoutes.get('/id/:slug', optionalAuth, async (c) => {
   const db = getDb(c.env);
   const viewer = viewerOf(c);
   const profile = await visibleProfile(c, db, c.req.param('slug'));
   setCacheHeaders(c);
-  const body: PublicProfile = await toPublicProfile(c.env, profile);
-  if (viewer && viewer.id !== profile.userId) body.blockedByMe = await hasBlocked(db, viewer.id, profile.userId);
+
+  const blockedByMe = viewer && viewer.id !== profile.userId ? await hasBlocked(db, viewer.id, profile.userId) : false;
+  const contact = await canSeeContact(db, viewer, profile, blockedByMe);
+  // vcardUrl only ever rides alongside contact, and only when it isn't already unconditionally in
+  // the plain vCard (a 'public' profile's vcard route already includes it with no signature needed).
+  const vcardUrl = contact && profile.contactVisibility !== 'public' ? await signedVcardUrl(c.env, profile.slug) : undefined;
+
+  const body: PublicProfile = await toPublicProfile(c.env, profile, { contact, vcardUrl });
+  if (viewer && viewer.id !== profile.userId) body.blockedByMe = blockedByMe;
   return c.json(body);
 });
 
 publicRoutes.get('/id/:slug/vcard', optionalAuth, async (c) => {
   const profile = await visibleProfile(c, getDb(c.env), c.req.param('slug'));
+
+  const exp = c.req.query('exp');
+  const sig = c.req.query('sig');
+  const signed = !!exp && !!sig && (await verifyVcardSignature(c.env, profile.slug, exp, sig));
+  const includeContact = signed || profile.contactVisibility === 'public';
+
   const vcard = buildVCard({
     displayName: profile.displayName,
     headline: profile.headline,
@@ -64,8 +121,16 @@ publicRoutes.get('/id/:slug/vcard', optionalAuth, async (c) => {
     links: parseLinks(profile.links),
     profileUrl: `${c.env.WEB_ORIGIN}${PROFILE_PATH_PREFIX}${profile.slug}`,
     bookingLinks: parseBookingLinks(profile.bookingLinks),
+    contact: includeContact ? parseContact(profile.contact) : undefined,
   });
-  setCacheHeaders(c);
+
+  // A verified signature proves this exact request may carry the number, so it's never cached or
+  // shared; otherwise the usual anonymous/signed-in cache rule applies (setCacheHeaders).
+  if (signed) c.header('Cache-Control', 'private, no-store');
+  else setCacheHeaders(c);
+  // #1 will make /id/* pages crawlable. This URL (and any Save contact link to it) must never be
+  // indexed, since a signed one carries the owner's number.
+  c.header('X-Robots-Tag', 'noindex');
   // Slugs are [a-z0-9-] only, so the filename needs no escaping.
   return c.body(vcard, 200, {
     'Content-Type': 'text/vcard; charset=utf-8',
@@ -112,7 +177,15 @@ publicRoutes.post('/id/:slug/connect', optionalAuth, async (c) => {
     .from(contacts)
     .where(and(eq(contacts.userId, owner.userId), eq(contacts.source, 'web_connect'), gt(contacts.createdAt, since)));
   if ((recent?.n ?? 0) <= CONNECT_EMAILS_PER_DAY) c.executionCtx.waitUntil(notifyOwner(c.env, db, owner.userId));
-  return c.json({ ok: true as const }, 201);
+
+  const body: ConnectFormResponse = { ok: true };
+  const usable = usableContact(parseContact(owner.contact));
+  if (usable) {
+    body.contact = usable;
+    // A 'public' profile's plain vcard already carries the number with no signature needed.
+    if (owner.contactVisibility !== 'public') body.vcardUrl = await signedVcardUrl(c.env, owner.slug);
+  }
+  return c.json(body, 201);
 });
 
 /** Control characters and bidi overrides, which could garble or disguise a name in the owner's contacts. */

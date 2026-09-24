@@ -1,7 +1,8 @@
 import type { Env } from '../env';
 
-// Signed, time-limited URLs for private R2 objects, served by GET /files/*.
-// R2 stays private; the Worker checks the HMAC before streaming the object.
+// Signed, time-limited URLs: for private R2 objects (served by GET /files/*) and for the vCard
+// of a 'connections' profile (served by GET /id/:slug/vcard). Both share one HMAC secret and the
+// same expiry-rounding trick so repeated calls return the same URL and clients can cache it.
 
 const enc = new TextEncoder();
 
@@ -51,5 +52,29 @@ export async function verifyFileSignature(env: Env, key: string, exp: string, si
   const expNum = Number(exp);
   if (!Number.isFinite(expNum) || expNum < Date.now() / 1000) return false;
   const expected = await hmacHex(env.FILE_SIGNING_SECRET, `${key}:${expNum}`);
+  return timingSafeEqual(expected, sig);
+}
+
+/**
+ * Signed URL to GET /id/:slug/vcard that carries the owner's phone and messaging details, valid for
+ * at least `ttlSeconds`. Only ever offered alongside `contact` on a 'connections' profile, to a
+ * viewer who may already see it (§2 of the plan): the owner, an accepted connection, or a Connect
+ * form sender. Expiry is rounded up to the hour, same trick as signedFileUrl.
+ */
+export async function signedVcardUrl(env: Env, slug: string, ttlSeconds = 3600): Promise<string> {
+  const exp = Math.ceil((Math.floor(Date.now() / 1000) + ttlSeconds) / 3600) * 3600;
+  const sig = await hmacHex(env.FILE_SIGNING_SECRET, `vcard:${slug}:${exp}`);
+  return `${env.API_ORIGIN}/id/${slug}/vcard?exp=${exp}&sig=${sig}`;
+}
+
+/**
+ * Checks a GET /id/:slug/vcard signature against `slug` specifically, so a signature minted for one
+ * slug never verifies for another. A bad or expired signature must never throw: the caller falls
+ * back to the plain (no-contact) vCard rather than an error.
+ */
+export async function verifyVcardSignature(env: Env, slug: string, exp: string, sig: string): Promise<boolean> {
+  const expNum = Number(exp);
+  if (!Number.isFinite(expNum) || expNum < Date.now() / 1000) return false;
+  const expected = await hmacHex(env.FILE_SIGNING_SECRET, `vcard:${slug}:${expNum}`);
   return timingSafeEqual(expected, sig);
 }
