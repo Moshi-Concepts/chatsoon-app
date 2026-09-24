@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["REPLACE_TEAM_ID.app.chatsoon"],
+        "appIDs": ["37HFA46L63.app.chatsoon"],
         "components": [
           {
             "/": "/id/*",
