@@ -126,15 +126,16 @@ form, because Google updates that list. The iOS build doesn't include ML Kit.
   upload to closed testing on 24 September and recruit 12 testers the same day. The 14 day clock ends around
   8 October, then apply for production. Until then Android users use https://chatsoon.app.
 
-## 1.1 update: booking links
+## 1.1 update: booking links and phone & messaging
 
-Use these only for the 1.1 submission (the build with booking links). 1.0 doesn't have the feature, so its listing
-and notes must not mention it.
+Use these only for the 1.1 submission (the build with booking links and phone & messaging). 1.0 doesn't have these features, so its listing and notes must not mention them.
+
+### Booking links
 
 **What's New in 1.1**
 
 > Book meetings straight from someone's profile. Add your Calendly, Google Calendar or other booking links, and
-> people can pick a time with you without leaving the app.
+> people can pick a time with you without leaving the app. Share your mobile number, WhatsApp and Signal details with people you connect with, or with anyone who has your link.
 
 **Description:** add this block after ORGANISE EVERYONE.
 
@@ -144,3 +145,21 @@ and notes must not mention it.
 **Reviewer notes:** add this sentence at the end.
 
 > To see booking links: Me tab > Edit profile > Booking links, paste https://calendly.com/chatwithpete/30min, save, then tap View my public page and tap the booking link to open the booking page in the app.
+
+### Phone & messaging
+
+Update the App Store and Play data safety forms:
+
+**App Store Connect:** Contact Info > Phone Number row (line 58)
+- Description: "the user's optional profile mobile number, and phone numbers the user enters for saved contacts"
+
+**Google Play:** Personal info > Phone number row (line 95)
+- What it is: "the user's optional profile mobile number, and phone numbers the user enters for saved contacts"
+
+**Both stores:** Contact Info > Other User Contact Info (App Store, line 59) / Personal info > Other info (Play, line 96)
+- Add to description: "WhatsApp and Signal details"
+- Play Privacy Policy: Shared remains "No"
+
+**Reviewer notes:** add this sentence at the end.
+
+> To see phone and messaging: Me tab > Edit profile > Phone and messaging, enter +61 491 570 156, tap "Use" under WhatsApp to copy the phone number there, save, then tap View my public page to see the contact pills.
