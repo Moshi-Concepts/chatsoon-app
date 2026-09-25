@@ -713,7 +713,7 @@ Order: D1, then D2 and D3 in parallel, with D4. Deploy the API (migration remote
 | Turnstile loads only after interaction | First submit takes 1–3 s longer | Load on first focus; show "Checking you're human…"; Send stays enabled. |
 | Handoff edge cases: an expired token, blocked storage, or cross-tab sign-out on static pages | A slow page, or an anonymous view for a signed-in user | Acceptable. The SPA's 401 handler recovers. The header has a Sign in link. |
 | Unknown top-level paths stay soft 200 | Minor crawl noise | The SPA `+not-found` sets meta noindex. A root 404.html would mean maintaining a route list, which D3 rejects. |
-| Free plan: every `/id` view invokes a Function plus the API; 10 ms CPU | Quota or CPU limits at big events | String templates only; deep imports (no zod); `sideEffects:false`. Monitor Workers analytics. |
+| Every `/id` view invokes a Function plus the API. The account is on Workers Paid (confirmed 25 Sep 2026), so CPU is not capped at 10 ms. | Cost at large events | String templates only; deep imports (no zod); `sideEffects:false`. Monitor Workers analytics. |
 | Search removal takes days to weeks; findable profiles make harvesting easier | Privacy complaints | Honest policy text, noindex and sitemap removal straight away, `search_blocked`, the global Connect limiter, Turnstile. |
 | Token changes in A (dark primary, textTertiary) restyle native at the next batch | Unexpected visual change | native-pending row; check on devices during the batch release. |
 | The deploy moves to `apps/web` | Linux-box runbook drift | Root `pnpm deploy:web` keeps its name; DEPLOY.md and CLAUDE.md updated in B3. The `DEV_VALUE` check scans every bundle. |
