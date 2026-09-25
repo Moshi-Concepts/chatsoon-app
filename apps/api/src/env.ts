@@ -73,6 +73,17 @@ export interface Env {
   /** The full contents of the .p8 private key Apple issues for APPLE_KEY_ID (PEM, PKCS8). Used to
    * sign Apple's client secret JWT ourselves (lib/apple-client-secret.ts); never logged. */
   APPLE_PRIVATE_KEY?: string;
+  /** X (Twitter), issue #11. Link-only: X never returns an email, so it's excluded from sign-in
+   * (GET /auth-providers' `providers`) but appears in `linkProviders` once both are set. */
+  TWITTER_CLIENT_ID?: string;
+  TWITTER_CLIENT_SECRET?: string;
+
+  // Referrals (issue #11, docs/referrals.md). Parsed as numbers with defaults by
+  // lib/referral-config.ts, so a missing/blank var (e.g. an older deploy) doesn't throw.
+  /** Minimum Discord account age, in days, for a linked Discord to count as eligible. Default 90. */
+  REFERRAL_DISCORD_MIN_AGE_DAYS?: string;
+  /** Minimum X follower count for a linked X account to count as eligible. Default 50. */
+  REFERRAL_X_MIN_FOLLOWERS?: string;
 }
 
 export interface AuthedUser {

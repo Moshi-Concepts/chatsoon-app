@@ -64,7 +64,11 @@
     "EXTRACT_DAILY_PER_USER": "30",
     "EXTRACT_DAILY_TOTAL": "1000",
     // "false" is the kill switch (and the Free-plan setting): profiles fall back to the default image.
-    "OG_CARDS_ENABLED": "true"
+    "OG_CARDS_ENABLED": "true",
+    // Referrals (issue #11), account linking / social_checks eligibility (docs/referrals.md).
+    // Parsed as numbers with defaults by lib/referral-config.ts.
+    "REFERRAL_DISCORD_MIN_AGE_DAYS": "90",
+    "REFERRAL_X_MIN_FOLLOWERS": "50"
   }
   // Secrets (wrangler secret put <NAME>):
   //   BETTER_AUTH_SECRET  RESEND_API_KEY  ANTHROPIC_API_KEY
@@ -74,4 +78,5 @@
   //   LINKEDIN_CLIENT_ID  LINKEDIN_CLIENT_SECRET
   //   DISCORD_CLIENT_ID   DISCORD_CLIENT_SECRET
   //   APPLE_CLIENT_ID     APPLE_TEAM_ID  APPLE_KEY_ID  APPLE_PRIVATE_KEY (the .p8 file's contents)
+  //   X / Twitter (issue #11), link-only, optional: TWITTER_CLIENT_ID  TWITTER_CLIENT_SECRET
 }

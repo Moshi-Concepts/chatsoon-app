@@ -329,6 +329,36 @@ export const usageCounters = sqliteTable(
   (t) => [index('usage_counters_day_idx').on(t.day)],
 );
 
+/**
+ * The identity-check snapshot behind a referral's "has an eligible social account" requirement
+ * (issue #11, docs/referrals.md "Capturing the checks"). One row per (user, provider): written by
+ * `lib/auth.ts`'s Better Auth `databaseHooks.account.create`/`update` hooks on every Discord or X
+ * sign-in *or* link, from the raw provider profile (never re-fetched from `lib/referrals.ts`'s
+ * qualification sweep, since every X read is billed). Google, Apple and LinkedIn need no row here:
+ * they're eligible as soon as they're linked (`packages/shared/src/social.ts`).
+ */
+export const socialChecks = sqliteTable(
+  'social_checks',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'discord' | 'twitter'. Google, Apple and LinkedIn are eligible without a check. */
+    provider: text('provider').notNull(),
+    providerAccountId: text('provider_account_id').notNull(),
+    /** Discord mfa_enabled. Always false for other providers. */
+    mfaEnabled: integer('mfa_enabled', { mode: 'boolean' }).notNull().default(false),
+    /** X: verified && verified_type !== 'none'. */
+    verified: integer('verified', { mode: 'boolean' }).notNull().default(false),
+    /** X is_identity_verified. */
+    identityVerified: integer('identity_verified', { mode: 'boolean' }).notNull().default(false),
+    /** X public_metrics.followers_count. */
+    followersCount: integer('followers_count').notNull().default(0),
+    checkedAt: integer('checked_at', { mode: 'timestamp_ms' }).notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.provider] })],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type ProfileRow = typeof profiles.$inferSelect;
 export type ContactRow = typeof contacts.$inferSelect;
@@ -336,3 +366,4 @@ export type TagRow = typeof tags.$inferSelect;
 export type EventRow = typeof events.$inferSelect;
 export type EmailLeadRow = typeof emailLeads.$inferSelect;
 export type EmailPrefsRow = typeof emailPrefs.$inferSelect;
+export type SocialCheckRow = typeof socialChecks.$inferSelect;
