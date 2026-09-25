@@ -44,7 +44,7 @@ export function ProfileCard({ profile }: { profile: PublicProfile }) {
 
   return (
     <Card style={styles.card}>
-      <Avatar name={profile.displayName} uri={profile.avatarUrl} size={104} />
+      <Avatar name={profile.displayName} uri={profile.avatarUrl} size={208} />
       <View style={styles.names}>
         <Text variant="title" align="center" role="heading">
           {profile.displayName}

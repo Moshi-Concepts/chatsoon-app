@@ -212,8 +212,8 @@ function profileCss(): string {
   return `
 .profile-wrap{max-width:520px;padding-top:${Spacing.six}px;padding-bottom:${Spacing.six}px;display:flex;flex-direction:column;gap:${Spacing.five}px}
 .profile-card{align-items:center;text-align:center;display:flex;flex-direction:column;gap:${Spacing.four}px;padding:${Spacing.six}px ${Spacing.five}px}
-#avatar{width:104px;height:104px;border-radius:${Radius.pill}px;object-fit:cover;display:block}
-.avatar.initials{width:104px;height:104px;font-size:40px}
+#avatar{width:208px;height:208px;border-radius:${Radius.pill}px;object-fit:cover;display:block}
+.avatar.initials{width:208px;height:208px;font-size:79px}
 .profile-card h1{font-size:26px;line-height:1.25;font-weight:700;margin:0}
 .profile-headline{color:var(--text-secondary);font-size:16px;line-height:1.4;margin:0}
 .profile-role{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--text-secondary);font-size:15px;margin:0}

@@ -68,8 +68,8 @@ describe('renderProfile', () => {
     const html = renderProfile(BASE, ASSETS);
     const img = html.match(/<img[^>]*id="avatar"[^>]*>/)?.[0] ?? '';
     expect(img).toBeTruthy();
-    expect(img).toContain('width="104"');
-    expect(img).toContain('height="104"');
+    expect(img).toContain('width="208"');
+    expect(img).toContain('height="208"');
     expect(img).toContain('fetchpriority="high"');
     expect(img).toContain(`alt="${escapeHtml(BASE.displayName)}"`);
     expect(img).not.toContain('loading="lazy"');

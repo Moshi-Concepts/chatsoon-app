@@ -97,7 +97,7 @@ const CHANNEL_ICON: Record<ProfileContactKey, IconName> = {
 function avatarBlock(p: PageProfile): string {
   if (p.avatarVersion) {
     const src = `/id/${encodeURIComponent(p.slug)}/photo?v=${encodeURIComponent(p.avatarVersion)}`;
-    return `<img id="avatar" src="${escapeHtml(src)}" width="104" height="104" alt="${escapeHtml(p.displayName)}" fetchpriority="high" decoding="async">`;
+    return `<img id="avatar" src="${escapeHtml(src)}" width="208" height="208" alt="${escapeHtml(p.displayName)}" fetchpriority="high" decoding="async">`;
   }
   return `<div class="avatar initials" aria-hidden="true">${escapeHtml(initials(p.displayName))}</div>`;
 }

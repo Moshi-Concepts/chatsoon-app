@@ -19,7 +19,7 @@ sides must follow this file. Change it first if the contract changes.
 ## Profile card
 
 - **Photo:**
-  - With a photo: `<img id="avatar" src="/id/<slug>/photo?v=<avatarVersion>" width="104" height="104" alt="<name>" fetchpriority="high" decoding="async">`. Never lazy-loaded.
+  - With a photo: `<img id="avatar" src="/id/<slug>/photo?v=<avatarVersion>" width="208" height="208" alt="<name>" fetchpriority="high" decoding="async">`. Never lazy-loaded.
   - Without one: `<div class="avatar initials" aria-hidden="true">AB</div>`.
 - **Text:** `<h1>` with the name, then the headline and the role line as text.
 - **Links:** `<ul class="links">`. Each item is `<a href target="_blank" rel="me noopener noreferrer">`, containing an
