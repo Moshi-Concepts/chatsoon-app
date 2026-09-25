@@ -1,7 +1,7 @@
 import data from './legal.json';
 
 // Privacy policy, terms and support live once in legal.json. The app renders them with
-// components/web/legal-page.tsx and scripts/build-static-pages.mjs turns them into static HTML.
+// components/web/legal-page.tsx and apps/web (src/render/legal.ts) turns them into static HTML.
 
 export type LegalSection = {
   heading: string;

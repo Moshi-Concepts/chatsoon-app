@@ -1,0 +1,69 @@
+{
+  "intro": "Meet hundreds of people at a conference and remember every one of them.",
+  "pitch": "Chatsoon is a networking CRM built for events. Share your profile with a QR code, capture the people you meet in seconds, and keep every conversation going long after the event ends.",
+  "hero": {
+    "eyebrow": "The networking CRM built for events",
+    "titleLine1": "Meet people.",
+    "titleLine2": "Follow up.",
+    "ctaLabel": "Get started",
+    "ctaCaption": "Free, and ready on the web today.",
+    "comingSoon": "Coming soon to the App Store and Google Play"
+  },
+  "mock": {
+    "qrScreenLabel": "My QR",
+    "qrName": "Alex Rivera",
+    "qrRole": "Partnerships at Northwind",
+    "qrSlug": "chatsoon.app/id/alex-rivera",
+    "contactName": "Priya Shah",
+    "contactRole": "Founder at Loop",
+    "newBadge": "New",
+    "contactChips": ["Investor", "Token2049"],
+    "contactFootnote": "Filled in from a card photo"
+  },
+  "features": {
+    "kicker": "Why Chatsoon",
+    "title": "Every hello, ready to follow up",
+    "subtitle": "Built for the busiest week of your year: conferences, meetups and trade shows.",
+    "items": [
+      {
+        "icon": "qr-code-outline",
+        "title": "Share your digital business card",
+        "body": "Show your QR code. Anyone can scan it and connect with you, even if they don't have the app. Their details land straight in your contacts."
+      },
+      {
+        "icon": "scan-outline",
+        "title": "Scan cards and badges with AI",
+        "body": "Snap a business card or event badge and Chatsoon fills in the details for you. Scan QR codes from Telegram, LinkedIn, X or a digital business card. Or type a name and move on."
+      },
+      {
+        "icon": "pricetags-outline",
+        "title": "Organise everyone",
+        "body": "Tag people as sponsors, investors, advisors, collaborators or anything you like. Add notes, set priority, and group contacts by the event where you met."
+      },
+      {
+        "icon": "search-outline",
+        "title": "Find anyone fast",
+        "body": "Search by name, company, tag or notes. Tap to message on Telegram, email, LinkedIn or X."
+      },
+      {
+        "icon": "lock-closed-outline",
+        "title": "Private by design",
+        "body": "Your notes and tags are yours alone. Connections only see your public profile. Export your data or delete your account anytime."
+      }
+    ]
+  },
+  "steps": {
+    "kicker": "How connecting works",
+    "title": "Swap details in one scan",
+    "items": [
+      { "title": "Show your QR", "body": "Open My QR at the event. It's your profile, ready to scan." },
+      { "title": "They scan it", "body": "With Chatsoon, or just their phone camera. No app needed." },
+      { "title": "Follow up", "body": "Their details land in your contacts, ready for a note and a tag." }
+    ]
+  },
+  "closing": {
+    "title": "Meet people. Follow up.",
+    "body": "Chatsoon is coming soon to the App Store and Google Play. Start on the web today and take it to your next event.",
+    "ctaLabel": "Get started"
+  }
+}

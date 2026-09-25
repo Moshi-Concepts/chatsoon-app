@@ -5,10 +5,18 @@
  * Usage:
  *   pnpm lh <url…> [--runs 3] [--scheme light|dark|both] [--out dir] [--budgets file]
  *
- * Launches one headless Chrome with chrome-launcher (CHROME_PATH honoured), connects to it
- * with puppeteer-core, and runs Lighthouse against a live Page so the colour scheme can be
- * emulated before each run and double-checked after it. Prints median scores and metrics per
- * URL/scheme and saves every run's raw LHR JSON under --out.
+ * Launches one headless Chrome with chrome-launcher (CHROME_PATH honoured) and connects to it
+ * with puppeteer-core once per whole run. Each individual Lighthouse run gets its own fresh
+ * incognito browser context (a real puppeteer page.close() and page.goto('about:blank') between
+ * runs is not enough): a context that has already loaded the page once leaves warm HTTP/2+H3
+ * connections, cached responses and Cloudflare's service worker registered, and Lighthouse's
+ * simulated ("Lantern") throttling model turns that unrealistically-fast warm load into a wildly
+ * *worse* simulated FCP/LCP than a cold one, not a better one, because the trace it captures no
+ * longer looks like the network waterfall the model expects. A fresh incognito context each run
+ * reproduces the CLI's behaviour of launching a brand-new Chrome per run, without paying Chrome's
+ * ~1s startup cost on every one of --runs × --scheme × <url> combinations. The colour scheme is
+ * still emulated before each run and double-checked after it. Prints median scores and metrics
+ * per URL/scheme and saves every run's raw LHR JSON under --out.
  *
  * --budgets is parsed and validated as JSON here, but nothing in Stage A compares a run against
  * it: Lighthouse 13.5.0 has no budgets feature of its own, and the gate lands in Stage E (plan D22).
@@ -112,8 +120,12 @@ function collectFailingAudits(lhrs) {
 }
 
 async function runOnce(browser, url, scheme) {
-  const page = await browser.newPage();
+  // A fresh incognito context per run, not just a fresh page on the shared default context: see
+  // the file header for why a warm context skews the simulated metrics. Closing the context also
+  // closes its page, so there's no separate page.close().
+  const context = await browser.createBrowserContext();
   try {
+    const page = await context.newPage();
     await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: scheme }]);
     // Lighthouse 13.5.0 drops any flag that isn't in its own defaultSettings, which does not
     // include `budgets` (the feature was removed from core); a budgets flag here would be a
@@ -127,7 +139,7 @@ async function runOnce(browser, url, scheme) {
     }
     return result.lhr;
   } finally {
-    await page.close();
+    await context.close();
   }
 }
 

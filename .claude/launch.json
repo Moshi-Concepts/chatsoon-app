@@ -4,14 +4,44 @@
     {
       "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@chatsoon/api", "run", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@chatsoon/api",
+        "run",
+        "dev"
+      ],
       "port": 8787
     },
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@chatsoon/mobile", "exec", "expo", "start", "--web", "--port", "8081"],
+      "runtimeArgs": [
+        "--filter",
+        "@chatsoon/mobile",
+        "exec",
+        "expo",
+        "start",
+        "--web",
+        "--port",
+        "8081"
+      ],
       "port": 8081
+    },
+    {
+      "name": "web-static",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@chatsoon/web",
+        "exec",
+        "wrangler",
+        "pages",
+        "dev",
+        "dist",
+        "--port",
+        "8788"
+      ],
+      "port": 8788
     }
   ]
 }

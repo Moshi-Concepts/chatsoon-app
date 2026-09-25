@@ -77,18 +77,20 @@ Build and deploy from the repo root:
 pnpm deploy:web
 ```
 
-This rebuilds `apps/mobile/dist` from scratch. Never deploy a `dist` you didn't just build: the one from local testing
-was built with dev values. `export:web` clears the Metro cache (Metro caches the inlined `EXPO_PUBLIC_*` values), so
-the export takes longer than a warm one. The build stops if the bundle still contains a localhost or LAN API URL, a
-Turnstile test key or the placeholder site key. `CHATSOON_ALLOW_DEV_BUILD=1` skips that check: use it only for a local
-test build, never for one you deploy. The deploy
-passes `--branch main`, so it is a Production deployment whichever branch you have checked out. Without `--branch`,
-wrangler uses the current git branch, and anything other than `main` becomes a Preview that chatsoon.app never
-serves. The same steps by hand:
+This rebuilds `apps/web/dist` from scratch: `expo export --platform web --clear` (into that directory, not
+`apps/mobile/dist`), then `apps/web/scripts/build.ts` adds the static `home.html`, `privacy.html`, `terms.html`,
+`support.html` (plus each one's `/index.html`) and `_redirects`. Never deploy a `dist` you didn't just build: the one
+from local testing was built with dev values. The export always runs with `--clear` (Metro caches the inlined
+`EXPO_PUBLIC_*` values), so it takes longer than a warm one. The build stops if the bundle still contains a localhost
+or LAN API URL, a Turnstile test key or the placeholder site key, or if `home.html` comes out over 14 KB gzipped.
+`CHATSOON_ALLOW_DEV_BUILD=1` skips the dev-value check: use it only for a local test build, never for one you deploy.
+The deploy passes `--branch main`, so it is a Production deployment whichever branch you have checked out. Without
+`--branch`, wrangler uses the current git branch, and anything other than `main` becomes a Preview that chatsoon.app
+never serves. The same steps by hand:
 
 ```bash
-cd apps/mobile
-pnpm run export:web
+cd apps/web
+pnpm run build
 npx wrangler pages deploy dist --project-name chatsoon-web --branch main
 ```
 

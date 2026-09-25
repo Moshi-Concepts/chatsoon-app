@@ -1,0 +1,24 @@
+{
+  "name": "@chatsoon/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @chatsoon/mobile exec expo export --platform web --clear --output-dir ../web/dist && tsx scripts/build.ts",
+    "deploy": "pnpm run build && wrangler pages deploy dist --project-name chatsoon-web --branch main",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen-icons": "tsx scripts/gen-icons.ts"
+  },
+  "dependencies": {
+    "@chatsoon/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "ionicons": "^7.4.0",
+    "qrcode": "^1.5.4",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "~4.1.11",
+    "wrangler": "^4.136.3"
+  }
+}

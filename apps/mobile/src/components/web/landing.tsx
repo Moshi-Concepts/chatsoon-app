@@ -5,51 +5,30 @@ import QRCode from 'react-native-qrcode-svg';
 
 import { Avatar, Button, Chip, Icon, Text, type IconName } from '@/components/ui';
 import { Colors, Radius, Spacing } from '@/constants/theme';
+import content from '@/content/landing.json';
 import { useTheme } from '@/hooks/use-theme';
 
 import { Container, useBreakpoint } from './layout';
 import { PageHead } from './page-head';
 import { WebPage } from './web-page';
 
-// Marketing home page at chatsoon.app for signed-out web visitors. Copy follows the store listing.
+// Marketing home page at chatsoon.app for signed-out web visitors. Every visible string lives in
+// content/landing.json (copy follows the store listing), so this file only lays it out.
 
-const INTRO = 'Meet hundreds of people at a conference and remember every one of them.';
-const PITCH =
-  'Chatsoon is a networking CRM built for events. Share your profile with a QR code, capture the people you meet in seconds, and keep every conversation going long after the event ends.';
+type Feature = { icon: IconName; title: string; body: string };
+type Step = { title: string; body: string };
 
-const FEATURES: { icon: IconName; title: string; body: string }[] = [
-  {
-    icon: 'qr-code-outline',
-    title: 'Share your profile',
-    body: "Show your QR code. Anyone can scan it and connect with you, even if they don't have the app. Their details land straight in your contacts.",
-  },
-  {
-    icon: 'scan-outline',
-    title: 'Capture in seconds',
-    body: 'Snap a business card or event badge and Chatsoon fills in the details for you. Scan QR codes from Telegram, LinkedIn, X or a digital business card. Or type a name and move on.',
-  },
-  {
-    icon: 'pricetags-outline',
-    title: 'Organise everyone',
-    body: 'Tag people as sponsors, investors, advisors, collaborators or anything you like. Add notes, set priority, and group contacts by the event where you met.',
-  },
-  {
-    icon: 'search-outline',
-    title: 'Find anyone fast',
-    body: 'Search by name, company, tag or notes. Tap to message on Telegram, email, LinkedIn or X.',
-  },
-  {
-    icon: 'lock-closed-outline',
-    title: 'Private by design',
-    body: 'Your notes and tags are yours alone. Connections only see your public profile. Export your data or delete your account anytime.',
-  },
-];
+const INTRO = content.intro;
+const PITCH = content.pitch;
+const HERO = content.hero;
+const MOCK = content.mock;
+const FEATURES = content.features.items as Feature[];
+const STEPS = content.steps.items as Step[];
+const CLOSING = content.closing;
 
-const STEPS: { title: string; body: string }[] = [
-  { title: 'Show your QR', body: "Open My QR at the event. It's your profile, ready to scan." },
-  { title: 'They scan it', body: 'With Chatsoon, or just their phone camera. No app needed.' },
-  { title: 'Follow up', body: 'Their details land in your contacts, ready for a note and a tag.' },
-];
+// react-native's TextProps doesn't type aria-level (react-native-web forwards it to the DOM anyway),
+// so the eyebrow's heading-level-1 attribute is applied as a plain object spread.
+const HEADING_LEVEL_1 = { 'aria-level': 1 };
 
 export function Landing() {
   return (
@@ -68,7 +47,7 @@ function ComingSoon() {
     <View style={styles.comingSoon}>
       <Icon name="phone-portrait-outline" size={16} color="textSecondary" />
       <Text variant="callout" color="textSecondary">
-        Coming soon to the App Store and Google Play
+        {HERO.comingSoon}
       </Text>
     </View>
   );
@@ -85,14 +64,16 @@ function Hero() {
       <View style={[styles.heroCopy, isWide && styles.heroCopyWide]}>
         <View style={[styles.eyebrow, { backgroundColor: theme.primarySoft }]}>
           <Icon name="sparkles" size={14} color="primary" />
-          <Text variant="captionStrong" color="primary">
-            The networking CRM built for events
+          {/* The page's one h1: role="heading" plus aria-level=1, matching D20. */}
+          <Text variant="captionStrong" color="primary" role="heading" {...HEADING_LEVEL_1}>
+            {HERO.eyebrow}
           </Text>
         </View>
-        <Text role="heading" style={[styles.heroTitle, title]}>
-          Meet people.{'\n'}
+        <Text style={[styles.heroTitle, title]}>
+          {HERO.titleLine1}
+          {'\n'}
           <Text color="primary" style={[styles.heroTitle, title]}>
-            Follow up.
+            {HERO.titleLine2}
           </Text>
         </Text>
         <Text style={[styles.lead, !isMedium && styles.leadSmall]}>{INTRO}</Text>
@@ -101,10 +82,10 @@ function Hero() {
         </Text>
         <View style={isMedium ? styles.ctaRow : styles.ctaColumn}>
           <Link href="/sign-in" asChild>
-            <Button title="Get started" fullWidth={!isMedium} style={isMedium ? styles.cta : undefined} />
+            <Button title={HERO.ctaLabel} fullWidth={!isMedium} style={isMedium ? styles.cta : undefined} />
           </Link>
           <Text variant="callout" color="textSecondary" align={isMedium ? 'left' : 'center'}>
-            Free, and ready on the web today.
+            {HERO.ctaCaption}
           </Text>
         </View>
         <ComingSoon />
@@ -128,20 +109,20 @@ function HeroVisual() {
       <View style={[styles.phone, shadow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={[styles.notch, { backgroundColor: theme.surfaceAlt }]} />
         <Text variant="captionStrong" color="textSecondary">
-          My QR
+          {MOCK.qrScreenLabel}
         </Text>
-        <Avatar name="Alex Rivera" size={60} />
+        <Avatar name={MOCK.qrName} size={60} />
         <View style={styles.phoneName}>
-          <Text variant="subheading">Alex Rivera</Text>
+          <Text variant="subheading">{MOCK.qrName}</Text>
           <Text variant="caption" color="textSecondary">
-            Partnerships at Northwind
+            {MOCK.qrRole}
           </Text>
         </View>
         <View style={[styles.qrTile, { backgroundColor: qr.surface, borderColor: theme.border }]}>
           <QRCode value={WEB_ORIGIN} size={148} color={qr.text} backgroundColor={qr.surface} />
         </View>
         <Text variant="small" color="textTertiary">
-          chatsoon.app/id/alex-rivera
+          {MOCK.qrSlug}
         </Text>
       </View>
 
@@ -153,27 +134,27 @@ function HeroVisual() {
           { backgroundColor: theme.surface, borderColor: theme.border },
         ]}>
         <View style={styles.contactHead}>
-          <Avatar name="Priya Shah" size={40} />
+          <Avatar name={MOCK.contactName} size={40} />
           <View style={styles.flex}>
-            <Text variant="bodyStrong">Priya Shah</Text>
+            <Text variant="bodyStrong">{MOCK.contactName}</Text>
             <Text variant="caption" color="textSecondary">
-              Founder at Loop
+              {MOCK.contactRole}
             </Text>
           </View>
           <View style={[styles.newBadge, { backgroundColor: theme.successSoft }]}>
             <Text variant="small" color="success">
-              New
+              {MOCK.newBadge}
             </Text>
           </View>
         </View>
         <View style={styles.chips}>
-          <Chip label="Investor" />
-          <Chip label="Token2049" icon="calendar-outline" />
+          <Chip label={MOCK.contactChips[0]} />
+          <Chip label={MOCK.contactChips[1]} icon="calendar-outline" />
         </View>
         <View style={styles.contactFoot}>
           <Icon name="sparkles" size={14} color="accent" />
           <Text variant="small" color="textSecondary">
-            Filled in from a card photo
+            {MOCK.contactFootnote}
           </Text>
         </View>
       </View>
@@ -215,9 +196,9 @@ function Features() {
     <View style={[styles.band, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       <Container style={styles.bandInner}>
         <SectionHead
-          kicker="Why Chatsoon"
-          title="Every hello, ready to follow up"
-          subtitle="Built for the busiest week of your year: conferences, meetups and trade shows."
+          kicker={content.features.kicker}
+          title={content.features.title}
+          subtitle={content.features.subtitle}
         />
         <View style={styles.grid}>
           {FEATURES.map((f, i) => (
@@ -244,7 +225,7 @@ function Steps() {
   const { isMedium } = useBreakpoint();
   return (
     <Container style={styles.bandInner}>
-      <SectionHead kicker="How connecting works" title="Swap details in one scan" />
+      <SectionHead kicker={content.steps.kicker} title={content.steps.title} />
       <View style={[styles.steps, isMedium && styles.stepsRow]}>
         {STEPS.map((s, i) => (
           <View key={s.title} style={[styles.step, isMedium && styles.flex]}>
@@ -273,14 +254,13 @@ function ClosingCta() {
     <Container style={styles.closingWrap}>
       <View style={[styles.closing, { backgroundColor: theme.primary }]}>
         <Text color="onPrimary" align="center" style={[styles.sectionTitle, !isMedium && styles.sectionTitleSmall]}>
-          Meet people. Follow up.
+          {CLOSING.title}
         </Text>
         <Text variant="body" color="onPrimary" align="center" style={styles.closingText}>
-          Chatsoon is coming soon to the App Store and Google Play. Start on the web today and take it to your next
-          event.
+          {CLOSING.body}
         </Text>
         <Link href="/sign-in" asChild>
-          <Button title="Get started" variant="secondary" fullWidth={false} style={styles.ctaCentre} />
+          <Button title={CLOSING.ctaLabel} variant="secondary" fullWidth={false} style={styles.ctaCentre} />
         </Link>
       </View>
     </Container>

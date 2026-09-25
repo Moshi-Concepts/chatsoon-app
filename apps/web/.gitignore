@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.dev.vars.*
+*.tsbuildinfo
+coverage/
+
+# Stage C (WP-C5): written by build.ts, never hand-edited or committed.
+functions/_generated/
