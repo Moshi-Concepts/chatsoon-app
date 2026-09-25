@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 
 import type { AppEnv } from '../env';
 import { deleteUserData, exportContactsCsv } from '../lib/account';
+import { getConnectedAccounts } from '../lib/connected-accounts';
 import { getDb } from '../lib/db';
 import { cancelAccountDeletion, cancelAccountDeletionByToken, maskEmail, scheduleAccountDeletion } from '../lib/deletion';
 import { ApiError, ipKey, limit, notFound, parseJson } from '../lib/errors';
@@ -14,6 +15,7 @@ import { isActiveReviewer } from '../lib/reviewer';
 // DELETE /me/deletion     cancels a pending scheduled deletion
 // POST   /account-deletion/cancel   cancels by the token from the "scheduled" email (no auth)
 // GET    /me/export.csv   the user's contacts as an RFC 4180 CSV download
+// GET    /me/connected-accounts     linked social accounts and referral eligibility (issue #11)
 //
 // Middleware is attached per route: a `use('*')` here would also run for every route
 // mounted after this module (including the anonymous POST /reports and POST /account-deletion/cancel).
@@ -72,6 +74,12 @@ accountRoutes.post('/account-deletion/cancel', async (c) => {
   const email = await cancelAccountDeletionByToken(getDb(c.env), token);
   if (!email) throw new ApiError(400, 'invalid_token', 'This cancellation link is invalid or has expired.');
   return c.json({ status: 'cancelled' as const, email: maskEmail(email) });
+});
+
+/** GET /me/connected-accounts (issue #11): never returns tokens - only what lib/connected-accounts.ts builds. */
+accountRoutes.get('/me/connected-accounts', requireAuth, async (c) => {
+  const accountsResponse = await getConnectedAccounts(getDb(c.env), c.env, c.get('user').id);
+  return c.json(accountsResponse);
 });
 
 accountRoutes.get('/me/export.csv', requireAuth, async (c) => {

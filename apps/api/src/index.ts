@@ -1,5 +1,5 @@
 import type { AuthProvidersResponse } from '@chatsoon/shared';
-import { SOCIAL_PROVIDERS } from '@chatsoon/shared';
+import { SOCIAL_PROVIDERS, SOCIAL_VALIDATION_PROVIDERS } from '@chatsoon/shared';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
@@ -75,14 +75,20 @@ app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n', 200, { 'Cac
 app.on(['GET', 'POST'], '/auth/*', otpRateLimit, async (c) => (await createAuth(c.env, c.executionCtx)).handler(c.req.raw));
 
 /**
- * Enabled social sign-in providers (issue #24), in display order. Outside `/auth/*` since that
- * basePath belongs to Better Auth. The sign-in page only shows buttons for these, so a provider can
- * switch on (once its secrets are set) without a web redeploy. Cached briefly since it changes only
- * when secrets are added or removed.
+ * Enabled social providers (issue #24, plus `linkProviders` for issue #11), in display order.
+ * Outside `/auth/*` since that basePath belongs to Better Auth. `providers` is the sign-in screen's
+ * button list, unchanged since issue #24. `linkProviders` is what the Connected accounts screen can
+ * offer (docs/referrals.md "Account linking"): every provider in `SOCIAL_VALIDATION_PROVIDERS` that's
+ * configured, which includes `twitter` (X) once its secrets are set even though X never appears in
+ * `providers` - it can't sign anyone in (lib/social-providers.ts's twitterGetUserInfo never returns a
+ * real email), only link. Cached briefly since it changes only when secrets are added or removed.
  */
 app.get('/auth-providers', async (c) => {
   const configured = await buildSocialProviders(c.env);
-  const body: AuthProvidersResponse = { providers: SOCIAL_PROVIDERS.filter((p) => p in configured) };
+  const body: AuthProvidersResponse = {
+    providers: SOCIAL_PROVIDERS.filter((p) => p in configured),
+    linkProviders: SOCIAL_VALIDATION_PROVIDERS.filter((p) => p in configured),
+  };
   c.header('Cache-Control', 'public, max-age=300');
   return c.json(body);
 });

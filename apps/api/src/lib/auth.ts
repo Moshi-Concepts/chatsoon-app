@@ -1,7 +1,7 @@
 import { expo } from '@better-auth/expo';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { bearer, emailOTP } from 'better-auth/plugins';
 import type { SocialProviders } from 'better-auth/social-providers';
 import type { MiddlewareHandler } from 'hono';
@@ -14,6 +14,8 @@ import { sendEmail, signInCodeEmail } from './email';
 import { ApiError, badRequest, clientIp, forbidden, ipKey, limit, rateLimited } from './errors';
 import { ensureReviewerData, isActiveReviewer, isReviewerEmail, reviewerCode, reviewerOtp } from './reviewer';
 import { timingSafeEqual } from './signing';
+import { captureSocialCheck } from './social-checks';
+import { discordGetUserInfo, twitterGetUserInfo } from './social-providers';
 
 export function allowedOrigins(env: Env): string[] {
   const extra = (env.EXTRA_ORIGINS ?? '')
@@ -33,10 +35,13 @@ export interface WaitUntil {
  * outside otpRateLimit (password reset), and the Expo OAuth proxy redirects to any https URL (an
  * open redirect on the API domain). Account deletion is DELETE /me.
  * The app uses send-verification-otp, sign-in/email-otp, get-session and sign-out, plus (once a
- * provider is configured, see buildSocialProviders) sign-in/social and callback/:id.
+ * provider is configured, see buildSocialProviders) sign-in/social, callback/:id and (issue #11)
+ * link-social for a signed-in user connecting a further provider.
  *
- * '/sign-in/social' is removed from this list in createAuth when at least one provider is configured,
- * so with none configured (today's default) behaviour is unchanged: that path still 404s.
+ * '/sign-in/social' and '/link-social' are removed from this list in createAuth when at least one
+ * provider is configured, so with none configured (today's default) behaviour is unchanged: both
+ * paths still 404. account-info and list-accounts stay disabled either way (unlink-account isn't
+ * used yet either, see the accountLinking comment below).
  */
 const DISABLED_AUTH_PATHS = [
   '/expo-authorization-proxy',
@@ -68,18 +73,10 @@ const DISABLED_AUTH_PATHS = [
 ];
 
 /**
- * Discord's raw profile shape (the bits `mapProfileToUser` reads). Declared narrow on purpose: Better
- * Auth passes the full DiscordProfile, but this is all buildSocialProviders needs from it.
- */
-interface DiscordProfileUsername {
-  username: string;
-}
-
-/**
- * Builds Better Auth's `socialProviders` option (issue #24): a provider is included only once every
- * one of its secrets is set on `env`, so an unconfigured provider is simply absent, not broken.
- * Exported so GET /auth-providers (src/index.ts) can report the same set without duplicating this
- * gating logic.
+ * Builds Better Auth's `socialProviders` option (issue #24, plus twitter for issue #11): a provider
+ * is included only once every one of its secrets is set on `env`, so an unconfigured provider is
+ * simply absent, not broken. Exported so GET /auth-providers (src/index.ts) can report the same set
+ * without duplicating this gating logic.
  */
 export async function buildSocialProviders(env: Env): Promise<SocialProviders> {
   const providers: SocialProviders = {};
@@ -98,12 +95,31 @@ export async function buildSocialProviders(env: Env): Promise<SocialProviders> {
       // room for provider profile fields), so it's copied onto the user row (additionalFields below)
       // for onboarding to prefill links.discord. Only applied on account creation / explicit update,
       // per Better Auth's own account-linking rules (see the account.accountLinking comment below).
-      mapProfileToUser: (profile: DiscordProfileUsername) => ({ discordUsername: profile.username }),
+      // discordGetUserInfo (issue #11) replaces Better Auth's own fetch entirely so it can also
+      // capture mfa_enabled for social_checks (lib/social-checks.ts); it still sets discordUsername
+      // the same way the old mapProfileToUser option did.
+      getUserInfo: discordGetUserInfo,
     };
   }
   if (env.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY) {
     const clientSecret = await appleClientSecret(env);
     if (clientSecret) providers.apple = { clientId: env.APPLE_CLIENT_ID, clientSecret };
+  }
+  if (env.TWITTER_CLIENT_ID && env.TWITTER_CLIENT_SECRET) {
+    providers.twitter = {
+      clientId: env.TWITTER_CLIENT_ID,
+      clientSecret: env.TWITTER_CLIENT_SECRET,
+      // docs/referrals.md "Adding X": users.read + tweet.read only, no email scope. Better Auth's
+      // twitter provider doesn't require offline.access for the initial link (refreshAccessToken is
+      // only ever called lazily, never during the callback itself), and this is a one-time identity
+      // check, not a standing API integration, so there's no need for a refresh token either.
+      disableDefaultScope: true,
+      scope: ['users.read', 'tweet.read'],
+      // Replaces Better Auth's default X profile fetch (which asks for a minimal user.fields and
+      // requests an extra `confirmed_email` scope this app deliberately doesn't use) with the fields
+      // docs/referrals.md needs, and captures social_checks the same way discordGetUserInfo does.
+      getUserInfo: twitterGetUserInfo,
+    };
   }
 
   return providers;
@@ -117,7 +133,10 @@ export async function createAuth(env: Env, ctx?: WaitUntil) {
   const db = getDb(env);
   const socialProviders = await buildSocialProviders(env);
   const anySocialProvider = Object.keys(socialProviders).length > 0;
-  const disabledPaths = anySocialProvider ? DISABLED_AUTH_PATHS.filter((p) => p !== '/sign-in/social') : DISABLED_AUTH_PATHS;
+  const ENABLED_WHEN_ANY_PROVIDER = ['/sign-in/social', '/link-social'];
+  const disabledPaths = anySocialProvider
+    ? DISABLED_AUTH_PATHS.filter((p) => !ENABLED_WHEN_ANY_PROVIDER.includes(p))
+    : DISABLED_AUTH_PATHS;
 
   return betterAuth({
     appName: 'Chatsoon',
@@ -139,15 +158,46 @@ export async function createAuth(env: Env, ctx?: WaitUntil) {
       ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
     },
     account: {
-      // Links a social sign-in to an existing email/OTP account with the same email address (issue
-      // #24 design point 3), but deliberately without `trustedProviders`: reading Better Auth 1.7.5's
-      // source (oauth2/link-account.ts), `trustedProviders` is a bypass that allows linking even when
-      // the provider's own profile says the email is *not* verified. Leaving it unset means Better
-      // Auth's default check applies instead - link only when the incoming profile is verified
-      // (Google's `email_verified`, Discord's `verified`, LinkedIn's `email_verified`; Apple's emails
-      // are always verified) - which is exactly the "only link verified emails" rule this feature
-      // needs, so no extra mapping is needed to enforce it.
-      accountLinking: { enabled: true },
+      accountLinking: {
+        enabled: true,
+        // Links a social sign-in to an existing email/OTP account with the same email address (issue
+        // #24 design point 3), but deliberately without google/apple/linkedin/discord in
+        // `trustedProviders`: reading Better Auth 1.7.5's source (oauth2/link-account.ts, the
+        // `isTrustedProvider` check ~line 77), `trustedProviders` is a bypass that allows *auto-linking
+        // at sign-in* even when the provider's own profile says the email is *not* verified. Leaving
+        // it unset for those four means Better Auth's default check applies instead - auto-link only
+        // when the incoming profile is verified (Google's `email_verified`, Discord's `verified`,
+        // LinkedIn's `email_verified`; Apple's emails are always verified) - exactly the "only link
+        // verified emails" rule docs/referrals.md "Decisions" #1 asks for, so no extra mapping is
+        // needed to enforce it.
+        //
+        // `twitter` IS listed, and must be for /link-social to work at all - this is a second,
+        // separate trustedProviders gate that oauth2/link-account.ts doesn't have. The explicit
+        // `/link-social` flow itself (api/routes/callback.mjs's `if (link)` branch, ~line 173, and the
+        // id-token variant in api/routes/account.mjs, ~line 207) refuses to complete *any* link -
+        // automatic or explicit - unless the provider is trusted OR the provider's profile says its
+        // email is verified; this check runs before, and independently of, `allowDifferentEmails`
+        // below. X never returns an email at all (see social-providers.ts's twitterGetUserInfo), so
+        // its `emailVerified` is always false; without `twitter` here, every `/link-social` attempt
+        // for X fails with "unable to link account", full stop. Adding it does not reopen the
+        // auto-link-at-sign-in risk the paragraph above describes, because that risk needs a
+        // *matching real email* on an existing user, and X can never supply one (twitterGetUserInfo
+        // always returns a synthetic, per-account placeholder address) - the auto-link-at-sign-in
+        // lookup this bypasses can never match an existing user for twitter. Sign-in via twitter is
+        // also refused outright below (`hooks.before`), so that code path never runs for it regardless
+        // of this setting. This is a place where docs/referrals.md's "never twitter" instruction (for
+        // trustedProviders generally) undercovers what Better Auth 1.7.5 actually gates on - flagged
+        // in the PR notes for Peter to confirm.
+        trustedProviders: ['twitter'],
+        // For a signed-in user linking a further provider (docs/referrals.md "Account linking"): the
+        // session already proves who's linking, so a work LinkedIn or an Apple relay address is the
+        // normal case, not a red flag. Confirmed at node_modules/better-auth/dist/api/routes/
+        // {account,callback}.mjs that `allowDifferentEmails` governs only the email-*match* check in
+        // the explicit `/link-social` flow (both its id-token and redirect variants) - it has no effect
+        // on `oauth2/link-account.ts`'s separate auto-link-at-sign-in path, which always requires a
+        // matching email regardless of this setting.
+        allowDifferentEmails: true,
+      },
     },
     user: {
       additionalFields: {
@@ -183,8 +233,44 @@ export async function createAuth(env: Env, ctx?: WaitUntil) {
           before: async (session) => ({ data: { ...session, ipAddress: null, userAgent: null } }),
         },
       },
+      account: {
+        // Captures social_checks (issue #11, docs/referrals.md "Capturing the checks") on every
+        // Discord or X sign-in *or* link. `create` fires for a brand-new sign-up and for auto-link-at-
+        // sign-in (`internalAdapter.linkAccount` also goes through `createWithHooks(..., 'account', ...)`,
+        // see node_modules/better-auth/dist/db/internal-adapter.mjs); `update` fires for an ordinary
+        // re-sign-in via an already-linked account and for an explicit Reconnect through /link-social
+        // (node_modules/better-auth/dist/db/with-hooks.mjs's `create.after`/`update.after` get the full
+        // written row - id, userId, providerId, accountId - which is exactly the correlation key
+        // `captureSocialCheck` needs; see lib/social-checks.ts for why the raw profile fields
+        // themselves have to travel a different way, via `getUserInfo`). A no-op for every other
+        // provider (google/apple/linkedin/credential), since only discord/twitter's `getUserInfo`
+        // ever calls `rememberSocialCheck`.
+        create: {
+          after: async (account) => {
+            await captureSocialCheck(db, account);
+          },
+        },
+        update: {
+          after: async (account) => {
+            await captureSocialCheck(db, account);
+          },
+        },
+      },
     },
     hooks: {
+      before: createAuthMiddleware(async (actx) => {
+        // X can't sign in (docs/referrals.md "Adding X": it never returns an email - see
+        // social-providers.ts's twitterGetUserInfo), so it's link-only even though it's a normal
+        // registered social provider once TWITTER_CLIENT_ID/SECRET are set (GET /auth-providers
+        // excludes it from the sign-in `providers` list for the same reason, but that's a UI-level
+        // filter Better Auth itself doesn't know about). Refusing it here, not just in the UI, also
+        // means the `trustedProviders: ['twitter']` entry above (needed for /link-social, see the
+        // comment there) can never reach the auto-link-at-sign-in code path it would otherwise bypass.
+        const body = actx.body as { provider?: unknown } | undefined;
+        if (actx.path === '/sign-in/social' && body?.provider === 'twitter') {
+          throw new APIError('NOT_FOUND', { code: 'PROVIDER_NOT_FOUND', message: 'twitter sign-in is not available' });
+        }
+      }),
       after: createAuthMiddleware(async (actx) => {
         if (actx.path !== '/sign-in/email-otp') return;
         const user = actx.context.newSession?.user;

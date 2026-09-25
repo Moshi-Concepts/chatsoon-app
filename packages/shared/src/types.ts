@@ -2,6 +2,7 @@
 // JSON is camelCase on the wire; the database uses snake_case.
 
 import type { SocialProvider } from './constants';
+import type { SocialIneligibleReason, SocialValidationProvider } from './social';
 
 export type LinkKey = 'x' | 'telegram' | 'discord' | 'linkedin' | 'website' | 'youtube';
 
@@ -252,15 +253,38 @@ export interface SignInResponse {
   user: { id: string; email: string };
 }
 
-/** GET /auth-providers response (issue #24): providers whose secrets are configured, in display order. */
+/**
+ * GET /auth-providers response. `providers` (issue #24) are the sign-in buttons the sign-in screen
+ * shows, in display order; unchanged shape, so it stays backward compatible. `linkProviders` (issue
+ * #11) is every configured provider the Connected accounts screen can offer to link, including
+ * `twitter` (X): X never returns an email, so it can't sign anyone in and never appears in
+ * `providers`, but once `TWITTER_CLIENT_ID`/`TWITTER_CLIENT_SECRET` are set it can be linked.
+ */
 export interface AuthProvidersResponse {
   providers: SocialProvider[];
+  linkProviders: SocialValidationProvider[];
 }
 
 /** POST /me/avatar/from-provider response (issue #24): the new avatar's key, same shape as an upload. */
 export interface AvatarFromProviderResponse {
   avatarKey: string;
 }
+
+/**
+ * GET /me/connected-accounts response (issue #11): one row per linked account whose provider is in
+ * `SOCIAL_VALIDATION_PROVIDERS` (never the email-OTP `credential` row). `label` is the Discord
+ * username, the X handle, or the provider email where the account or `users` row gives one, and
+ * never a token. `eligible` is always true for google/apple/linkedin; for discord/twitter it reflects
+ * `discordEligible`/`xEligible` against the last captured `social_checks` row (missing row: not
+ * eligible), with `reason` set only when ineligible.
+ */
+export type ConnectedAccountsResponse = {
+  provider: SocialValidationProvider;
+  connectedAt: string;
+  label?: string;
+  eligible: boolean;
+  reason?: SocialIneligibleReason;
+}[];
 
 /** Error body for every non-2xx response from the API (except Better Auth's own routes). */
 export interface ApiErrorBody {

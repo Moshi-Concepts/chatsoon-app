@@ -48,6 +48,8 @@ export default defineConfig(async () => {
             ANTHROPIC_API_KEY: '',
             OG_CARDS_ENABLED: 'true',
             PAGES_SHARED_SECRET: 'test-pages-secret',
+            REFERRAL_DISCORD_MIN_AGE_DAYS: '90',
+            REFERRAL_X_MIN_FOLLOWERS: '50',
           },
           // Auxiliary worker: wrangler.jsonc's "services" binding names it "chatsoon-og" with the
           // "OgRenderer" entrypoint, so this is what env.OG.render() actually calls in tests.
