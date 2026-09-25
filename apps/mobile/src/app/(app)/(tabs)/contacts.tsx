@@ -2,15 +2,16 @@ import type { Contact } from '@chatsoon/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
-import { FlatList, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ContactListSkeleton, ContactRow } from '@/components/contacts/contact-row';
+import { FilterBar } from '@/components/contacts/filter-bar';
 import { HeaderIconButton } from '@/components/contacts/header-button';
 import { OutboxSection } from '@/components/contacts/outbox-section';
 import { ALL_CONTACTS, buildSearchIndex, filterContacts, type ContactFilter } from '@/components/contacts/search';
 import { SearchField } from '@/components/contacts/search-field';
 import { isReadingCard, needsReview, plural } from '@/components/contacts/source';
-import { Button, Chip, EmptyState, Icon, Screen, Text } from '@/components/ui';
+import { Button, EmptyState, Icon, Screen, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useOutbox } from '@/lib/outbox';
@@ -55,6 +56,21 @@ export default function ContactsScreen() {
     const ids = new Set(all.map((c) => c.eventId));
     return (events.data ?? []).filter((e) => ids.has(e.id));
   }, [all, events.data]);
+  // Per-tag and per-event contact counts, shown on the filter chips.
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of all) {
+      for (const id of c.tagIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  }, [all]);
+  const eventCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of all) {
+      if (c.eventId) counts.set(c.eventId, (counts.get(c.eventId) ?? 0) + 1);
+    }
+    return counts;
+  }, [all]);
   const index = useMemo(() => buildSearchIndex(all, tagNames, eventNames), [all, tagNames, eventNames]);
 
   // A filter on a tag that was deleted, or an event with no contacts left, falls back to All.
@@ -196,33 +212,16 @@ export default function ContactsScreen() {
               accessibilityLabel="Search contacts"
             />
           </View>
-          <ScrollView
-            horizontal
-            // A mouse wheel can't scroll sideways, so desktop browsers need the scrollbar.
-            showsHorizontalScrollIndicator={Platform.OS === 'web'}
-            keyboardShouldPersistTaps="handled"
-            style={styles.chipScroll}
-            contentContainerStyle={styles.chips}>
-            <Chip label="All" selected={active.kind === 'all'} onPress={() => setFilter(ALL_CONTACTS)} />
-            {(tags.data ?? []).map((tag) => (
-              <Chip
-                key={tag.id}
-                label={tag.name}
-                selected={active.kind === 'tag' && active.id === tag.id}
-                onPress={() => toggleFilter({ kind: 'tag', id: tag.id })}
-              />
-            ))}
-            {usedEvents.map((event) => (
-              <Chip
-                key={event.id}
-                label={event.name}
-                icon="calendar-outline"
-                selected={active.kind === 'event' && active.id === event.id}
-                onPress={() => toggleFilter({ kind: 'event', id: event.id })}
-              />
-            ))}
-            <Chip label="Manage tags" icon="pricetags-outline" onPress={() => router.push('/tags')} />
-          </ScrollView>
+          <FilterBar
+            active={active}
+            totalCount={all.length}
+            tags={tags.data ?? []}
+            tagCounts={tagCounts}
+            events={usedEvents}
+            eventCounts={eventCounts}
+            onSelectAll={() => setFilter(ALL_CONTACTS)}
+            onToggleFilter={toggleFilter}
+          />
         </View>
       ) : null}
 
@@ -263,9 +262,6 @@ const styles = StyleSheet.create({
   // Gap and bottom padding are 4pt less than they look: the chip row adds 4pt above and below.
   toolbar: { paddingTop: Spacing.two, paddingBottom: Spacing.two, gap: Spacing.two },
   search: { paddingHorizontal: Spacing.four },
-  chipScroll: { flexGrow: 0 },
-  // The vertical padding keeps each chip's 4pt hitSlop inside the scroll view, which clips touches.
-  chips: { gap: Spacing.two, paddingHorizontal: Spacing.four, paddingVertical: Spacing.one },
   listContent: { flexGrow: 1, paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
   listHeader: { gap: Spacing.four, paddingBottom: Spacing.two },
   summary: { paddingHorizontal: Spacing.one },

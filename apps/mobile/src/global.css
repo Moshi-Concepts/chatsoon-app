@@ -4,3 +4,28 @@
     'Segoe UI Emoji', 'Noto Color Emoji';
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 }
+
+/* Contacts filter bar (apps/mobile/src/components/contacts/filter-bar.tsx): the browser's own
+   horizontal scrollbar is redundant once the bar has its own arrow buttons and wheel handling, and
+   an edge fade shows when there is more to scroll to in that direction. Toggled via the RN-web
+   `dataSet` prop, which becomes `data-*` attributes on the underlying div. Mask values are plain
+   black/transparent alpha stops, not theme colours, so hex here is fine even though screens never
+   use hex literals directly. */
+[data-filterbar] {
+  scrollbar-width: none;
+}
+[data-filterbar]::-webkit-scrollbar {
+  display: none;
+}
+[data-filterbar-mask='left'] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 24px);
+  mask-image: linear-gradient(to right, transparent 0, #000 24px);
+}
+[data-filterbar-mask='right'] {
+  -webkit-mask-image: linear-gradient(to left, transparent 0, #000 24px);
+  mask-image: linear-gradient(to left, transparent 0, #000 24px);
+}
+[data-filterbar-mask='both'] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+}

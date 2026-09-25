@@ -11,13 +11,17 @@ export function Chip({
   selected,
   onPress,
   icon,
+  count,
 }: {
   label: string;
   selected?: boolean;
   onPress?: () => void;
   icon?: IconName;
+  /** Shown after the label in a muted style, e.g. "Investor · 3". Also drives the accessibility label. */
+  count?: number;
 }) {
   const theme = useTheme();
+  const accessibilityLabel = count == null ? undefined : `${label}, ${count} ${count === 1 ? 'contact' : 'contacts'}`;
   return (
     <Pressable
       onPress={onPress}
@@ -26,6 +30,7 @@ export function Chip({
       hitSlop={4}
       accessibilityRole={onPress ? 'button' : 'text'}
       accessibilityState={{ selected: !!selected }}
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.chip,
         {
@@ -38,6 +43,14 @@ export function Chip({
       <Text variant="captionStrong" color={selected ? 'onPrimary' : 'text'}>
         {label}
       </Text>
+      {count != null ? (
+        <Text
+          variant="captionStrong"
+          color={selected ? 'onPrimary' : 'textSecondary'}
+          style={selected ? styles.countSelected : undefined}>
+          · {count}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -52,4 +65,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
   },
+  countSelected: { opacity: 0.75 },
 });
