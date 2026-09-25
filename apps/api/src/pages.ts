@@ -170,8 +170,8 @@ type AvatarVariantOutcome =
   | { kind: 'no-attempt' };
 
 /**
- * Builds (or reuses) the 416x416 WebP avatar variant for one avatar, or decides there isn't going to
- * be one. Never throws: `env.IMAGES` being absent is normal (a lower-tier account); an actual
+ * Builds the 416x416 WebP avatar variant for one avatar (the caller has already checked R2 for a
+ * stored one), or decides there isn't going to be one. Never throws: `env.IMAGES` being absent is normal (a lower-tier account); an actual
  * transform or store failure is logged once and treated the same as "no variant" so the request can
  * still be served from the original (design point 2c).
  */
@@ -184,9 +184,6 @@ async function loadAvatarVariant(
   contentType: string,
 ): Promise<AvatarVariantOutcome> {
   const variantKey = avatarVariantKey(userId, version);
-
-  const existing = await env.FILES.get(variantKey);
-  if (existing) return { kind: 'variant', body: existing.body, contentLength: existing.size };
 
   if (!env.IMAGES || object.size > MAX_AVATAR_ORIGINAL_BYTES || !contentType.startsWith('image/')) {
     return { kind: 'no-attempt' };
@@ -243,15 +240,32 @@ export async function profilePhoto(
   const avatarKey = found.row.avatarKey;
   if (!avatarKey) return { status: 'not_found' };
 
+  const indexable = isIndexable(found.row, found.email);
+  const version = await hashKey16(avatarKey);
+  const maxAge = v !== null && V_PATTERN.test(v) && v === version ? 3600 : 60;
+
+  // The stored variant first: once it exists (every request after the first), the original is never
+  // read, saving an R2 round trip on the page's LCP image. It's keyed by the current avatar's version
+  // and deleted when that avatar changes or is removed, so a hit always belongs to `avatarKey`.
+  const existing = await env.FILES.get(avatarVariantKey(found.row.userId, version));
+  if (existing) {
+    return {
+      status: 'ok',
+      body: existing.body,
+      contentType: 'image/webp',
+      contentLength: existing.size,
+      version,
+      variant: '416',
+      maxAge,
+      indexable,
+    };
+  }
+
   const object = await env.FILES.get(avatarKey);
   if (!object) return { status: 'not_found' };
 
-  const indexable = isIndexable(found.row, found.email);
   const contentType = object.httpMetadata?.contentType;
   if (!contentType?.startsWith('image/')) return { status: 'not_found' };
-
-  const version = await hashKey16(avatarKey);
-  const maxAge = v !== null && V_PATTERN.test(v) && v === version ? 3600 : 60;
 
   const outcome = await loadAvatarVariant(env, ctx, found.row.userId, version, object, contentType);
   if (outcome.kind === 'variant') {
