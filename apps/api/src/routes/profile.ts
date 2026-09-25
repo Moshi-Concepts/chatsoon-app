@@ -1,4 +1,5 @@
 import {
+  AVATAR_WIDTHS,
   canonicalLinkValue,
   emailPrefsInputSchema,
   isDiscordDiscriminator,
@@ -190,13 +191,15 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
     c.executionCtx.waitUntil(
       c.env.FILES.delete(previousAvatar).catch((err) => console.error('Deleting old avatar failed', err)),
     );
-    // The 416x416 WebP variant (Stage F, D8) of the old avatar, if one was ever built. On a change,
-    // the new avatar's next photo request would eventually sweep this anyway (pages.ts), but a
-    // removal (avatarKey now null) never makes another photo request, so it never would — the privacy
-    // policy says removed data goes straight away, not "eventually" (design point 4).
+    // Every resized WebP variant (Stage F, D8; every width in AVATAR_WIDTHS, issue #23) of the old
+    // avatar, if any were ever built. On a change, the new avatar's next photo request would
+    // eventually sweep its own width anyway (pages.ts), but a removal (avatarKey now null) never
+    // makes another photo request, so it never would — the privacy policy says removed data goes
+    // straight away, not "eventually" (design point 4). Deleting the keys directly (R2 accepts a
+    // batch of keys) needs no `list()`: every width's key is derivable from `version` alone.
     c.executionCtx.waitUntil(
       hashKey16(previousAvatar)
-        .then((version) => c.env.FILES.delete(avatarVariantKey(userId, version)))
+        .then((version) => c.env.FILES.delete(AVATAR_WIDTHS.map((w) => avatarVariantKey(userId, version, w))))
         .catch((err) => console.error('Deleting old avatar variant failed', err)),
     );
   }

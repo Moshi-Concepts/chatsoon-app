@@ -19,7 +19,7 @@ sides must follow this file. Change it first if the contract changes.
 ## Profile card
 
 - **Photo:**
-  - With a photo: `<img id="avatar" src="/id/<slug>/photo?v=<avatarVersion>" width="208" height="208" alt="<name>" fetchpriority="high" decoding="async">`. Never lazy-loaded.
+  - With a photo: `<img id="avatar" src="/id/<slug>/photo?v=<avatarVersion>" srcset="/id/<slug>/photo?v=<avatarVersion>&w=208 208w, /id/<slug>/photo?v=<avatarVersion>&w=368 368w, /id/<slug>/photo?v=<avatarVersion>&w=416 416w, /id/<slug>/photo?v=<avatarVersion>&w=512 512w" sizes="208px" width="208" height="208" alt="<name>" fetchpriority="high" decoding="async">` (issue #23: `src` is the plain, no-`w` URL — the API's own 416 default, kept as the fallback for anything that ignores `srcset`; the `&` in each URL is escaped to `&amp;`). Never lazy-loaded. JSON-LD's `image` and the OG image keep the plain `src` URL, with no `w` at all.
   - Without one: `<div class="avatar initials" aria-hidden="true">AB</div>`.
 - **Text:** `<h1>` with the name, then the headline and the role line as text.
 - **Links:** `<ul class="links">`. Each item is `<a href target="_blank" rel="me noopener noreferrer">`, containing an

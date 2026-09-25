@@ -8,7 +8,7 @@
 // Deep imports only (docs/public-pages-plan.md §4): `@chatsoon/shared/src/{constants,design,booking,
 // links,profile-contact,profile-page,types}`. No dependency on apps/mobile.
 
-import { APP_NAME, COPYRIGHT, SUPPORT_EMAIL, TAGLINE, WEB_ORIGIN } from '@chatsoon/shared/src/constants';
+import { APP_NAME, AVATAR_WIDTHS, COPYRIGHT, SUPPORT_EMAIL, TAGLINE, WEB_ORIGIN } from '@chatsoon/shared/src/constants';
 import { Colors } from '@chatsoon/shared/src/design';
 import { bookingEmbedUrl, bookingOpenUrl, bookingProviderName } from '@chatsoon/shared/src/booking';
 import { discordDisplay, toLinkUrl } from '@chatsoon/shared/src/links';
@@ -97,10 +97,21 @@ const CHANNEL_ICON: Record<ProfileContactKey, IconName> = {
   signal: 'chatbubble-ellipses-outline',
 };
 
+/**
+ * `src` stays the plain, no-`w` URL — the API's own 416 default — so it's the fallback for anything
+ * that ignores `srcset` (older browsers, non-browser consumers). `srcset` (issue #23) offers the same
+ * photo at every AVATAR_WIDTHS size; `sizes="208px"` matches the card's fixed 208 CSS px display width,
+ * so a browser picks the smallest source that still covers the actual device pixel ratio instead of
+ * always downloading the 416 variant. JSON-LD's `image` and the OG image (og.ts) are unaffected: they
+ * keep the plain `src` URL, never a `w`.
+ */
 function avatarBlock(p: PageProfile): string {
   if (p.avatarVersion) {
-    const src = `/id/${encodeURIComponent(p.slug)}/photo?v=${encodeURIComponent(p.avatarVersion)}`;
-    return `<img id="avatar" src="${escapeHtml(src)}" width="208" height="208" alt="${escapeHtml(p.displayName)}" fetchpriority="high" decoding="async">`;
+    const v = encodeURIComponent(p.avatarVersion);
+    const photoUrl = (w?: number) => `/id/${encodeURIComponent(p.slug)}/photo?v=${v}${w ? `&w=${w}` : ''}`;
+    const src = photoUrl();
+    const srcset = AVATAR_WIDTHS.map((w) => `${photoUrl(w)} ${w}w`).join(', ');
+    return `<img id="avatar" src="${escapeHtml(src)}" srcset="${escapeHtml(srcset)}" sizes="208px" width="208" height="208" alt="${escapeHtml(p.displayName)}" fetchpriority="high" decoding="async">`;
   }
   return `<div class="avatar initials" aria-hidden="true">${escapeHtml(initials(p.displayName))}</div>`;
 }

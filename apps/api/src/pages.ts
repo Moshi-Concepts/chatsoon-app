@@ -1,3 +1,4 @@
+import { normalizeAvatarWidth, type AvatarWidth } from '@chatsoon/shared/src/constants';
 import { toOgCard } from '@chatsoon/shared/src/og';
 import type { ProfilePageResult, SitemapProfilesResult } from '@chatsoon/shared';
 import { and, asc, eq, notExists, notInArray, sql } from 'drizzle-orm';
@@ -149,13 +150,16 @@ export type ProfilePhotoResult =
       contentLength: number;
       version: string;
       /**
-       * '416' when the 416x416 WebP variant (Stage F item 2, D8) was served; 'original' when the
-       * avatar was streamed unresized (no `IMAGES` binding, the source wasn't eligible, or building
-       * the variant failed). The caller's ETag must differ between the two: a browser holding the
-       * original JPEG under the plain `"<version>"` ETag must not get a 304 for the WebP, or vice
-       * versa.
+       * 'resized' when the WebP variant (Stage F item 2, D8; every width in AVATAR_WIDTHS, issue #23)
+       * was served; 'original' when the avatar was streamed unresized (no `IMAGES` binding, the source
+       * wasn't eligible, or building the variant failed). The caller's ETag must differ between the
+       * two: a browser holding the original JPEG under the plain `"<version>"` ETag must not get a 304
+       * for the WebP, or vice versa.
        */
-      variant: 'original' | '416';
+      variant: 'original' | 'resized';
+      /** The width actually asked for (already normalised); only meaningful when `variant` is
+       * 'resized' — folded into the ETag as `"<version>-<width>"`, same shape as the old fixed 416. */
+      width: AvatarWidth;
       maxAge: number;
       /** Same predicate as `PageProfile.indexable` (§3.2/§3.3): the caller sets `X-Indexable` from it. */
       indexable: boolean;
@@ -164,20 +168,25 @@ export type ProfilePhotoResult =
 /** Only originals up to this size are ever resized; a bigger one is served as-is (design point 2d). */
 const MAX_AVATAR_ORIGINAL_BYTES = 5 * 1024 * 1024;
 
+/** The one size that could ever be larger than a typical original: mobile caps its own avatar
+ * uploads at 512px (AvatarPicker's AVATAR_MAX_SIZE), so asking Images to "cover" 512x512 from a
+ * same-size-or-smaller original would just upscale it for no visual gain (issue #23, design point 2). */
+const NO_UPSCALE_WIDTH: AvatarWidth = 512;
+
 type AvatarVariantOutcome =
   | { kind: 'variant'; body: ReadableStream | Uint8Array; contentLength: number }
   // The original's bytes were already read out of its R2 stream while attempting a variant (to feed
-  // `IMAGES.input()`, or to compare sizes), so `object.body` is spent: the caller must serve these
-  // buffered bytes instead of re-reading `object`.
+  // `IMAGES.input()`/`IMAGES.info()`, or to compare sizes), so `object.body` is spent: the caller must
+  // serve these buffered bytes instead of re-reading `object`.
   | { kind: 'buffered-original'; bytes: Uint8Array }
   // No attempt was made at all; `object.body` is untouched and the caller streams it as before.
   | { kind: 'no-attempt' };
 
 /**
- * Builds the 416x416 WebP avatar variant for one avatar (the caller has already checked R2 for a
- * stored one), or decides there isn't going to be one. Never throws: `env.IMAGES` being absent is normal (a lower-tier account); an actual
- * transform or store failure is logged once and treated the same as "no variant" so the request can
- * still be served from the original (design point 2c).
+ * Builds the `w`x`w` WebP avatar variant for one avatar (the caller has already checked R2 for a
+ * stored one at this width), or decides there isn't going to be one. Never throws: `env.IMAGES` being
+ * absent is normal (a lower-tier account); an actual transform or store failure is logged once and
+ * treated the same as "no variant" so the request can still be served from the original (design point 2c).
  */
 async function loadAvatarVariant(
   env: Env,
@@ -186,8 +195,9 @@ async function loadAvatarVariant(
   version: string,
   object: R2ObjectBody,
   contentType: string,
+  w: AvatarWidth,
 ): Promise<AvatarVariantOutcome> {
-  const variantKey = avatarVariantKey(userId, version);
+  const variantKey = avatarVariantKey(userId, version, w);
 
   if (!env.IMAGES || object.size > MAX_AVATAR_ORIGINAL_BYTES || !contentType.startsWith('image/')) {
     return { kind: 'no-attempt' };
@@ -197,8 +207,15 @@ async function loadAvatarVariant(
   // still available to fall back on if the transform, the size comparison, or the store fails partway.
   const originalBytes = new Uint8Array(await object.arrayBuffer());
   try {
+    if (w === NO_UPSCALE_WIDTH) {
+      const info = await env.IMAGES.info(new Response(originalBytes).body!);
+      if ('width' in info && info.width <= NO_UPSCALE_WIDTH && info.height <= NO_UPSCALE_WIDTH) {
+        return { kind: 'buffered-original', bytes: originalBytes };
+      }
+    }
+
     const rendered = await env.IMAGES.input(new Response(originalBytes).body!)
-      .transform({ width: 416, height: 416, fit: 'cover' })
+      .transform({ width: w, height: w, fit: 'cover' })
       .output({ format: 'image/webp', quality: 80 });
     const variantBytes = new Uint8Array(await new Response(rendered.image()).arrayBuffer());
     // Unlikely, but cheap to check (design point 2e): never ship a "savings" feature that regresses.
@@ -211,7 +228,7 @@ async function loadAvatarVariant(
     ctx.waitUntil(
       env.FILES
         .put(variantKey, variantBytes, { httpMetadata: { contentType: 'image/webp' } })
-        .then(() => sweepAvatarVariants(env, userId, variantKey))
+        .then(() => sweepAvatarVariants(env, userId, w, variantKey))
         .catch((err) => console.error('Storing avatar variant failed', err)),
     );
     return { kind: 'variant', body: variantBytes, contentLength: variantBytes.byteLength };
@@ -228,8 +245,10 @@ async function loadAvatarVariant(
  * `toPageProfile` puts in `avatarVersion`, so the caller's own `?v=` either matches it or doesn't
  * (unaffected by which variant is actually served — design point 3).
  *
- * Serves the 416x416 WebP variant (Stage F item 2) when one can be made or already exists, falling
- * back to the original avatar exactly as before Stage F otherwise.
+ * Serves the WebP variant at `w` (Stage F item 2, generalised to every AVATAR_WIDTHS size by issue
+ * #23) when one can be made or already exists, falling back to the original avatar exactly as before
+ * Stage F otherwise. `wParam` is normalised here (any value that isn't in AVATAR_WIDTHS becomes the
+ * 416 default), so callers can pass the raw query string straight through.
  */
 export async function profilePhoto(
   env: Env,
@@ -237,6 +256,7 @@ export async function profilePhoto(
   slug: string,
   ip: string | null,
   v: string | null,
+  wParam: string | null,
 ): Promise<ProfilePhotoResult> {
   const found = await lookupProfile(env, slug, ip);
   if (found.status !== 'ok') return found;
@@ -247,11 +267,12 @@ export async function profilePhoto(
   const indexable = isIndexable(found.row, found.email);
   const version = await hashKey16(avatarKey);
   const maxAge = v !== null && V_PATTERN.test(v) && v === version ? 3600 : 60;
+  const w = normalizeAvatarWidth(wParam);
 
   // The stored variant first: once it exists (every request after the first), the original is never
   // read, saving an R2 round trip on the page's LCP image. It's keyed by the current avatar's version
   // and deleted when that avatar changes or is removed, so a hit always belongs to `avatarKey`.
-  const existing = await env.FILES.get(avatarVariantKey(found.row.userId, version));
+  const existing = await env.FILES.get(avatarVariantKey(found.row.userId, version, w));
   if (existing) {
     return {
       status: 'ok',
@@ -259,7 +280,8 @@ export async function profilePhoto(
       contentType: 'image/webp',
       contentLength: existing.size,
       version,
-      variant: '416',
+      variant: 'resized',
+      width: w,
       maxAge,
       indexable,
     };
@@ -271,7 +293,7 @@ export async function profilePhoto(
   const contentType = object.httpMetadata?.contentType;
   if (!contentType?.startsWith('image/')) return { status: 'not_found' };
 
-  const outcome = await loadAvatarVariant(env, ctx, found.row.userId, version, object, contentType);
+  const outcome = await loadAvatarVariant(env, ctx, found.row.userId, version, object, contentType, w);
   if (outcome.kind === 'variant') {
     return {
       status: 'ok',
@@ -279,7 +301,8 @@ export async function profilePhoto(
       contentType: 'image/webp',
       contentLength: outcome.contentLength,
       version,
-      variant: '416',
+      variant: 'resized',
+      width: w,
       maxAge,
       indexable,
     };
@@ -287,5 +310,5 @@ export async function profilePhoto(
 
   const body = outcome.kind === 'buffered-original' ? outcome.bytes : object.body;
   const contentLength = outcome.kind === 'buffered-original' ? outcome.bytes.byteLength : object.size;
-  return { status: 'ok', body, contentType, contentLength, version, variant: 'original', maxAge, indexable };
+  return { status: 'ok', body, contentType, contentLength, version, variant: 'original', width: w, maxAge, indexable };
 }

@@ -43,7 +43,15 @@ export async function servePhoto(ctx: PagesContext, slug: string): Promise<Respo
   const ip = ctx.request.headers.get(CLIENT_IP_HEADER);
   const ifNoneMatch = ctx.request.headers.get('if-none-match');
 
-  const upstream = await fetchProfilePhoto(ctx.env.API, ctx.env, slug, url.searchParams.get('v'), ip, ifNoneMatch);
+  const upstream = await fetchProfilePhoto(
+    ctx.env.API,
+    ctx.env,
+    slug,
+    url.searchParams.get('v'),
+    url.searchParams.get('w'),
+    ip,
+    ifNoneMatch,
+  );
   if (!upstream) return notFoundResponse(); // network error or timeout: no default avatar to fall back to
 
   switch (upstream.status) {

@@ -167,6 +167,34 @@ describe('servePhoto', () => {
     expectSecurityHeaders(res.headers);
   });
 
+  it('forwards a valid w to the API (issue #23: the srcset widths)', async () => {
+    const { ctx, api } = makeCtx({ query: '?v=deadbeefdeadbeef&w=368' });
+    await servePhoto(ctx, 'peter-bui-5ec50167');
+    const forwardedUrl = api.mock.calls[0]?.[0] as URL;
+    expect(new URL(forwardedUrl).searchParams.get('w')).toBe('368');
+  });
+
+  it('drops an invalid w rather than forwarding it, normalising to the same 416 default the API would', async () => {
+    const { ctx, api } = makeCtx({ query: '?v=deadbeefdeadbeef&w=999' });
+    await servePhoto(ctx, 'peter-bui-5ec50167');
+    const forwardedUrl = api.mock.calls[0]?.[0] as URL;
+    expect(new URL(forwardedUrl).searchParams.has('w')).toBe(false);
+  });
+
+  it('drops an explicit w=416 too, so it hits the API exactly like a request with no w at all', async () => {
+    const { ctx, api } = makeCtx({ query: '?v=deadbeefdeadbeef&w=416' });
+    await servePhoto(ctx, 'peter-bui-5ec50167');
+    const forwardedUrl = api.mock.calls[0]?.[0] as URL;
+    expect(new URL(forwardedUrl).searchParams.has('w')).toBe(false);
+  });
+
+  it('omits w entirely when the request has none, unchanged from before issue #23', async () => {
+    const { ctx, api } = makeCtx({ query: '?v=deadbeefdeadbeef' });
+    await servePhoto(ctx, 'peter-bui-5ec50167');
+    const forwardedUrl = api.mock.calls[0]?.[0] as URL;
+    expect(new URL(forwardedUrl).searchParams.has('w')).toBe(false);
+  });
+
   it('404s on a network error (a stand-in for a timeout) — there is no default avatar', async () => {
     const { ctx } = makeCtx({
       apiFetch: async () => {

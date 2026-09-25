@@ -75,6 +75,20 @@ describe('renderProfile', () => {
     expect(img).not.toContain('loading="lazy"');
   });
 
+  it('gives the avatar a plain 416 src (fallback) plus an escaped srcset over every AVATAR_WIDTHS size, and sizes="208px" (issue #23)', () => {
+    const html = renderProfile(BASE, ASSETS);
+    const img = html.match(/<img[^>]*id="avatar"[^>]*>/)?.[0] ?? '';
+    const base = `/id/${BASE.slug}/photo?v=${BASE.avatarVersion}`;
+
+    expect(img).toContain(`src="${base}"`); // no &w= at all: the API's own 416 default
+    expect(img).toContain('sizes="208px"');
+
+    const srcset = [208, 368, 416, 512].map((w) => `${base}&amp;w=${w} ${w}w`).join(', ');
+    expect(img).toContain(`srcset="${srcset}"`);
+    // The raw `&` never appears unescaped inside the attribute.
+    expect(img).not.toMatch(/srcset="[^"]*&(?!amp;)/);
+  });
+
   it('renders initials instead of an <img> when there is no avatar', () => {
     const html = renderProfile({ ...BASE, avatarVersion: null }, ASSETS);
     expect(html).not.toMatch(/<img[^>]*id="avatar"/);

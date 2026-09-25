@@ -1,4 +1,10 @@
-import { REVIEWER_EMAIL, type ApiErrorBody, type ProfilePageResult, type SitemapProfilesResult } from '@chatsoon/shared';
+import {
+  AVATAR_WIDTHS,
+  REVIEWER_EMAIL,
+  type ApiErrorBody,
+  type ProfilePageResult,
+  type SitemapProfilesResult,
+} from '@chatsoon/shared';
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
@@ -362,8 +368,10 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
   }
 
   /** A fake `IMAGES` binding: just enough of the real `ImagesBinding` shape for `loadAvatarVariant`
-   * (pages.ts) to drive, with a call counter so a test can assert a transform did or didn't run. */
-  function fakeImages(webpBytes: Uint8Array, opts: { throws?: boolean } = {}) {
+   * (pages.ts) to drive, with a call counter so a test can assert a transform did or didn't run.
+   * `info` defaults to a 1000x1000 original — comfortably bigger than every AVATAR_WIDTHS size, so the
+   * w=512 no-upscale check (issue #23) never trips unless a test asks it to via `infoSize`. */
+  function fakeImages(webpBytes: Uint8Array, opts: { throws?: boolean; infoSize?: number } = {}) {
     let calls = 0;
     const transformer = {
       transform: () => transformer,
@@ -373,7 +381,11 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
         return { image: () => new Response(webpBytes).body! };
       },
     };
-    const binding = { input: () => transformer } as unknown as ImagesBinding;
+    const size = opts.infoSize ?? 1000;
+    const binding = {
+      input: () => transformer,
+      info: async () => ({ format: 'image/jpeg', fileSize: size, width: size, height: size }),
+    } as unknown as ImagesBinding;
     return { binding, callCount: () => calls };
   }
 
@@ -397,7 +409,7 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
       expect(new Uint8Array(await first.arrayBuffer())).toEqual(webpBytes);
       expect(fake.callCount()).toBe(1);
 
-      const variantInR2 = await env.FILES.get(avatarVariantKey(owner.userId, version));
+      const variantInR2 = await env.FILES.get(avatarVariantKey(owner.userId, version, 416));
       expect(variantInR2).not.toBeNull();
       expect(new Uint8Array(await variantInR2!.arrayBuffer())).toEqual(webpBytes);
 
@@ -452,7 +464,7 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
       expect(res.headers.get('content-type')).toBe('image/jpeg');
       expect(res.headers.get('etag')).toBe(`"${version}"`);
       expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
-      expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).toBeNull();
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 416))).toBeNull();
     } finally {
       env.IMAGES = saved;
     }
@@ -473,7 +485,7 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
       expect(res.headers.get('content-type')).toBe('image/jpeg');
       expect(res.headers.get('etag')).toBe(`"${version}"`);
       expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
-      expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).toBeNull(); // never stored
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 416))).toBeNull(); // never stored
     } finally {
       env.IMAGES = saved;
     }
@@ -489,14 +501,110 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
     env.IMAGES = fakeImages(new Uint8Array([1, 2, 3])).binding;
     try {
       await pagesCallAwaited(`/_pages/photo/${owner.slug}`); // creates variant A
-      expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA))).not.toBeNull();
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA, 416))).not.toBeNull();
 
       const keyB = await putAvatar(owner.userId, new Uint8Array(60), 'image/png');
       await putProfileAwaited(owner.token, { displayName: 'Sam Sweep', avatarKey: keyB });
 
       // Removed straight away by the PUT itself (§4: a removal never gets another photo request that
       // would otherwise sweep it), not just eventually by the next photo fetch.
-      expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA))).toBeNull();
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA, 416))).toBeNull();
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('builds and reads a separate variant per width, each keyed and ETagged by that width (issue #23)', async () => {
+    const owner = await signUpWithProfile('pages-variant-widths@example.com', 'Wanda Widths');
+    const key = await putAvatar(owner.userId, new Uint8Array(50), 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Wanda Widths', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const saved = env.IMAGES;
+    const fake = fakeImages(new Uint8Array([1, 2, 3]));
+    env.IMAGES = fake.binding;
+    try {
+      for (const w of AVATAR_WIDTHS) {
+        const res = await pagesCallAwaited(`/_pages/photo/${owner.slug}?w=${w}`);
+        expect(res.status).toBe(200);
+        expect(res.headers.get('content-type')).toBe('image/webp');
+        expect(res.headers.get('etag')).toBe(`"${version}-${w}"`);
+        expect(await env.FILES.get(avatarVariantKey(owner.userId, version, w))).not.toBeNull();
+      }
+      // Every width got its own transform; no width's variant was reused for another's request.
+      expect(fake.callCount()).toBe(AVATAR_WIDTHS.length);
+
+      // Re-reading each one now comes straight from R2, no re-transform.
+      for (const w of AVATAR_WIDTHS) await pagesCallAwaited(`/_pages/photo/${owner.slug}?w=${w}`);
+      expect(fake.callCount()).toBe(AVATAR_WIDTHS.length);
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('treats an invalid or missing w as the 416 default', async () => {
+    const owner = await signUpWithProfile('pages-variant-badw@example.com', 'Iggy Invalidwidth');
+    const key = await putAvatar(owner.userId, new Uint8Array(50), 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Iggy Invalidwidth', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const saved = env.IMAGES;
+    env.IMAGES = fakeImages(new Uint8Array([1, 2, 3])).binding;
+    try {
+      for (const bad of ['999', '0', '-416', 'not-a-number', '']) {
+        const res = await pagesCallAwaited(`/_pages/photo/${owner.slug}?w=${bad}`);
+        expect(res.status).toBe(200);
+        expect(res.headers.get('etag')).toBe(`"${version}-416"`);
+      }
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 416))).not.toBeNull();
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it("deletes the old avatar's variant at every width when the avatar changes", async () => {
+    const owner = await signUpWithProfile('pages-variant-sweep-widths@example.com', 'Sid Sweepwidths');
+    const keyA = await putAvatar(owner.userId, new Uint8Array(50), 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Sid Sweepwidths', avatarKey: keyA } });
+    const versionA = await hashKey16(keyA);
+
+    const saved = env.IMAGES;
+    env.IMAGES = fakeImages(new Uint8Array([1, 2, 3])).binding;
+    try {
+      for (const w of AVATAR_WIDTHS) await pagesCallAwaited(`/_pages/photo/${owner.slug}?w=${w}`);
+      for (const w of AVATAR_WIDTHS) {
+        expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA, w))).not.toBeNull();
+      }
+
+      const keyB = await putAvatar(owner.userId, new Uint8Array(60), 'image/png');
+      await putProfileAwaited(owner.token, { displayName: 'Sid Sweepwidths', avatarKey: keyB });
+
+      for (const w of AVATAR_WIDTHS) {
+        expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA, w))).toBeNull();
+      }
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('skips the 512 variant (serves the original) when the original is already 512px or smaller', async () => {
+    const owner = await signUpWithProfile('pages-variant-noupscale@example.com', 'Uma Noupscale');
+    const bytes = new Uint8Array(50);
+    const key = await putAvatar(owner.userId, bytes, 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Uma Noupscale', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const saved = env.IMAGES;
+    const fake = fakeImages(new Uint8Array([1, 2, 3]), { infoSize: 400 }); // smaller than 512 on both sides
+    env.IMAGES = fake.binding;
+    try {
+      const res = await pagesCallAwaited(`/_pages/photo/${owner.slug}?w=512`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/jpeg'); // the original, not a WebP variant
+      expect(res.headers.get('etag')).toBe(`"${version}"`); // plain ETag: 'original', not 'resized'
+      expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
+      expect(fake.callCount()).toBe(0); // never transformed
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 512))).toBeNull(); // never stored
     } finally {
       env.IMAGES = saved;
     }
@@ -512,14 +620,14 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
     env.IMAGES = fakeImages(new Uint8Array([1, 2, 3])).binding;
     try {
       await pagesCallAwaited(`/_pages/photo/${owner.slug}`);
-      expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).not.toBeNull();
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 416))).not.toBeNull();
     } finally {
       env.IMAGES = saved;
     }
 
     const del = await call('/me', { method: 'DELETE', token: owner.token });
     expect(del.status).toBe(204);
-    expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).toBeNull();
+    expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 416))).toBeNull();
   });
 });
 

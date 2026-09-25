@@ -6,7 +6,7 @@
 // or slow binding call must never break the app shell or the image response it feeds — og-inject.ts,
 // og-image.ts, photo.ts and sitemap.ts each fall back to their own "as if nothing was found" path.
 
-import { API_ORIGIN } from '@chatsoon/shared/src/constants';
+import { API_ORIGIN, DEFAULT_AVATAR_WIDTH, normalizeAvatarWidth } from '@chatsoon/shared/src/constants';
 import type { ProfilePageResult, SitemapProfilesResult } from '@chatsoon/shared/src/types';
 
 import type { PagesEnv, PagesFetcher } from './types';
@@ -96,12 +96,18 @@ export async function fetchOgImage(
  * `fetchOgImage`: photo.ts (not this function) decides what each status means for the caller; `null`
  * only for a network error or the 10s timeout, which photo.ts treats as a 404 (there's no default
  * avatar to fall back to).
+ *
+ * `w` (issue #23, the `srcset` widths) is normalised with the same `normalizeAvatarWidth` the API
+ * itself applies, so the two always agree on what's valid; the default width is never forwarded as
+ * `w=416`, since that's already what a bare `/_pages/photo/:slug` (no `w` at all) resolves to — every
+ * URL from before this feature keeps hitting the API exactly as it did.
  */
 export async function fetchProfilePhoto(
   api: PagesFetcher,
   env: PagesEnv,
   slug: string,
   v: string | null,
+  w: string | null,
   ip: string | null,
   ifNoneMatch: string | null,
 ): Promise<Response | null> {
@@ -109,6 +115,8 @@ export async function fetchProfilePhoto(
   if (ifNoneMatch) headers.set('if-none-match', ifNoneMatch);
   const url = new URL(`${API_ORIGIN}/_pages/photo/${encodeURIComponent(slug)}`);
   if (v) url.searchParams.set('v', v);
+  const width = normalizeAvatarWidth(w);
+  if (width !== DEFAULT_AVATAR_WIDTH) url.searchParams.set('w', String(width));
   try {
     return await withTimeout(api.fetch(url, { headers }), PROFILE_PHOTO_TIMEOUT_MS);
   } catch {
