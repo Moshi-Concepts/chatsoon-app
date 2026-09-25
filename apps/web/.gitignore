@@ -8,3 +8,4 @@ coverage/
 
 # Stage C (WP-C5): written by build.ts, never hand-edited or committed.
 functions/_generated/
+!.dev.vars.example

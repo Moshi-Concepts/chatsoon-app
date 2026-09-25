@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import legalContent from '../../mobile/src/content/legal.json';
 import { escapeHtml } from '../src/render/escape';
 import { renderLegal, type LegalDoc, type LegalKey } from '../src/render/legal';
+import { DEFAULT_OG_IMAGE } from '../src/render/og-asset';
 
 const legal = legalContent as Record<LegalKey, LegalDoc>;
 const KEYS: LegalKey[] = ['privacy', 'terms', 'support'];
@@ -34,6 +35,13 @@ describe.each(KEYS)('renderLegal(%s)', (key) => {
     const url = `https://chatsoon.app/${key}`;
     expect(html).toContain(`<link rel="canonical" href="${url}">`);
     expect(html).toContain(`<meta property="og:url" content="${url}">`);
+  });
+
+  it('has a single og:image using the default share image, and summary_large_image', () => {
+    expect(html.match(/property="og:image"/g)).toHaveLength(1);
+    expect(html).toContain(`<meta property="og:image" content="https://chatsoon.app${DEFAULT_OG_IMAGE.path}">`);
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(html).toContain('<meta name="twitter:site" content="@ChatSoonApp">');
   });
 
   it('wraps the mailto link in email_off comments', () => {

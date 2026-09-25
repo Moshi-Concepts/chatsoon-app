@@ -20,12 +20,16 @@ import { WEB_ORIGIN } from '@chatsoon/shared/src/constants';
 
 import { renderHome, type LandingContent } from '../src/render/home';
 import { LEGAL_KEYS, renderLegal, type LegalDoc, type LegalKey } from '../src/render/legal';
+import { DEFAULT_OG_IMAGE } from '../src/render/og-asset';
+import { injectShellOg } from '../src/render/shell';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, 'dist');
 const mobileContent = path.resolve(root, '../mobile/src/content');
 
 const HOME_GZIP_BUDGET = 14 * 1024;
+const OG_IMAGE_MAX_BYTES = 300 * 1024;
+const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
 // Refuse to finish a web build that still carries local dev values: an API on localhost or a LAN
 // address (from .env), one of Cloudflare's always-pass Turnstile test site keys, or the placeholder
@@ -140,8 +144,44 @@ async function writeRedirects(): Promise<void> {
   await writeFileLogged(path.join(outDir, '_redirects'), '/home / 301\n/ /home 200\n');
 }
 
+// Gives every app route a branded link preview (docs/og-plan.md O12, WP-2) by splicing the generic
+// tags into the exported SPA shell. Skipped, like inlineSpaStylesheets, if there's no shell to patch.
+async function injectSpaShellOg(): Promise<void> {
+  const file = path.join(outDir, 'index.html');
+  if (!existsSync(file)) return;
+  const html = await readFile(file, 'utf8');
+  await writeFileLogged(file, injectShellOg(html));
+}
+
+// A missing or truncated static file would otherwise serve 200 text/html for what every page's
+// og:image tag claims is a JPEG (docs/og-plan.md §4 WP-2, risk table). Checked after the SPA export,
+// since `expo export` is what copies apps/mobile/public/og/ into dist/.
+async function assertOgImage(): Promise<void> {
+  const file = path.join(outDir, DEFAULT_OG_IMAGE.path);
+  const bytes = await readFile(file);
+  if (!bytes.subarray(0, 3).equals(JPEG_MAGIC)) {
+    throw new Error(`build: ${DEFAULT_OG_IMAGE.path} doesn't start with the JPEG SOI marker (FF D8 FF)`);
+  }
+  if (bytes.byteLength > OG_IMAGE_MAX_BYTES) {
+    throw new Error(`build: ${DEFAULT_OG_IMAGE.path} is ${bytes.byteLength} B, over the ${OG_IMAGE_MAX_BYTES} B budget`);
+  }
+}
+
+// `functions/` doesn't exist until WP-5 adds the /id/* Pages Function; until then there's nothing for
+// `_routes.json` to scope and Pages should keep invoking no Function at all.
+async function writeRoutesJson(): Promise<void> {
+  if (!existsSync(path.join(root, 'functions'))) return;
+  await writeFileLogged(
+    path.join(outDir, '_routes.json'),
+    JSON.stringify({ version: 1, include: ['/id/*'], exclude: [] }),
+  );
+}
+
 await assertProductionBundle();
 await buildHome();
 await buildLegalPages();
 await writeRedirects();
 await inlineSpaStylesheets();
+await injectSpaShellOg();
+await assertOgImage();
+await writeRoutesJson();

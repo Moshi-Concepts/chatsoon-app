@@ -16,13 +16,13 @@ export function PageHead({
 }) {
   if (Platform.OS !== 'web') return null;
   const fullTitle = title ? `${title} · ${APP_NAME}` : `${APP_NAME}: ${TAGLINE}`;
+  // og:title, og:description and og:site_name used to be set here too, but a crawler never runs this
+  // app's JS, so they only ever produced duplicates of the tags apps/web/src/render/{layout,shell}.ts
+  // already emit server-side (docs/og-plan.md O17). `description` is kept as a prop so its call sites
+  // don't need to change.
   return (
     <Head>
       <title>{fullTitle}</title>
-      {/* The exported index.html already has <meta name="description"> (app.json web.description). */}
-      {description ? <meta property="og:description" content={description} /> : null}
-      <meta property="og:title" content={fullTitle} />
-      <meta property="og:site_name" content={APP_NAME} />
       {noIndex ? <meta name="robots" content="noindex" /> : null}
     </Head>
   );

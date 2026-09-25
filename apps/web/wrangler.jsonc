@@ -1,0 +1,12 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "chatsoon-web",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-09-23",
+  // The API's default entrypoint (docs/og-plan.md O14): GET /_pages/profile/:slug and
+  // /_pages/og/:slug, both gated by the PAGES_SHARED_SECRET set with
+  // `wrangler pages secret put PAGES_SHARED_SECRET --project-name chatsoon-web`.
+  "services": [{ "binding": "API", "service": "chatsoon-api" }]
+  // The dashboard config (checked with `wrangler pages download config chatsoon-web`, 25 Sep 2026)
+  // held only compatibility_date 2026-09-23, now kept here; this file is the source of truth.
+}

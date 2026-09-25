@@ -67,3 +67,8 @@
 # Hashed bundles from `expo export` never change.
 /_expo/static/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Share-preview images carry a content hash in the filename (O5, docs/og-plan.md) and a new one is
+# never reused for different bytes, so they can be cached forever too.
+/og/*
+  Cache-Control: public, max-age=31536000, immutable

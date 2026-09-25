@@ -1,0 +1,85 @@
+// Calls the two secret-gated routes docs/og-plan.md §3.3 describes, over the API service binding
+// (O14): GET /_pages/profile/:slug for the tags handler and GET /_pages/og/:slug for the image
+// handler. Both bucket their own kind of "no answer" into a single, simple result rather than
+// throwing, since a broken or slow binding call must never break the app shell or the image response
+// it feeds — og-inject.ts and og-image.ts each fall back to their own "as if nothing was found" path.
+
+import { API_ORIGIN } from '@chatsoon/shared/src/constants';
+import type { ProfilePageResult } from '@chatsoon/shared/src/types';
+
+import type { PagesEnv, PagesFetcher } from './types';
+
+const CLIENT_IP_HEADER = 'x-client-ip';
+const PAGES_KEY_HEADER = 'x-pages-key';
+
+// docs/og-plan.md's "checked for this plan" note: binding calls carry no cf-connecting-ip of their
+// own, so the caller's IP (read off the incoming request by og-inject.ts/og-image.ts) is forwarded
+// explicitly. `PAGES_SHARED_SECRET` unset just means the API's own gate 404s both routes below.
+function pagesHeaders(env: PagesEnv, ip: string | null): Headers {
+  const headers = new Headers();
+  if (env.PAGES_SHARED_SECRET) headers.set(PAGES_KEY_HEADER, env.PAGES_SHARED_SECRET);
+  if (ip) headers.set(CLIENT_IP_HEADER, ip);
+  return headers;
+}
+
+/** Races `promise` against a timer that rejects after `ms`, bounding how long a hung or slow
+ * chatsoon-api can hold a Pages Function response open (§3.4's "with a 1.5s/10s timeout"). The timer
+ * is always cleared once either side settles, so a fast, successful call never leaves one ticking. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timedOut]).finally(() => clearTimeout(timer));
+}
+
+/** Exported so the tests can drive them with fake timers instead of waiting on the wall clock. */
+export const PROFILE_LOOKUP_TIMEOUT_MS = 1500;
+export const OG_IMAGE_TIMEOUT_MS = 10_000;
+
+/**
+ * GET /_pages/profile/:slug (§3.3). Always resolves: a network error, a non-2xx response, a body that
+ * isn't the expected JSON, or the 1.5s timeout all come back as `null`, which og-inject.ts treats
+ * exactly like there being no profile to inject at all.
+ */
+export async function fetchProfilePage(
+  api: PagesFetcher,
+  env: PagesEnv,
+  slug: string,
+  ip: string | null,
+): Promise<ProfilePageResult | null> {
+  try {
+    const res = await withTimeout(
+      api.fetch(`${API_ORIGIN}/_pages/profile/${encodeURIComponent(slug)}`, { headers: pagesHeaders(env, ip) }),
+      PROFILE_LOOKUP_TIMEOUT_MS,
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as ProfilePageResult;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /_pages/og/:slug (§3.3). Returns the upstream `Response` untouched so og-image.ts can read its
+ * status and headers directly (it, not this function, decides what each status means for the caller);
+ * `null` only for a network error or the 10s timeout, which og-image.ts treats as "unavailable".
+ */
+export async function fetchOgImage(
+  api: PagesFetcher,
+  env: PagesEnv,
+  slug: string,
+  v: string | null,
+  ip: string | null,
+  ifNoneMatch: string | null,
+): Promise<Response | null> {
+  const headers = pagesHeaders(env, ip);
+  if (ifNoneMatch) headers.set('if-none-match', ifNoneMatch);
+  const url = new URL(`${API_ORIGIN}/_pages/og/${encodeURIComponent(slug)}`);
+  if (v) url.searchParams.set('v', v);
+  try {
+    return await withTimeout(api.fetch(url, { headers }), OG_IMAGE_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+}

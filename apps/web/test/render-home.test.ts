@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import landing from '../../mobile/src/content/landing.json';
 import { renderHome, type LandingContent } from '../src/render/home';
+import { DEFAULT_OG_IMAGE } from '../src/render/og-asset';
 
 // A minimal, valid <svg> stands in for the real QR code build.ts (WP-B3) generates with `qrcode`.
 const QR_SVG = '<svg viewBox="0 0 29 29" xmlns="http://www.w3.org/2000/svg"><rect width="29" height="29"/></svg>';
@@ -59,6 +60,22 @@ describe('renderHome', () => {
       'Organization',
       'WebApplication',
     ]);
+  });
+
+  it('gives the Organization node the brand X account as sameAs (O24)', () => {
+    const match = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+    const data = JSON.parse(match?.[1] ?? '');
+    const org = data['@graph'].find((n: { '@type': string }) => n['@type'] === 'Organization');
+    expect(org.sameAs).toEqual(['https://x.com/ChatSoonApp']);
+  });
+
+  it('has a single, absolute og:image using the default share image, and summary_large_image', () => {
+    expect(html.match(/property="og:image"/g)).toHaveLength(1);
+    expect(html).toContain(`<meta property="og:image" content="https://chatsoon.app${DEFAULT_OG_IMAGE.path}">`);
+    expect(html).toContain(`<meta property="og:image:width" content="${DEFAULT_OG_IMAGE.width}">`);
+    expect(html).toContain(`<meta property="og:image:height" content="${DEFAULT_OG_IMAGE.height}">`);
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(html).toContain('<meta name="twitter:site" content="@ChatSoonApp">');
   });
 
   it('wraps the mailto link in email_off comments', () => {

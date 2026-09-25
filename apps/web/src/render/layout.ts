@@ -6,18 +6,10 @@ import { Colors } from '@chatsoon/shared/src/design';
 
 import { css } from './css';
 import { escapeHtml, escapeJsonLd } from './escape';
+import { ogTags, type OgTagsMeta } from './og';
 
-export interface PageOgOptions {
-  /** e.g. "website" for home and legal pages, "profile" for the Stage C profile page. */
-  type: string;
-  title: string;
-  description: string;
-  url: string;
-  /** Omitted on legal pages today, matching apps/mobile/scripts/build-static-pages.mjs. */
-  image?: string;
-  imageAlt?: string;
-  card?: 'summary' | 'summary_large_image';
-}
+/** Every page built through `page()` gives its own url, image and card (docs/og-plan.md §3.4). */
+export type PageOgOptions = OgTagsMeta;
 
 export interface PageOptions {
   title: string;
@@ -49,22 +41,6 @@ const FOOTER_LINKS = [
   { href: '/terms', label: 'Terms' },
   { href: '/support', label: 'Support' },
 ];
-
-function ogTags(og: PageOgOptions): string {
-  const image = og.image
-    ? `<meta property="og:image" content="${escapeHtml(og.image)}">` +
-      (og.imageAlt ? `<meta property="og:image:alt" content="${escapeHtml(og.imageAlt)}">` : '')
-    : '';
-  return (
-    `<meta property="og:type" content="${escapeHtml(og.type)}">` +
-    `<meta property="og:site_name" content="${APP_NAME}">` +
-    `<meta property="og:title" content="${escapeHtml(og.title)}">` +
-    `<meta property="og:description" content="${escapeHtml(og.description)}">` +
-    `<meta property="og:url" content="${escapeHtml(og.url)}">` +
-    image +
-    `<meta name="twitter:card" content="${og.card ?? 'summary'}">`
-  );
-}
 
 /** Renders one complete `<html>` document. */
 export function page(opts: PageOptions): string {

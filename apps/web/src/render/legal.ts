@@ -7,6 +7,7 @@ import { APP_NAME, SUPPORT_EMAIL, WEB_ORIGIN } from '@chatsoon/shared/src/consta
 
 import { escapeHtml } from './escape';
 import { page } from './layout';
+import { DEFAULT_OG_IMAGE } from './og-asset';
 
 export type LegalKey = 'privacy' | 'terms' | 'support';
 
@@ -74,7 +75,7 @@ ${doc.sections.map(renderSection).join('')}
     title,
     description,
     canonical: url,
-    og: { type: 'website', title, description, url },
+    og: { type: 'website', title, description, url, image: DEFAULT_OG_IMAGE, card: 'summary_large_image' },
     main,
   });
 }

@@ -1,0 +1,3 @@
+# Copy to .dev.vars for `wrangler pages dev` (gitignored, unlike this file). Must match the API's own
+# PAGES_SHARED_SECRET (apps/api/.dev.vars) for GET /_pages/* to authorize (docs/og-plan.md §3.3).
+PAGES_SHARED_SECRET=dev-pages-shared-secret

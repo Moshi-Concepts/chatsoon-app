@@ -7,6 +7,7 @@ import { APP_NAME, SUPPORT_EMAIL, WEB_ORIGIN } from '@chatsoon/shared/src/consta
 import { escapeHtml } from './escape';
 import { icon, sprite, type IconName } from './icons';
 import { page } from './layout';
+import { DEFAULT_OG_IMAGE } from './og-asset';
 
 export interface LandingFeature {
   icon: IconName;
@@ -60,7 +61,9 @@ export interface LandingContent {
 }
 
 const TITLE = `${APP_NAME}: networking CRM and digital business card for events`;
-const DESCRIPTION =
+// Exported so shell.ts (docs/og-plan.md WP-2) can reuse the same copy for the SPA shell's generic
+// og:description, instead of carrying a second copy that could drift from this one.
+export const DESCRIPTION =
   'Share a digital business card with a QR code, scan business cards and badges with AI, and follow up with everyone you meet at events. Free on the web.';
 
 // try/catch: a blocked storage API (private browsing, a locked-down browser) must never break the
@@ -88,6 +91,7 @@ function jsonLd(): Record<string, unknown> {
         url: `${WEB_ORIGIN}/`,
         email: SUPPORT_EMAIL,
         logo: `${WEB_ORIGIN}/logo.png`,
+        sameAs: ['https://x.com/ChatSoonApp'], // O24: attributes the brand account on shared cards.
       },
       {
         '@type': 'WebApplication',
@@ -232,9 +236,8 @@ export function renderHome(landing: LandingContent, { qrSvg }: { qrSvg: string }
       title: TITLE,
       description: DESCRIPTION,
       url: `${WEB_ORIGIN}/`,
-      image: `${WEB_ORIGIN}/og.png`,
-      imageAlt: `${APP_NAME} preview`,
-      card: 'summary',
+      image: DEFAULT_OG_IMAGE,
+      card: 'summary_large_image',
     },
     jsonLd: jsonLd(),
     headScript: REDIRECT_SIGNED_IN,
