@@ -16,6 +16,13 @@ export const profileUrl = (slug: string) => `${WEB_ORIGIN}${PROFILE_PATH_PREFIX}
 export const GA_MEASUREMENT_ID = 'G-9JPQ94MJLZ';
 
 export const REVIEWER_EMAIL = 'review@chatsoon.app';
+
+/**
+ * Social sign-in providers (issue #24), in the fixed order GET /auth-providers returns them and the
+ * sign-in page shows their buttons. A provider only appears once its secrets are configured on the API.
+ */
+export const SOCIAL_PROVIDERS = ['apple', 'google', 'linkedin', 'discord'] as const;
+export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 /** Second test profile the App Store / Play reviewer can scan or open in a browser. */
 export const DEMO_PROFILE_SLUG = 'alex-rivera-demo';
 

@@ -1,6 +1,8 @@
 // API contract shared by the Worker (apps/api) and the app (apps/mobile).
 // JSON is camelCase on the wire; the database uses snake_case.
 
+import type { SocialProvider } from './constants';
+
 export type LinkKey = 'x' | 'telegram' | 'discord' | 'linkedin' | 'website' | 'youtube';
 
 /** Profile links. Values are stored as the user typed them, normalised to full URLs by `toLinkUrl`. */
@@ -100,7 +102,16 @@ export interface SitemapProfilesResult {
 }
 
 export interface Me {
-  user: { id: string; email: string; createdAt: string };
+  user: {
+    id: string;
+    email: string;
+    createdAt: string;
+    /** From a social sign-in (issue #24). Null when signed in with email only, or not set. */
+    name?: string | null;
+    /** Provider avatar URL from a social sign-in (issue #24). Not an R2 key: fetch it server-side
+     * with POST /me/avatar/from-provider to use it as the profile photo. */
+    image?: string | null;
+  };
   /** Null until onboarding has created the profile. */
   profile: MyProfile | null;
   /** ISO timestamp of a pending account deletion (issue #8), or null. See POST/DELETE /me/deletion. */
@@ -111,6 +122,12 @@ export interface Me {
    * Optional only because older cached responses lack it; the API always sends it.
    */
   tipsEmails?: boolean;
+  /** Details picked up from a social sign-in (issue #24) that onboarding can offer to prefill. */
+  socialPrefill?: {
+    /** Discord username, kept from `mapProfileToUser` since Better Auth's `accounts` table doesn't
+     * store it. Prefills the Discord profile link. */
+    discord?: string;
+  };
 }
 
 /** PUT /me/email-prefs response (issue #7): the value actually saved. */
@@ -233,6 +250,16 @@ export interface ExtractCardResponse {
 export interface SignInResponse {
   token: string;
   user: { id: string; email: string };
+}
+
+/** GET /auth-providers response (issue #24): providers whose secrets are configured, in display order. */
+export interface AuthProvidersResponse {
+  providers: SocialProvider[];
+}
+
+/** POST /me/avatar/from-provider response (issue #24): the new avatar's key, same shape as an upload. */
+export interface AvatarFromProviderResponse {
+  avatarKey: string;
 }
 
 /** Error body for every non-2xx response from the API (except Better Auth's own routes). */

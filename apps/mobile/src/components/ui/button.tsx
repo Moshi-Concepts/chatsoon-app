@@ -6,7 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { Icon, type IconName } from './icon';
 import { Text } from './text';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerSoft' | 'inverse';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerSoft' | 'inverse' | 'apple';
 
 export type ButtonProps = Omit<PressableProps, 'style' | 'children'> & {
   title: string;
@@ -28,6 +28,10 @@ const palette: Record<Variant, { bg: ThemeColor | 'transparent'; fg: ThemeColor;
   // (e.g. the "Get your own free profile" promo card), where the ordinary `primary` variant would
   // disappear into its own background.
   inverse: { bg: 'onPrimary', fg: 'primary' },
+  // "Sign in with Apple"'s button guidance: solid black on a light background, solid white on a dark
+  // one. `text`/`background` already invert exactly that way between the light and dark themes, so
+  // this reuses them rather than hard-coding Apple's colours.
+  apple: { bg: 'text', fg: 'background' },
 };
 
 export function Button({

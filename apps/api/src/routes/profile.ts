@@ -73,7 +73,14 @@ profileRoutes.get('/me', requireAuth, async (c) => {
   const { id } = c.get('user');
   const db = getDb(c.env);
   const [user] = await db
-    .select({ id: users.id, email: users.email, createdAt: users.createdAt })
+    .select({
+      id: users.id,
+      email: users.email,
+      createdAt: users.createdAt,
+      name: users.name,
+      image: users.image,
+      discordUsername: users.discordUsername,
+    })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
@@ -85,10 +92,19 @@ profileRoutes.get('/me', requireAuth, async (c) => {
     tipsEmailsEnabled(db, id),
   ]);
   const body: Me = {
-    user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+    user: {
+      id: user.id,
+      email: user.email,
+      createdAt: user.createdAt.toISOString(),
+      // '' is the column's default for an email/OTP account that never had a name set; treated the
+      // same as null so onboarding's "prefill when empty" check doesn't need to know about it.
+      name: user.name || null,
+      image: user.image || null,
+    },
     profile: profile ? await toMyProfile(c.env, profile) : null,
     deletionScheduledFor: deleteAfter ? deleteAfter.toISOString() : null,
     tipsEmails,
+    ...(user.discordUsername ? { socialPrefill: { discord: user.discordUsername } } : {}),
   };
   c.header('Cache-Control', 'private, no-store');
   return c.json(body);

@@ -17,6 +17,10 @@ export const users = sqliteTable('users', {
   email: text('email').notNull().unique(),
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   image: text('image'),
+  /** Discord username from a social sign-in (issue #24), set by `mapProfileToUser` in lib/auth.ts.
+   * Better Auth's `accounts` table has no room for provider-specific profile fields, so this is kept
+   * on the user row instead; GET /me exposes it as `socialPrefill.discord` for onboarding. */
+  discordUsername: text('discord_username'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   /** Reserved. Account deletion is a hard delete in 1.0. */

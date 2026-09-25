@@ -33,6 +33,8 @@ type AuthContextValue = {
   sendCode: (email: string) => Promise<void>;
   /** Verifies the code and stores the session. */
   verifyCode: (email: string, code: string) => Promise<void>;
+  /** Finishes a social sign-in redirect (issue #24, /auth-complete) and stores the session. */
+  completeSocialSignIn: () => Promise<void>;
   /** Clears the local session and everything stored for it (and tells the server when online). */
   signOut: () => Promise<void>;
   /** Clears the local session and everything stored for it, without calling the server (after account deletion). */
@@ -114,6 +116,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [endSession]);
 
+  /** Shared by the email-code and social flows: stores the new session the same way for both. */
+  const finishSignIn = useCallback(
+    async (token: string, user: { id: string }) => {
+      // One account's offline captures must never be sent as another's.
+      const owner = await getJson<string | null>(OUTBOX_OWNER_KEY, null);
+      if (owner !== user.id) await clearOutbox();
+      await setJson(OUTBOX_OWNER_KEY, user.id);
+      await forgetMe();
+      await secureSet(TOKEN_KEY, token);
+      setAuthToken(token);
+      queryClient.clear();
+      setStatus('signedIn');
+    },
+    [queryClient],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -122,15 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       verifyCode: async (email, code) => {
         const { token, user } = await api.auth.signIn(email.trim().toLowerCase(), code.trim());
-        // One account's offline captures must never be sent as another's.
-        const owner = await getJson<string | null>(OUTBOX_OWNER_KEY, null);
-        if (owner !== user.id) await clearOutbox();
-        await setJson(OUTBOX_OWNER_KEY, user.id);
-        await forgetMe();
-        await secureSet(TOKEN_KEY, token);
-        setAuthToken(token);
-        queryClient.clear();
-        setStatus('signedIn');
+        await finishSignIn(token, user);
+      },
+      completeSocialSignIn: async () => {
+        const { token, user } = await api.auth.completeSocialSignIn();
+        await finishSignIn(token, user);
       },
       signOut: async () => {
         try {
@@ -142,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       clearSession,
     }),
-    [status, queryClient, clearSession],
+    [status, finishSignIn, clearSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

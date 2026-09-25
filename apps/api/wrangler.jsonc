@@ -69,4 +69,9 @@
   // Secrets (wrangler secret put <NAME>):
   //   BETTER_AUTH_SECRET  RESEND_API_KEY  ANTHROPIC_API_KEY
   //   TURNSTILE_SECRET    FILE_SIGNING_SECRET  REVIEWER_CODE  PAGES_SHARED_SECRET
+  //   Social sign-in (issue #24), each provider optional - set every one of its secrets to enable it:
+  //   GOOGLE_CLIENT_ID    GOOGLE_CLIENT_SECRET
+  //   LINKEDIN_CLIENT_ID  LINKEDIN_CLIENT_SECRET
+  //   DISCORD_CLIENT_ID   DISCORD_CLIENT_SECRET
+  //   APPLE_CLIENT_ID     APPLE_TEAM_ID  APPLE_KEY_ID  APPLE_PRIVATE_KEY (the .p8 file's contents)
 }

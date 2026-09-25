@@ -1,5 +1,7 @@
 import type {
   ApiErrorBody,
+  AuthProvidersResponse,
+  AvatarFromProviderResponse,
   BlockInput,
   CancelDeletionByTokenResponse,
   CancelDeletionResponse,
@@ -21,6 +23,7 @@ import type {
   ScanConnectResponse,
   ScheduleDeletionResponse,
   SignInResponse,
+  SocialProvider,
   Tag,
   TagsResponse,
   UploadPurpose,
@@ -214,6 +217,57 @@ export const api = {
       return { ...data, token: headerToken || data.token };
     },
     signOut: () => request<unknown>('POST', '/auth/sign-out', { body: {}, skipAuthHandler: true }),
+
+    /** Enabled social sign-in providers (issue #24), so the sign-in page shows only live buttons. */
+    providers: () => request<AuthProvidersResponse>('GET', '/auth-providers', { skipAuthHandler: true }),
+
+    /** Starts a redirect-based social sign-in. Navigate the browser to the returned `url`. */
+    socialSignIn: (
+      provider: SocialProvider,
+      urls: { callbackURL: string; errorCallbackURL: string; newUserCallbackURL: string },
+    ) =>
+      request<{ url: string; redirect: boolean }>('POST', '/auth/sign-in/social', {
+        body: { provider, ...urls },
+        skipAuthHandler: true,
+      }),
+
+    /**
+     * Called from /auth-complete once the provider's redirect lands back on our own origin: the OAuth
+     * callback (api.chatsoon.app/auth/callback/<provider>) already set Better Auth's session cookie on
+     * the API origin, so this exchanges it for the bearer token the app actually stores. `credentials:
+     * 'include'` is used only here, and only for this one same-site call to our own API - never for
+     * any other request `request()` makes (those stay `credentials: 'omit'`, see below), never to a
+     * third party, and the token that comes back is held in memory and stored exactly like the email
+     * code flow's token, never put in a URL.
+     */
+    completeSocialSignIn: async (): Promise<SignInResponse> => {
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/auth/get-session`, {
+          credentials: 'include',
+          headers: { Accept: 'application/json' },
+        });
+      } catch (err) {
+        if (isTransportError(err)) throw new ApiError(0, 'network', NETWORK_MESSAGE);
+        throw err;
+      }
+      if (!res.ok) throw new ApiError(res.status, 'internal', fallbackMessage(res.status));
+      // The bearer plugin only sets `set-auth-token` when it also refreshes the session cookie, which
+      // a session this fresh won't yet need - so the header is checked first (belt and braces) but
+      // `session.token` in the JSON body (Better Auth never strips it from GET /auth/get-session) is
+      // what actually carries the token on this call.
+      let data: { session?: { token?: string }; user?: { id: string; email: string } } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        // handled below: no token, no user.
+      }
+      const token = res.headers.get('set-auth-token') || data?.session?.token;
+      if (!token || !data?.user) {
+        throw new ApiError(0, 'invalid_token', "We couldn't finish signing you in. Please try again.");
+      }
+      return { token, user: { id: data.user.id, email: data.user.email } };
+    },
   },
 
   me: {
@@ -236,6 +290,8 @@ export const api = {
       const res = await request<Response>('GET', '/me/export.csv', { asResponse: true });
       return res.text();
     },
+    /** Downloads the photo from a social sign-in (issue #24) into R2 as a normal avatar upload. */
+    avatarFromProvider: () => request<AvatarFromProviderResponse>('POST', '/me/avatar/from-provider', { body: {} }),
   },
 
   /** The signed-out flow from the "scheduled" email's cancel link (issue #8). */

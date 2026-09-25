@@ -11,3 +11,17 @@ REVIEWER_CODE=246810
 WEB_ORIGIN=http://localhost:8081
 API_ORIGIN=http://localhost:8787
 EXTRA_ORIGINS=http://localhost:8081,http://localhost:19006
+
+# Social sign-in (issue #24). Leave all of a provider's vars unset to leave it disabled; the sign-in
+# page then shows no social buttons (today's behaviour). Redirect URI to register with each provider:
+# http://localhost:8787/auth/callback/<google|apple|linkedin|discord>
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+LINKEDIN_CLIENT_ID=
+LINKEDIN_CLIENT_SECRET=
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+APPLE_CLIENT_ID=
+APPLE_TEAM_ID=
+APPLE_KEY_ID=
+APPLE_PRIVATE_KEY=

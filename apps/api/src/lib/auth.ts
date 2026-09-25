@@ -3,14 +3,16 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware } from 'better-auth/api';
 import { bearer, emailOTP } from 'better-auth/plugins';
+import type { SocialProviders } from 'better-auth/social-providers';
 import type { MiddlewareHandler } from 'hono';
 
 import { accounts, sessions, users, verifications } from '../db/schema';
 import type { AppEnv, Env } from '../env';
+import { appleClientSecret } from './apple-client-secret';
 import { getDb } from './db';
 import { sendEmail, signInCodeEmail } from './email';
 import { ApiError, badRequest, clientIp, forbidden, ipKey, limit, rateLimited } from './errors';
-import { ensureReviewerData, isActiveReviewer, reviewerCode, reviewerOtp } from './reviewer';
+import { ensureReviewerData, isActiveReviewer, isReviewerEmail, reviewerCode, reviewerOtp } from './reviewer';
 import { timingSafeEqual } from './signing';
 
 export function allowedOrigins(env: Env): string[] {
@@ -26,11 +28,15 @@ export interface WaitUntil {
 }
 
 /**
- * Better Auth endpoints Chatsoon doesn't use: passwords, email change, social and linked accounts,
- * and the other email OTP flows. They answer 404. Some would email a code to any registered address
+ * Better Auth endpoints Chatsoon doesn't use: passwords, email change, and linked-account management,
+ * plus the other email OTP flows. They answer 404. Some would email a code to any registered address
  * outside otpRateLimit (password reset), and the Expo OAuth proxy redirects to any https URL (an
  * open redirect on the API domain). Account deletion is DELETE /me.
- * The app uses send-verification-otp, sign-in/email-otp, get-session and sign-out.
+ * The app uses send-verification-otp, sign-in/email-otp, get-session and sign-out, plus (once a
+ * provider is configured, see buildSocialProviders) sign-in/social and callback/:id.
+ *
+ * '/sign-in/social' is removed from this list in createAuth when at least one provider is configured,
+ * so with none configured (today's default) behaviour is unchanged: that path still 404s.
  */
 const DISABLED_AUTH_PATHS = [
   '/expo-authorization-proxy',
@@ -62,18 +68,64 @@ const DISABLED_AUTH_PATHS = [
 ];
 
 /**
+ * Discord's raw profile shape (the bits `mapProfileToUser` reads). Declared narrow on purpose: Better
+ * Auth passes the full DiscordProfile, but this is all buildSocialProviders needs from it.
+ */
+interface DiscordProfileUsername {
+  username: string;
+}
+
+/**
+ * Builds Better Auth's `socialProviders` option (issue #24): a provider is included only once every
+ * one of its secrets is set on `env`, so an unconfigured provider is simply absent, not broken.
+ * Exported so GET /auth-providers (src/index.ts) can report the same set without duplicating this
+ * gating logic.
+ */
+export async function buildSocialProviders(env: Env): Promise<SocialProviders> {
+  const providers: SocialProviders = {};
+
+  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
+    providers.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+  }
+  if (env.LINKEDIN_CLIENT_ID && env.LINKEDIN_CLIENT_SECRET) {
+    providers.linkedin = { clientId: env.LINKEDIN_CLIENT_ID, clientSecret: env.LINKEDIN_CLIENT_SECRET };
+  }
+  if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
+    providers.discord = {
+      clientId: env.DISCORD_CLIENT_ID,
+      clientSecret: env.DISCORD_CLIENT_SECRET,
+      // Discord's username isn't kept anywhere in Better Auth's own tables (the accounts row has no
+      // room for provider profile fields), so it's copied onto the user row (additionalFields below)
+      // for onboarding to prefill links.discord. Only applied on account creation / explicit update,
+      // per Better Auth's own account-linking rules (see the account.accountLinking comment below).
+      mapProfileToUser: (profile: DiscordProfileUsername) => ({ discordUsername: profile.username }),
+    };
+  }
+  if (env.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY) {
+    const clientSecret = await appleClientSecret(env);
+    if (clientSecret) providers.apple = { clientId: env.APPLE_CLIENT_ID, clientSecret };
+  }
+
+  return providers;
+}
+
+/**
  * Better Auth is created per request because D1 is a per-request binding.
  * Clients authenticate with `Authorization: Bearer <token>` (bearer plugin) on native and web.
  */
-export function createAuth(env: Env, ctx?: WaitUntil) {
+export async function createAuth(env: Env, ctx?: WaitUntil) {
   const db = getDb(env);
+  const socialProviders = await buildSocialProviders(env);
+  const anySocialProvider = Object.keys(socialProviders).length > 0;
+  const disabledPaths = anySocialProvider ? DISABLED_AUTH_PATHS.filter((p) => p !== '/sign-in/social') : DISABLED_AUTH_PATHS;
+
   return betterAuth({
     appName: 'Chatsoon',
     baseURL: env.API_ORIGIN,
     basePath: '/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: allowedOrigins(env),
-    disabledPaths: DISABLED_AUTH_PATHS,
+    disabledPaths,
     database: drizzleAdapter(db, {
       provider: 'sqlite',
       schema: { user: users, session: sessions, account: accounts, verification: verifications },
@@ -85,6 +137,43 @@ export function createAuth(env: Env, ctx?: WaitUntil) {
     advanced: {
       // Cloudflare sets this to the real client IP on every request (Better Auth's rate limits).
       ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
+    },
+    account: {
+      // Links a social sign-in to an existing email/OTP account with the same email address (issue
+      // #24 design point 3), but deliberately without `trustedProviders`: reading Better Auth 1.7.5's
+      // source (oauth2/link-account.ts), `trustedProviders` is a bypass that allows linking even when
+      // the provider's own profile says the email is *not* verified. Leaving it unset means Better
+      // Auth's default check applies instead - link only when the incoming profile is verified
+      // (Google's `email_verified`, Discord's `verified`, LinkedIn's `email_verified`; Apple's emails
+      // are always verified) - which is exactly the "only link verified emails" rule this feature
+      // needs, so no extra mapping is needed to enforce it.
+      accountLinking: { enabled: true },
+    },
+    user: {
+      additionalFields: {
+        // Populated only by mapProfileToUser above, via the OAuth provider-profile path. Never
+        // `input: false`: that flag also blocks Better Auth's own provider-profile mapping from
+        // writing it (parseAdditionalUserInputFromProviderProfile skips `input: false` fields), not
+        // just client input. It's still not client-settable in practice: Better Auth's own
+        // /update-user and /sign-up/email endpoints, the only routes that would accept it from a
+        // request body, are both in DISABLED_AUTH_PATHS above.
+        discordUsername: { type: 'string', required: false },
+      },
+      // Runs before create-user, link-account, and (for OAuth) sign-in, across *every* auth method,
+      // including plain email-otp - so this only rejects the OAuth path (`source.method === 'oauth'`).
+      // The reviewer's own sign-in (the fixed OTP code, checked in otpRateLimit/reviewer.ts) must keep
+      // working; only reaching that account via social sign-in or linking is what issue #24 blocks.
+      validateUserInfo: ({ user, source }) => {
+        if (source.method !== 'oauth') return;
+        const email = user.email;
+        if (!email) return;
+        if (isReviewerEmail(email)) {
+          return { error: 'reviewer_blocked', errorDescription: "This account can't be used with social sign-in." };
+        }
+        if (isBannedEmail(env, email)) {
+          return { error: 'account_banned', errorDescription: "This email can't be used to sign in to Chatsoon." };
+        }
+      },
     },
     databaseHooks: {
       session: {
@@ -105,6 +194,7 @@ export function createAuth(env: Env, ctx?: WaitUntil) {
         await ensureReviewerData(env, user.id).catch((err) => console.error('Reviewer sample data failed', err));
       }),
     },
+    socialProviders,
     plugins: [
       expo(),
       bearer(),
@@ -133,7 +223,7 @@ export function createAuth(env: Env, ctx?: WaitUntil) {
   });
 }
 
-export type Auth = ReturnType<typeof createAuth>;
+export type Auth = Awaited<ReturnType<typeof createAuth>>;
 
 // ---------------------------------------------------------------------------
 // Sign-in code rate limiting, mounted in front of Better Auth in src/index.ts.

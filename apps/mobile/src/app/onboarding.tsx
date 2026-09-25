@@ -1,6 +1,6 @@
-import { isValidSlug } from '@chatsoon/shared';
+import { isValidSlug, type ProfileInput } from '@chatsoon/shared';
 import { Redirect, router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Logo } from '@/components/brand';
@@ -14,8 +14,9 @@ import {
   type AvatarValue,
   type ProfileFormErrors,
 } from '@/components/profile';
-import { Button, Card, Icon, Screen, Text } from '@/components/ui';
+import { Avatar, Button, Card, Icon, Screen, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { confirm, showError } from '@/lib/dialogs';
 import { useOutbox } from '@/lib/outbox';
@@ -40,6 +41,33 @@ export default function OnboardingScreen() {
   const [errors, setErrors] = useState<ProfileFormErrors>({});
   const [avatar, setAvatar] = useState<AvatarValue>({ key: null, url: null });
   const [uploading, setUploading] = useState(false);
+
+  // Social sign-in prefill (issue #24): a name from the provider fills the name field when it's still
+  // empty (never overwrites something typed in already), and an offered provider photo is fetched into
+  // R2 only if the person accepts it.
+  const [providerPhotoDismissed, setProviderPhotoDismissed] = useState(false);
+  const [fetchingProviderPhoto, setFetchingProviderPhoto] = useState(false);
+  const providerName = me.data?.user.name;
+  useEffect(() => {
+    if (!providerName) return;
+    setValues((v) => (v.displayName.trim() ? v : { ...v, displayName: providerName }));
+  }, [providerName]);
+
+  const providerImage = me.data?.user.image;
+  const useProviderPhoto = async () => {
+    if (fetchingProviderPhoto) return;
+    setFetchingProviderPhoto(true);
+    try {
+      const { avatarKey } = await api.me.avatarFromProvider();
+      // The provider's own URL previews instantly; the saved key (an R2 upload, like any other
+      // avatar) is what PUT /me/profile actually stores.
+      setAvatar({ key: avatarKey, url: providerImage ?? null });
+    } catch (err) {
+      showError(err, "Couldn't use that photo");
+    }
+    setProviderPhotoDismissed(true);
+    setFetchingProviderPhoto(false);
+  };
 
   // Signing out wipes captures that haven't synced, so warn first (same as the Me tab).
   const confirmSignOut = async () => {
@@ -84,8 +112,13 @@ export default function OnboardingScreen() {
       return;
     }
     setErrors({});
+    // Onboarding's own form has no links section (only the profile editor does), so a Discord
+    // username from a social sign-in is carried straight into the saved profile rather than shown
+    // and re-typed here; the person can still see and change it right after, in "Edit profile".
+    const discordUsername = me.data?.socialPrefill?.discord;
+    const input: ProfileInput = discordUsername ? { ...parsed.input, links: { discord: discordUsername } } : parsed.input;
     try {
-      await update.mutateAsync(parsed.input);
+      await update.mutateAsync(input);
       if (next) router.dismissTo(next);
       else router.replace('/contacts');
     } catch (err) {
@@ -140,6 +173,33 @@ export default function OnboardingScreen() {
         disabled={saving}
       />
 
+      {providerImage && !avatar.key && !providerPhotoDismissed ? (
+        <Card style={styles.providerPhoto}>
+          <Avatar name={values.displayName || '?'} uri={providerImage} size={40} />
+          <Text variant="caption" color="textSecondary" style={styles.providerPhotoText}>
+            Use your sign-in photo as your profile photo?
+          </Text>
+          <View style={styles.providerPhotoActions}>
+            <Button
+              title="Use it"
+              variant="secondary"
+              size="sm"
+              fullWidth={false}
+              onPress={() => void useProviderPhoto()}
+              loading={fetchingProviderPhoto}
+            />
+            <Button
+              title="No thanks"
+              variant="ghost"
+              size="sm"
+              fullWidth={false}
+              onPress={() => setProviderPhotoDismissed(true)}
+              disabled={fetchingProviderPhoto}
+            />
+          </View>
+        </Card>
+      ) : null}
+
       <ProfileFields
         values={values}
         errors={errors}
@@ -169,4 +229,7 @@ const styles = StyleSheet.create({
   privacy: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
   privacyText: { flex: 1 },
   footer: { gap: Spacing.three },
+  providerPhoto: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, flexWrap: 'wrap' },
+  providerPhotoText: { flex: 1, minWidth: 140 },
+  providerPhotoActions: { flexDirection: 'row', gap: Spacing.two },
 });

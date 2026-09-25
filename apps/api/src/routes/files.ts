@@ -1,9 +1,15 @@
-import { ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES, type UploadPurpose, type UploadResponse } from '@chatsoon/shared';
+import {
+  ALLOWED_UPLOAD_TYPES,
+  MAX_UPLOAD_BYTES,
+  type AvatarFromProviderResponse,
+  type UploadPurpose,
+  type UploadResponse,
+} from '@chatsoon/shared';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { contacts } from '../db/schema';
+import { contacts, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { getDb } from '../lib/db';
 import { ApiError, badRequest, forbidden, limit, notFound, parseJson, userKey } from '../lib/errors';
@@ -12,6 +18,7 @@ import { fileKey, isCardKey, signedFileUrl, verifyFileSignature } from '../lib/s
 
 // POST /files uploads a photo to private R2. GET /files/* serves it back behind an HMAC signature.
 // DELETE /files/card removes a card photo that no contact uses (a queued card the app discarded).
+// POST /me/avatar/from-provider (issue #24) fetches a social sign-in's photo into R2 the same way.
 
 type ImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic';
 
@@ -86,6 +93,62 @@ filesRoutes.delete('/files/card', requireAuth, async (c) => {
   return c.body(null, 204);
 });
 
+/** Provider CDN hosts POST /me/avatar/from-provider is allowed to fetch from. Apple gives no photo. */
+const PROVIDER_AVATAR_HOSTS = new Set(['lh3.googleusercontent.com', 'media.licdn.com', 'cdn.discordapp.com']);
+/** A provider's own photo can be larger than what the app's own picker uploads (MAX_PHOTO_BYTES). */
+const MAX_PROVIDER_AVATAR_BYTES = 5 * 1024 * 1024;
+const PROVIDER_AVATAR_TIMEOUT_MS = 8_000;
+const providerPhotoUnusable = () => badRequest("Couldn't use that photo. Please choose one instead.");
+
+/**
+ * Downloads the profile photo from a social sign-in (issue #24) into R2 as a normal avatar, so
+ * onboarding can offer it without the client ever fetching a third-party URL itself.
+ *
+ * SSRF safety: the URL to fetch is never client-supplied - it's `users.image`, which only Better
+ * Auth's OAuth flow ever sets (routes/profile.ts's own profile save never writes it). It must be
+ * `https:` on PROVIDER_AVATAR_HOSTS; `redirect: 'manual'` means a 3xx response (e.g. to a host off the
+ * allowlist) is surfaced as an opaque, not-ok response rather than followed; the declared
+ * content-type must be `image/*`; and the body is capped at MAX_PROVIDER_AVATAR_BYTES with a timeout.
+ */
+filesRoutes.post('/me/avatar/from-provider', requireAuth, async (c) => {
+  const userId = c.var.user.id;
+  await limit(c.env.UPLOAD_LIMITER, `upload:${userId}`);
+
+  const [row] = await getDb(c.env).select({ image: users.image }).from(users).where(eq(users.id, userId)).limit(1);
+  const imageUrl = row?.image;
+  if (!imageUrl) throw providerPhotoUnusable();
+
+  let url: URL;
+  try {
+    url = new URL(imageUrl);
+  } catch {
+    throw providerPhotoUnusable();
+  }
+  if (url.protocol !== 'https:' || !PROVIDER_AVATAR_HOSTS.has(url.hostname)) throw providerPhotoUnusable();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROVIDER_AVATAR_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), { redirect: 'manual', signal: controller.signal });
+  } catch {
+    throw new ApiError(502, 'internal', "Couldn't fetch your provider photo. Please choose one instead.");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw providerPhotoUnusable();
+  if (!(res.headers.get('content-type') ?? '').toLowerCase().startsWith('image/')) throw providerPhotoUnusable();
+
+  const bytes = await readCapped(res, MAX_PROVIDER_AVATAR_BYTES, providerPhotoUnusable);
+  const type = sniffImageType(bytes);
+  if (!type || !(ALLOWED_UPLOAD_TYPES as readonly string[]).includes(type)) throw providerPhotoUnusable();
+
+  const key = fileKey(userId, 'avatar', EXTENSIONS[type]);
+  await c.env.FILES.put(key, bytes, { httpMetadata: { contentType: type }, customMetadata: { userId, purpose: 'avatar' } });
+  const body: AvatarFromProviderResponse = { avatarKey: key };
+  return c.json(body, 201);
+});
+
 // No auth: the signature is the permission. Keys and expiries are covered by the HMAC.
 filesRoutes.get('/files/*', async (c) => {
   const encoded = new URL(c.req.url).pathname.slice('/files/'.length);
@@ -146,9 +209,13 @@ async function readUpload(req: Request): Promise<Uint8Array> {
   throw badRequest('Send the photo as multipart/form-data');
 }
 
-/** Reads the whole body, failing with 413 as soon as it passes `max` bytes. */
-async function readCapped(req: Request, max: number): Promise<Uint8Array> {
-  if (Number(req.headers.get('content-length') ?? 0) > max) throw tooLarge();
+/** Reads the whole body of a Request or a fetched Response, failing as soon as it passes `max` bytes. */
+async function readCapped(
+  req: Pick<Request, 'headers' | 'body'>,
+  max: number,
+  onTooLarge: () => ApiError = tooLarge,
+): Promise<Uint8Array> {
+  if (Number(req.headers.get('content-length') ?? 0) > max) throw onTooLarge();
   if (!req.body) return new Uint8Array(0);
 
   const reader = req.body.getReader();
@@ -161,7 +228,7 @@ async function readCapped(req: Request, max: number): Promise<Uint8Array> {
     size += chunk.byteLength;
     if (size > max) {
       await reader.cancel();
-      throw tooLarge();
+      throw onTooLarge();
     }
     chunks.push(chunk);
   }

@@ -1,9 +1,11 @@
+import type { AuthProvidersResponse } from '@chatsoon/shared';
+import { SOCIAL_PROVIDERS } from '@chatsoon/shared';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 
 import type { AppEnv, Env } from './env';
-import { allowedOrigins, createAuth, otpRateLimit } from './lib/auth';
+import { allowedOrigins, buildSocialProviders, createAuth, otpRateLimit } from './lib/auth';
 import { runDueDeletions } from './lib/deletion';
 import { errorBody, onError } from './lib/errors';
 import { runEmailSequences } from './lib/sequences';
@@ -21,7 +23,9 @@ import { publicRoutes } from './routes/public';
 import { tagsRoutes } from './routes/tags';
 
 // Route table (MVP). Each module owns its paths:
-//   /auth/*                                   Better Auth (email OTP), lib/auth.ts
+//   /auth/*                                   Better Auth (email OTP, plus social sign-in once a
+//                                              provider is configured, issue #24), lib/auth.ts
+//   GET  /auth-providers (no auth)             enabled social providers, index.ts
 //   GET  /id/:slug  GET /id/:slug/vcard  POST /id/:slug/connect      routes/public.ts
 //   GET  /me  PUT /me/profile                                         routes/profile.ts
 //   DELETE /me  POST/DELETE /me/deletion  GET /me/export.csv           routes/account.ts
@@ -68,7 +72,20 @@ app.get('/health', (c) => c.json({ ok: true }));
 // Nothing on api.chatsoon.app is meant for search engines; the public pages live on chatsoon.app.
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n', 200, { 'Cache-Control': 'public, max-age=86400' }));
 
-app.on(['GET', 'POST'], '/auth/*', otpRateLimit, (c) => createAuth(c.env, c.executionCtx).handler(c.req.raw));
+app.on(['GET', 'POST'], '/auth/*', otpRateLimit, async (c) => (await createAuth(c.env, c.executionCtx)).handler(c.req.raw));
+
+/**
+ * Enabled social sign-in providers (issue #24), in display order. Outside `/auth/*` since that
+ * basePath belongs to Better Auth. The sign-in page only shows buttons for these, so a provider can
+ * switch on (once its secrets are set) without a web redeploy. Cached briefly since it changes only
+ * when secrets are added or removed.
+ */
+app.get('/auth-providers', async (c) => {
+  const configured = await buildSocialProviders(c.env);
+  const body: AuthProvidersResponse = { providers: SOCIAL_PROVIDERS.filter((p) => p in configured) };
+  c.header('Cache-Control', 'public, max-age=300');
+  return c.json(body);
+});
 
 app.route('/', publicRoutes);
 app.route('/', profileRoutes);

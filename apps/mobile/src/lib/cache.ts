@@ -6,6 +6,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 export const qk = {
   me: ['me'] as const,
+  authProviders: ['auth-providers'] as const,
   contacts: ['contacts'] as const,
   contact: (id: string) => ['contacts', id] as const,
   tags: ['tags'] as const,

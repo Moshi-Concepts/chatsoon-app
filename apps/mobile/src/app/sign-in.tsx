@@ -1,17 +1,54 @@
-import { emailSchema, isValidSlug, otpSchema } from '@chatsoon/shared';
+import { emailSchema, isValidSlug, otpSchema, type SocialProvider } from '@chatsoon/shared';
 import { Redirect, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { BackHandler, Platform, StyleSheet, TextInput, View } from 'react-native';
 
+import { SocialSignInButtons } from '@/components/auth/social-sign-in-buttons';
 import { Logo, Wordmark } from '@/components/brand';
 import { Button, Screen, Text, TextField } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { ApiError } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useAuthProviders } from '@/lib/queries';
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN_MS = 30_000;
+
+/**
+ * Better Auth's OAuth callback redirects to `errorCallbackURL?error=<code>` (see
+ * oauth2/errors.ts's redirectOnError), *appending* to whatever query string we passed it - so our own
+ * `?error=social` default and Better Auth's own code both end up in the URL. `readSocialError` below
+ * reads every `error` value and keeps the last one, which is Better Auth's own code when there is one,
+ * falling back to our generic `social` when the redirect never reached Better Auth at all (e.g. this
+ * page linked here directly, or a step before Better Auth runs failed).
+ */
+function socialErrorMessage(code: string): string {
+  switch (code) {
+    case 'email_not_verified':
+      return "That account's email isn't verified with the provider yet. Verify it there, then try again, or use your email.";
+    case 'account_not_linked':
+      return 'That email already has a Chatsoon account signed in a different way. Use your email code instead.';
+    case 'reviewer_blocked':
+    case 'account_banned':
+      return "That account can't be used with social sign-in.";
+    default:
+      return "We couldn't sign you in with that account. Try again or use your email.";
+  }
+}
+
+/** Reads every `?error=` value from the current URL (there can be more than one, see above) and
+ * removes them, so refreshing or navigating back never re-shows a stale error. Web only. */
+function readSocialError(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  const url = new URL(window.location.href);
+  const codes = url.searchParams.getAll('error');
+  if (codes.length === 0) return null;
+  url.searchParams.delete('error');
+  url.searchParams.delete('error_description');
+  window.history.replaceState(null, '', url.toString());
+  return codes[codes.length - 1] ?? null;
+}
 
 type Step = 'email' | 'code';
 
@@ -52,6 +89,7 @@ function authErrorMessage(err: unknown, step: Step): string {
 }
 
 export default function SignInScreen() {
+  const theme = useTheme();
   const { status, sendCode, verifyCode } = useAuth();
   const next = profileReturnPath(useLocalSearchParams<{ next?: string }>().next);
   // Coming from a profile in the app, show the header so there's a visible way back to it.
@@ -61,6 +99,32 @@ export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
+  // Social sign-in (issue #24), web only: see docs/native-pending.md.
+  const authProviders = useAuthProviders();
+  const [socialPending, setSocialPending] = useState<SocialProvider | null>(null);
+  const [socialError, setSocialError] = useState<string | null>(() => {
+    const code = readSocialError();
+    return code ? socialErrorMessage(code) : null;
+  });
+
+  const startSocialSignIn = async (provider: SocialProvider) => {
+    if (socialPending || typeof window === 'undefined') return;
+    setSocialError(null);
+    setSocialPending(provider);
+    try {
+      const origin = window.location.origin;
+      const { url } = await api.auth.socialSignIn(provider, {
+        callbackURL: `${origin}/auth-complete`,
+        errorCallbackURL: `${origin}/sign-in?error=social`,
+        newUserCallbackURL: `${origin}/auth-complete`,
+      });
+      window.location.href = url;
+    } catch (err) {
+      setSocialPending(null);
+      setSocialError(authErrorMessage(err, 'email'));
+    }
+  };
 
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -212,6 +276,30 @@ export default function SignInScreen() {
               Enter your email and we'll send you a 6 digit code. No password needed.
             </Text>
           </View>
+
+          {socialError ? (
+            <Text variant="caption" color="danger" align="center" accessibilityLiveRegion="polite">
+              {socialError}
+            </Text>
+          ) : null}
+
+          {authProviders.data && authProviders.data.providers.length > 0 ? (
+            <>
+              <SocialSignInButtons
+                providers={authProviders.data.providers}
+                onPress={(provider) => void startSocialSignIn(provider)}
+                pending={socialPending}
+              />
+              <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+                <Text variant="caption" color="textTertiary">
+                  or
+                </Text>
+                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+              </View>
+            </>
+          ) : null}
+
           <TextField
             label="Email"
             placeholder="you@company.com"
@@ -222,7 +310,7 @@ export default function SignInScreen() {
             }}
             error={emailError}
             icon="mail-outline"
-            autoFocus
+            autoFocus={!authProviders.data?.providers.length}
             keyboardType="email-address"
             autoComplete="email"
             textContentType="emailAddress"
@@ -410,6 +498,8 @@ const styles = StyleSheet.create({
   brand: { alignItems: 'center', gap: Spacing.three },
   form: { gap: Spacing.four },
   intro: { gap: Spacing.two, marginBottom: Spacing.one },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
   strong: { fontWeight: '600' },
   message: { minHeight: 18 },
   links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Spacing.two },

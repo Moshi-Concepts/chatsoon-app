@@ -27,6 +27,17 @@
         ]
       },
       {
+        "heading": "Signing in with Google, Apple, LinkedIn or Discord",
+        "paragraphs": [
+          "If you choose to sign in or create your account with Google, Apple, LinkedIn or Discord, that service shares your name, email address and profile photo with us, and for Discord also your username, so we can create or sign in to your account and prefill your profile. We don't receive your password for that service."
+        ],
+        "bullets": [
+          "We don't post anything on your behalf, and we don't read your contacts or messages on that service.",
+          "You can disconnect Chatsoon from that service any time in its own account settings.",
+          "If you use Apple's \"Hide My Email\", the private address it gives us still works for signing in and for anything we email you."
+        ]
+      },
+      {
         "heading": "How we use your information",
         "bullets": [
           "To sign you in and keep your account secure.",

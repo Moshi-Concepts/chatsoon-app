@@ -55,6 +55,24 @@ export interface Env {
   REVIEWER_CODE?: string;
   /** Shared with the web Function; gates GET /_pages/* (§3.3). Unset means those routes 404. */
   PAGES_SHARED_SECRET?: string;
+
+  // Social sign-in (issue #24). Each provider is only added to Better Auth's socialProviders once
+  // every one of its secrets below is set (lib/auth.ts buildSocialProviders); with none set, the API
+  // behaves exactly as before. GET /auth-providers reports which are live.
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  LINKEDIN_CLIENT_ID?: string;
+  LINKEDIN_CLIENT_SECRET?: string;
+  DISCORD_CLIENT_ID?: string;
+  DISCORD_CLIENT_SECRET?: string;
+  /** Apple's Services ID (not the app's bundle id). */
+  APPLE_CLIENT_ID?: string;
+  APPLE_TEAM_ID?: string;
+  /** The key id of the .p8 signing key below. */
+  APPLE_KEY_ID?: string;
+  /** The full contents of the .p8 private key Apple issues for APPLE_KEY_ID (PEM, PKCS8). Used to
+   * sign Apple's client secret JWT ourselves (lib/apple-client-secret.ts); never logged. */
+  APPLE_PRIVATE_KEY?: string;
 }
 
 export interface AuthedUser {

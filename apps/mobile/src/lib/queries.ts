@@ -8,6 +8,7 @@ import type {
   ReportInput,
 } from '@chatsoon/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Platform } from 'react-native';
 
 import { api, getAuthToken } from './api';
 import { ME_CACHE_KEY, useAuth } from './auth';
@@ -34,6 +35,20 @@ export function useMe() {
       return me;
     },
     enabled: status === 'signedIn',
+  });
+}
+
+/**
+ * Enabled social sign-in providers (issue #24), for the sign-in page's buttons. Signed out by
+ * definition, so this never depends on auth status. Web only in 1.0 (see sign-in.tsx): a native build
+ * has no redirect-based flow to run yet, so it's not worth fetching there.
+ */
+export function useAuthProviders() {
+  return useQuery({
+    queryKey: qk.authProviders,
+    queryFn: () => api.auth.providers(),
+    staleTime: 5 * 60_000,
+    enabled: Platform.OS === 'web',
   });
 }
 

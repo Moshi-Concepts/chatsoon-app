@@ -54,6 +54,7 @@ function RootStack() {
         }}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        <Stack.Screen name="auth-complete" options={{ headerShown: false }} />
         <Stack.Screen name="cancel-deletion" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="(app)" options={{ headerShown: false }} />

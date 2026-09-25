@@ -451,7 +451,7 @@ describe('reviewer login', () => {
 
   it('treats the reviewer like any other address when the flag is off', async () => {
     await deleteUserRows(REVIEWER_EMAIL);
-    const auth = createAuth(withEnv({ REVIEWER_ENABLED: 'false' }));
+    const auth = await createAuth(withEnv({ REVIEWER_ENABLED: 'false' }));
     const post = (path: string, body: unknown) =>
       auth.handler(
         new Request(`${env.API_ORIGIN}/auth${path}`, {
