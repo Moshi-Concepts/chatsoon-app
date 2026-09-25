@@ -658,6 +658,13 @@ Order: D1, then D2 and D3 in parallel, with D4. Deploy the API (migration remote
      - D1 read replication with the Sessions API;
      - Cache API HTML with a 60 s TTL plus a global purge-by-URL from `PUT /me/profile` and `DELETE /me`. The purge needs a token scoped to Zone › Cache Purge; ask Peter to create it.
 2. **Avatar.** A 208 px WebP variant made at upload with the Images binding and backfilled lazily. Check the account's Images allowance first.
+   - **Done 25 Sep 2026 (#6).**
+     - The photo is now shown at 208 px, so the variant is 416×416 WebP (q80): about 28 KB instead of the 52 KB JPEG.
+     - It's made lazily on the first photo request with the `IMAGES` binding and stored at `u/<userId>/avatar-416/<version>.webp`. The ETag is `"<version>-416"`.
+     - The variant is read before the original, and any failure falls back to the original.
+     - It's deleted when the avatar changes or is removed, and on account deletion.
+   - The profile page scores Performance 100 with LCP (the photo) at about 1.43–1.46 s.
+   - D1 runs in `OC`. TTFB (item 1) is untouched and is only worth doing if PSI from the US drops below 100.
 3. **Beacon.** Turn off Web Analytics, only if Peter wants a report with no warnings.
 
 ---
