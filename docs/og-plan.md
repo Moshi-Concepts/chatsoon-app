@@ -54,7 +54,7 @@ Paths are relative to `D:\Claude\chatsoon-app`. Evidence and mock-ups are in `C:
 | O21 | **No user-agent gating.** | There's a long tail of preview bots, and iMessage fetches from the sender's device. |
 | O22 | **og:title is `{name} – {roleLine ?? headline}`,** or just `{name}` when that is over 70 characters. The `<title>` follows §3.3. | More informative on Facebook, LinkedIn, Slack and WhatsApp. *Peter can override.* |
 | O23 | **"Connect on Chatsoon" and `chatsoon.app` are baked into the plate.** | Static text costs nothing per render. *Peter can override.* |
-| O24 | **Omit `twitter:site` and `fb:app_id`** until Peter supplies them. | There's no brand X handle in the repo; `astroboysoup` is his personal account. |
+| O24 | **`twitter:site` is `@ChatSoonApp` on every page** (home, legal, SPA shell and profiles); Peter supplied it on 25 Sep 2026. The home Organization JSON-LD gets `"sameAs":["https://x.com/ChatSoonApp"]`. `fb:app_id` stays out until Peter supplies one. | The brand X account attributes shared cards. |
 
 **Workers Paid vs Free**
 
@@ -100,7 +100,7 @@ The canvas is 1200×630, opaque, sRGB, JPEG q85, and must stay under 300 KB (the
   - sharp renders this SVG (it has no text).
 - **Right-hand art:** the header's crop x 1655–2172 (517×724), scaled to 630 px high (≈450 px wide), placed at x=750. Its left edge fades from 0 to 22% (see `issue5-scratch/plate.mjs`).
 - **Static text layer**, drawn with the renderer's own satori and resvg-wasm in Node to a transparent PNG, then composited with sharp:
-  - **Brand row at (72, 56):** a 52×52 bubble mark (white-to-`#E4DEFF` fill, dots `#5146E5` / `#8B3DF0` / `#FF6B4A`), then "Chatsoon" in 800 at 30 px, white, 14 px gap.
+  - **Brand row at (72, 56):** the official mark `apps/og/assets/brand/x-avatar.png` (Peter's 400×400 X profile image, added 25 Sep 2026), scaled to 52×52 with a 14 px corner radius, then "Chatsoon" in 800 at 30 px, white, 14 px gap. It replaces the drawn bubble mark, which is still used as the initials fallback where needed.
   - **Call-to-action row, bottom edge 52 px up (y ≈ 526–578):**
     - a pill reading "Connect on Chatsoon": 800, 24 px, white, padding 12/24, radius 32, fill a 90° gradient `#FF5FA2` → `#FF8A4C` (the header's "Follow up." gradient);
     - then "chatsoon.app": 600, 22 px, `#B9B3F5`, letter-spacing 5 px, 22 px left margin.
@@ -248,7 +248,7 @@ export function computeOgVersion(card: OgCard, avatarKey: string | null): Promis
   - **429:** `no-store` and `Retry-After: 60`.
   - **503, a timeout, or anything else:** the default image bytes from `env.ASSETS.fetch(new URL(DEFAULT_OG_IMAGE.path, request.url))`, with `public, max-age=60`.
 
-**Tag templates.** `ogTags()` emits them in this order: og:type, og:site_name, og:title, og:description, og:url (if set), og:image, og:image:type, og:image:width, og:image:height, og:image:alt, twitter:card, twitter:image:alt. Every value is escaped with `escapeHtml`.
+**Tag templates.** `ogTags()` emits them in this order: og:type, og:site_name, og:title, og:description, og:url (if set), og:image, og:image:type, og:image:width, og:image:height, og:image:alt, twitter:card, twitter:site (`@ChatSoonApp`), twitter:image:alt. Every value is escaped with `escapeHtml`.
 
 ```html
 <!-- Home (layout.ts; canonical already there) -->
