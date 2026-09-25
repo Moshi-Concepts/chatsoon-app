@@ -14,6 +14,7 @@ tag, not from `main`, because `main` already contains the features below.
 | Booking links ([plan](booking-links.md)) | 24 Sep 2026 | Yes: `react-native-webview` is a native module | [store/listing.md](../store/listing.md), "1.1 update" |
 | Phone and messaging on profiles ([plan](profile-contact.md)) | 25 Sep 2026 | No: JS only | [store/listing.md](../store/listing.md), "1.1 update" |
 | Accessible colour tokens (web now; native appearance changes) | 25 Sep 2026 | No: JS only | — |
+| Privacy text: link previews | 25 Sep 2026 | No: policy only | — |
 
 ## Releasing a batch to the apps
 

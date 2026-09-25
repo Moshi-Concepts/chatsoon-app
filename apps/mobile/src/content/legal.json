@@ -51,7 +51,8 @@
           "Your email address is never shown on your public profile.",
           "Your contacts, notes, tags and priorities are private to you. If you add a mobile number, WhatsApp or Signal, you choose who can see them: people you connect with (Chatsoon users you connect with, and people who send you their details with the Connect form on your page), or anyone with your link. They're never shown to search engines. Tapping WhatsApp or Signal opens that app; Chatsoon doesn't send your details to WhatsApp or Signal.",
           "People you connect with see your public profile and, if you added them, your phone and messaging details. If you let anyone with your link see them, blocking someone doesn't hide them from that person when they're signed out.",
-          "Booking links you add (such as Calendly or Google Calendar) are shown on your public profile. When someone books, they do it on that service's page, under its own terms and privacy policy. Chatsoon doesn't see or store the booking."
+          "Booking links you add (such as Calendly or Google Calendar) are shown on your public profile. When someone books, they do it on that service's page, under its own terms and privacy policy. Chatsoon doesn't see or store the booking.",
+          "When you share your profile link in apps such as LinkedIn, WhatsApp, Slack, X or iMessage, the app shows a link preview made from your public profile: an image with your name, photo, role, company and headline, and the same details as text. Your phone, WhatsApp and Signal details are never included in link previews. When you change your profile, new previews show the change, but apps that already made a preview may keep showing their copy for a while, and we can't remove copies they've made."
         ]
       },
       {
@@ -91,7 +92,7 @@
         "heading": "Retention and deletion",
         "bullets": [
           "We keep your information for as long as your account is open.",
-          "You can delete your account at any time: open the Me tab in the app, or sign in at https://chatsoon.app and open the Me tab, then tap Delete account. You can also email hello@chatsoon.app from the address you sign in with and we will delete it within 30 days. This immediately and permanently deletes your account, profile, contacts, notes, tags, connections and the files you uploaded, including profile and card photos. Your public profile link stops working straight away.",
+          "You can delete your account at any time: open the Me tab in the app, or sign in at https://chatsoon.app and open the Me tab, then tap Delete account. You can also email hello@chatsoon.app from the address you sign in with and we will delete it within 30 days. This immediately and permanently deletes your account, profile, contacts, notes, tags, connections and the files you uploaded, including profile and card photos and the link preview images made from your profile. Your public profile link stops working straight away.",
           "Our database provider keeps backups for disaster recovery. Deleted data rolls off these backups automatically, within 30 days.",
           "Reports you made, reports made about you and your blocks are deleted with your account. Copies of reports already sent to our moderation inbox may be kept until we finish reviewing them.",
           "Contacts that other people saved about you, for example from your public profile or a connection, belong to their accounts and are not removed when you delete yours. You can ask them to remove it, or email us.",

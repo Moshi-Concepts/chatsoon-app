@@ -111,6 +111,51 @@ Then check:
   above the "Send to Alex" button doesn't say "Testing only"
 - https://www.chatsoon.app/id/alex-rivera-demo redirects (301) to https://chatsoon.app/id/alex-rivera-demo
 
+## 2b. Phase 2: personalised OG cards (after WP-3 approval)
+
+Run these steps in order. They deploy the renderer and then the API and web, so Stage C's Functions become live.
+
+1. Run `npx wrangler pages download config chatsoon-web` and merge the output into `apps/web/wrangler.jsonc`, so that
+   wrangler.jsonc is the source of truth and no dashboard settings are lost.
+
+2. Deploy the renderer:
+   ```bash
+   pnpm deploy:og
+   ```
+   Check the output for "cpu_ms_avg" or similar; it should be under 1000 (1 s). If it's longer, the Function may time
+   out on cold starts.
+
+3. Create a shared secret for the API and web pages to use:
+   ```bash
+   PAGES_SECRET=$(openssl rand -hex 32)
+   echo $PAGES_SECRET     # save this somewhere
+   cd apps/api
+   npx wrangler secret put PAGES_SHARED_SECRET
+   # paste the value when prompted
+   cd ../web
+   npx wrangler pages secret put PAGES_SHARED_SECRET --project-name chatsoon-web
+   # paste the value when prompted
+   ```
+
+4. Deploy the API with the binding:
+   ```bash
+   pnpm deploy:api
+   ```
+
+5. Deploy the web with the secret:
+   ```bash
+   pnpm deploy:web
+   ```
+
+6. Warm Peter's card so the first user doesn't pay the cold-start penalty:
+   ```bash
+   curl -s -o /dev/null https://chatsoon.app/id/peter-bui-5ec50167/og.jpg
+   ```
+
+Then check:
+- https://chatsoon.app/id/peter-bui-5ec50167/og.jpg returns 200 `image/jpeg`, under 300 KB
+- `curl -s https://chatsoon.app/id/peter-bui-5ec50167 | grep -o 'og:image.*>'` shows the og:image tag with a `v=` parameter
+
 ## 3. Resend (sign-in emails from hello@updates.chatsoon.app)
 
 The sending domain is `updates.chatsoon.app` (`EMAIL_FROM` in `apps/api/wrangler.jsonc`); replies go to

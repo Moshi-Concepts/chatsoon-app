@@ -89,8 +89,10 @@ All paths are relative to the repo root, `D:\Claude\chatsoon-app`. Evidence file
 | `/` | `dist/home.html` through `_redirects` `/ /home 200` | 200, from `_headers` `/*` |
 | `/home` | `_redirects` `/home / 301` | 301 |
 | `/privacy`, `/terms`, `/support` | Static HTML from the apps/web renderer | 200 |
+| `/og/chatsoon-<sha8>.jpg` | Static, from `apps/mobile/public/og/` | 200, immutable (`max-age=31536000`) |
 | `/id/:slug` | Function `functions/id/[[path]].ts` | 200 / 301 (uppercase or trailing slash) / 404 (invalid or missing) / 429 (miss limiter) / 503 (RPC error) |
 | `/id/:slug/photo?v=` | Same Function | 200 streamed / 404 / 429 |
+| `/id/:slug/og.jpg?v=` | Same Function | 200 image/jpeg / 304 / 404 / 429 / 503 fallback |
 | Other `/id/*` | Same Function | 404 |
 | `/sitemap-profiles.xml` | Function (Stage D) | 200 application/xml, `max-age=3600` |
 | `/sitemap.xml`, `/robots.txt`, `/llms.txt` | Static, from `apps/mobile/public` | 200 |
@@ -240,6 +242,8 @@ CREATE INDEX profiles_search_idx ON profiles (search_visible, slug);
 
 The photo endpoint carries `X-Robots-Tag: noindex` unless the profile is indexable.
 
+**OG tags:** follow the template in `docs/og-plan.md` §3.4 for the profile og:image path and version parameter.
+
 **Body, in order:**
 1. Site header: logo link with `aria-label="Chatsoon home"`, and **Sign in** linking to `/sign-in?next=/id/{slug}`.
 2. `<main id="page" data-slug data-api data-sitekey data-first data-visibility>`.
@@ -366,7 +370,8 @@ Sitemap: https://chatsoon.app/sitemap.xml
 ### 3.6 Policy and UI text
 
 **Stage C** (legal.json; bump the privacy `updated` date):
-- **Privacy › Your public profile, new paragraph:** "When you share your profile link in apps such as LinkedIn, WhatsApp, Slack or iMessage, the app can show a preview with your name, headline and photo. Your phone and messaging details are never included in link previews."
+- **Privacy › Your public profile, new paragraph:** "When you share your profile link in apps such as LinkedIn, WhatsApp, Slack, X or iMessage, the app shows a link preview made from your public profile: an image with your name, photo, role, company and headline, and the same details as text. Your phone, WhatsApp and Signal details are never included in link previews. When you change your profile, new previews show the change, but apps that already made a preview may keep showing their copy for a while, and we can't remove copies they've made."
+- **Retention and deletion:** add "and the link preview images made from your profile" after "including profile and card photos".
 
 **Stage D** (legal.json; bump the privacy and terms dates):
 
@@ -491,6 +496,8 @@ WPs run in order: B1, then B2, then B3.
 ### Stage C: server-rendered profile page (all profiles stay noindex)
 
 **Expected** on `/id/peter-bui-5ec50167`: performance about 65 → 100, with LCP (the headline text) about 1.0–1.3 s, TBT about 0 and CLS 0. Accessibility 100, best practices 100, SEO 66 (noindex by design until Stage D), agentic 100. Link previews show name, headline and photo.
+
+**OG note (from issue #5):** C1 (`apps/api/src/pages.ts`), C2 (`packages/shared/src/profile-page.ts`) and C5 (`apps/web/functions/` and `apps/web/src/server/`) now exist and follow their own plans. The API transport for profile metadata uses the §3.1 fallback (HTTP routes with a shared secret) until a spike proves that Pages can bind a named entrypoint; the tag builder, DTO and image route remain as specified.
 
 WP order: C1 and C2 first; then C3, C4 and C5 in parallel; C6 at any point.
 

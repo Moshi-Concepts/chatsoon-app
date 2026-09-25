@@ -9,6 +9,7 @@ reminders and similar come later. Do not add them.
 - `apps/mobile`: Expo SDK 57, expo-router, routes in `src/app`. UI kit in `src/components/ui`, tokens in `src/constants/theme.ts`.
 - `packages/shared`: API types (`types.ts`), zod input schemas (`schemas.ts`), constants, parsers. Both apps import `@chatsoon/shared`.
 - `apps/web`: Cloudflare Pages project (`@chatsoon/web`) that builds and deploys the public pages — home, `/privacy`, `/terms`, `/support` today, `/id/:slug` from Stage C. Renderer in `src/render`, build script in `scripts/build.ts`; import `@chatsoon/shared/src/<module>` directly here, never the index (it pulls in zod). See `docs/public-pages-plan.md`.
+- `apps/og`: Cloudflare Worker that renders personalised link preview cards (`chatsoon-og`). Satori 0.32.0 with resvg-wasm, fonts from Fontsource, a static plate image. No routes or bindings; the API calls it via RPC. See `docs/og-plan.md`.
 
 ## Rules
 - Every private query is scoped by `user_id`. Client-sent R2 keys must pass `ownsKey(userId, key)`.
@@ -25,6 +26,7 @@ reminders and similar come later. Do not add them.
 - Camera permission text is exactly: "Used to scan QR codes and photograph business cards". Never request photo library permission.
 
 ## Commands
-- Typecheck: `pnpm -r typecheck`. Tests: `pnpm --filter @chatsoon/api test`, `pnpm --filter @chatsoon/shared test`, `pnpm --filter @chatsoon/web test`.
+- Typecheck: `pnpm -r typecheck`. Tests: `pnpm --filter @chatsoon/api test`, `pnpm --filter @chatsoon/shared test`, `pnpm --filter @chatsoon/web test`, `pnpm --filter @chatsoon/og test`.
 - New migration: edit `apps/api/src/db/schema.ts`, then `pnpm --filter @chatsoon/api db:generate`.
 - Web build: `pnpm build:web` (writes `apps/web/dist`); deploy with `pnpm deploy:web` (see DEPLOY.md).
+- OG Worker: deploy with `pnpm deploy:og` (see DEPLOY.md).
