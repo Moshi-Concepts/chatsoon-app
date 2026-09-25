@@ -17,7 +17,7 @@ import { gzipSync } from 'node:zlib';
 import { build as esbuildBuild } from 'esbuild';
 import QRCode from 'qrcode';
 
-import { API_ORIGIN, WEB_ORIGIN } from '@chatsoon/shared/src/constants';
+import { API_ORIGIN } from '@chatsoon/shared/src/constants';
 
 import { renderHome, type LandingContent } from '../src/render/home';
 import { LEGAL_KEYS, renderLegal, type LegalDoc, type LegalKey } from '../src/render/legal';
@@ -99,7 +99,7 @@ async function writeFileLogged(file: string, contents: string): Promise<void> {
 async function buildHome(): Promise<void> {
   const landing = JSON.parse(await readFile(path.join(mobileContent, 'landing.json'), 'utf8')) as LandingContent;
   // margin:0 because home.ts's phone mock already pads the code inside its own .qr-tile wrapper.
-  const qrSvg = await QRCode.toString(WEB_ORIGIN, { type: 'svg', margin: 0 });
+  const qrSvg = await QRCode.toString(landing.mock.qrUrl, { type: 'svg', margin: 0 });
   const html = renderHome(landing, { qrSvg });
   const gzipped = gzipSync(Buffer.from(html, 'utf8')).byteLength;
   if (gzipped > HOME_GZIP_BUDGET) {

@@ -76,3 +76,7 @@
 /review-qr.png
   X-Robots-Tag: noindex
   Cache-Control: public, max-age=3600
+
+# Small static images for the home page (not content-hashed, so a day rather than forever).
+/img/*
+  Cache-Control: public, max-age=86400

@@ -36,6 +36,10 @@ export interface LandingContent {
     qrName: string;
     qrRole: string;
     qrSlug: string;
+    /** What the mock QR encodes: a real profile, so scanning the home page opens it (#9). */
+    qrUrl: string;
+    /** Site-relative photo for the mock avatar; initials when absent. */
+    qrPhoto?: string;
     contactName: string;
     contactRole: string;
     newBadge: string;
@@ -125,7 +129,7 @@ function heroVisual(mock: LandingContent['mock'], qrSvg: string): string {
 <div class="phone">
 <div class="phone-notch"></div>
 <p class="text-caption-strong">${escapeHtml(mock.qrScreenLabel)}</p>
-${avatar(mock.qrName, 60)}
+${mock.qrPhoto ? `<img class="avatar" src="${escapeHtml(mock.qrPhoto)}" width="60" height="60" alt="" decoding="async" style="object-fit:cover">` : avatar(mock.qrName, 60)}
 <p class="text-subheading">${escapeHtml(mock.qrName)}</p>
 <p class="text-caption">${escapeHtml(mock.qrRole)}</p>
 <div class="qr-tile">${qrSvg}</div>

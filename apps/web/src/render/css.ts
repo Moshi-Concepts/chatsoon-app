@@ -143,7 +143,8 @@ function homeCss(): string {
 .qr-tile svg{display:block;width:${QR_SIZE}px;height:${QR_SIZE}px}
 .contact-card{position:relative;width:260px;margin-top:-${Spacing.four}px;margin-left:-${Spacing.four}px;border-radius:${Radius.lg}px;border:1px solid var(--border);background:var(--surface);box-shadow:0 28px 60px -28px var(--overlay);padding:${Spacing.four}px;display:flex;flex-direction:column;gap:${Spacing.three}px}
 /* Like the live page: the card hangs off the phone's lower-left, clear of the QR code. */
-@media (min-width:${MEDIUM}px){.contact-card{position:absolute;left:calc(50% - ${PHONE_WIDTH / 2 + 100}px);bottom:-${Spacing.six}px;margin:0}}
+/* Low enough to overlap only the phone's footer, never the QR: the mock QR is a real, scannable profile link (#9). */
+@media (min-width:${MEDIUM}px){.contact-card{position:absolute;left:calc(50% - ${PHONE_WIDTH / 2 + 100}px);bottom:-${Spacing.seven * 2 + Spacing.six}px;margin:0}.hero-visual{margin-bottom:${Spacing.seven + Spacing.six}px}}
 .contact-head{display:flex;align-items:center;gap:${Spacing.three}px}
 .badge-success{padding:2px ${Spacing.two}px;border-radius:${Radius.pill}px;background:var(--success-soft);color:var(--success-text);font-size:12px;font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:${Spacing.two}px}

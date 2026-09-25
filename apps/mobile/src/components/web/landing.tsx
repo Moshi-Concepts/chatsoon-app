@@ -111,7 +111,7 @@ function HeroVisual() {
         <Text variant="captionStrong" color="textSecondary">
           {MOCK.qrScreenLabel}
         </Text>
-        <Avatar name={MOCK.qrName} size={60} />
+        <Avatar name={MOCK.qrName} uri={`${WEB_ORIGIN}${MOCK.qrPhoto}`} size={60} />
         <View style={styles.phoneName}>
           <Text variant="subheading">{MOCK.qrName}</Text>
           <Text variant="caption" color="textSecondary">
@@ -119,7 +119,7 @@ function HeroVisual() {
           </Text>
         </View>
         <View style={[styles.qrTile, { backgroundColor: qr.surface, borderColor: theme.border }]}>
-          <QRCode value={WEB_ORIGIN} size={148} color={qr.text} backgroundColor={qr.surface} />
+          <QRCode value={MOCK.qrUrl} size={148} color={qr.text} backgroundColor={qr.surface} />
         </View>
         <Text variant="small" color="textTertiary">
           {MOCK.qrSlug}
