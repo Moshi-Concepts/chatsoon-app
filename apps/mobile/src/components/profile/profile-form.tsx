@@ -200,6 +200,7 @@ type LinkFieldConfig = {
   maxLength: number;
   keyboardType: TextInputProps['keyboardType'];
   autoComplete?: TextInputProps['autoComplete'];
+  hint?: string;
 };
 
 const LINK_FIELDS: Record<LinkKey, LinkFieldConfig> = {
@@ -210,6 +211,14 @@ const LINK_FIELDS: Record<LinkKey, LinkFieldConfig> = {
     placeholder: 'username',
     maxLength: 200,
     keyboardType: 'default',
+  },
+  discord: {
+    label: 'Discord',
+    icon: 'logo-discord',
+    placeholder: 'yourusername',
+    maxLength: 100,
+    keyboardType: 'default',
+    hint: 'Your Discord username, or user ID',
   },
   linkedin: {
     label: 'LinkedIn',
@@ -402,6 +411,7 @@ export function ProfileFields({
                   label={field.label}
                   icon={field.icon}
                   prefix={prefix}
+                  hint={field.hint}
                   placeholder={field.placeholder}
                   value={values.links[key]}
                   onChangeText={(v) => setLink(key, v)}

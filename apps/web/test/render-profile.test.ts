@@ -261,6 +261,37 @@ describe('renderProfile', () => {
     });
   });
 
+  describe('Discord link (issue #21)', () => {
+    it('renders a copy chip for a username, with the username as the visible label', () => {
+      const html = renderProfile({ ...BASE, links: { ...BASE.links, discord: 'peterbui' } }, ASSETS);
+      expect(html).toContain('<button type="button" class="chip" data-copy="peterbui"');
+      expect(html).toContain('aria-label="Copy Discord username peterbui"');
+      expect(html).toContain('<span>peterbui</span>');
+      expect(html).not.toContain('discord.com');
+    });
+
+    it('renders a normal link for a numeric id, with rel="me noopener noreferrer"', () => {
+      const html = renderProfile({ ...BASE, links: { ...BASE.links, discord: '123456789012345678' } }, ASSETS);
+      expect(html).toContain(
+        'href="https://discord.com/users/123456789012345678" target="_blank" rel="me noopener noreferrer"',
+      );
+      expect(html).toContain('<span>Discord</span>');
+      expect(html).not.toContain('data-copy');
+    });
+
+    it('renders neither a link nor a copy chip for a server invite', () => {
+      const html = renderProfile({ ...BASE, links: { ...BASE.links, discord: 'https://discord.gg/abc123' } }, ASSETS);
+      expect(html).not.toContain('data-copy');
+      expect(html).not.toContain('discord.gg');
+    });
+
+    it('omits Discord entirely when there is no value', () => {
+      const html = renderProfile({ ...BASE, links: { ...BASE.links, discord: undefined } }, ASSETS);
+      expect(html).not.toContain('data-copy');
+      expect(html).not.toContain('id="icon-logo-discord"');
+    });
+  });
+
   it('omits the booking section entirely with no booking links', () => {
     const html = renderProfile({ ...BASE, bookingLinks: [] }, ASSETS);
     expect(html).not.toContain('id="booking"');

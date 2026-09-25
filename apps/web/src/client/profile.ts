@@ -9,6 +9,7 @@
 
 import { initBooking } from './booking';
 import { initConnect } from './connect';
+import { initCopy } from './copy';
 import { initReport } from './report';
 import { initReveal } from './reveal';
 
@@ -38,6 +39,7 @@ function main(): void {
   initBooking({ first: config.first });
   initReport({ api: config.api, slug: config.slug, first: config.first });
   if (config.visibility === 'public') initReveal({ api: config.api, slug: config.slug });
+  initCopy();
 }
 
 // Guarded so this module can be imported under Node (client-profile.test.ts imports `readConfig`)

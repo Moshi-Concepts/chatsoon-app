@@ -61,6 +61,21 @@ describe('buildVCard', () => {
     );
   });
 
+  it('writes X-SOCIALPROFILE;TYPE=discord as a URL for a numeric id, and as text for a username or discriminator', () => {
+    const withId = buildVCard({ ...peter, links: { discord: '123456789012345678' } });
+    expect(withId).toContain('X-SOCIALPROFILE;TYPE=discord:https://discord.com/users/123456789012345678');
+
+    const withUsername = buildVCard({ ...peter, links: { discord: 'peterbui' } });
+    expect(withUsername).toContain('X-SOCIALPROFILE;TYPE=discord:peterbui');
+
+    const withDiscriminator = buildVCard({ ...peter, links: { discord: 'PeterBui#1234' } });
+    expect(withDiscriminator).toContain('X-SOCIALPROFILE;TYPE=discord:PeterBui#1234');
+
+    // A server invite is never written - it isn't a personal profile.
+    const withInvite = buildVCard({ ...peter, links: { discord: 'https://discord.gg/abc123' } });
+    expect(withInvite).not.toMatch(/discord/i);
+  });
+
   it('writes only the name and profile URL for a minimal profile', () => {
     expect(buildVCard({ displayName: 'Alex Rivera', profileUrl: profileUrl('alex-rivera-demo') })).toBe(
       crlf(

@@ -24,6 +24,11 @@ sides must follow this file. Change it first if the contract changes.
 - **Text:** `<h1>` with the name, then the headline and the role line as text.
 - **Links:** `<ul class="links">`. Each item is `<a href target="_blank" rel="me noopener noreferrer">`, containing an
   inline SVG icon, the visible label, and `<span class="sr-only">(opens in a new tab)</span>`.
+  - **Discord (issue #21):** a numeric user id renders like every other link above. A username or legacy
+    discriminator has no URL at all, so it renders `<li><button type="button" class="chip" data-copy="<username>"
+    aria-label="Copy Discord username <username>">`, containing the icon and the username as visible text. The
+    island (`copy.ts`) copies `data-copy` to the clipboard on tap, swaps the label `<span>` (and the aria-label) to
+    "Copied" for about 1.5s, and falls back to selecting the label text when the Clipboard API is unavailable.
 - **Phone and messaging chips:** `<div id="contact-chips" data-channels="phone whatsapp signal">`, listing the keys
   that exist. It's omitted when there are none.
   - `connections` visibility: each chip is `<span class="chip locked">` with a lock icon and the label (Mobile,

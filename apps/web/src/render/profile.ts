@@ -11,7 +11,7 @@
 import { APP_NAME, COPYRIGHT, SUPPORT_EMAIL, TAGLINE, WEB_ORIGIN } from '@chatsoon/shared/src/constants';
 import { Colors } from '@chatsoon/shared/src/design';
 import { bookingEmbedUrl, bookingOpenUrl, bookingProviderName } from '@chatsoon/shared/src/booking';
-import { toLinkUrl } from '@chatsoon/shared/src/links';
+import { discordDisplay, toLinkUrl } from '@chatsoon/shared/src/links';
 import { CONTACT_LABELS } from '@chatsoon/shared/src/profile-contact';
 import { CONNECT_FORM_MAX, firstName, roleLine } from '@chatsoon/shared/src/profile-page';
 import type { BookingLink, LinkKey, PageProfile, ProfileContactKey } from '@chatsoon/shared/src/types';
@@ -84,6 +84,7 @@ const PROFILE_LINKS: { key: LinkKey; label: string; icon: IconName }[] = [
   { key: 'linkedin', label: 'LinkedIn', icon: 'logo-linkedin' },
   { key: 'x', label: 'X', icon: 'logo-x' },
   { key: 'telegram', label: 'Telegram', icon: 'paper-plane-outline' },
+  { key: 'discord', label: 'Discord', icon: 'logo-discord' },
   { key: 'youtube', label: 'YouTube', icon: 'logo-youtube' },
   { key: 'website', label: 'Website', icon: 'globe-outline' },
 ];
@@ -102,8 +103,29 @@ function avatarBlock(p: PageProfile): string {
   return `<div class="avatar initials" aria-hidden="true">${escapeHtml(initials(p.displayName))}</div>`;
 }
 
+/**
+ * Discord (issue #21) is the one PROFILE_LINKS entry that isn't always a plain external link: a
+ * numeric id renders the usual `<a target="_blank">`, but a username or legacy discriminator has no
+ * URL at all (`toLinkUrl` returns null for it) - it renders a `<button data-copy>` instead, which the
+ * client island (initCopy, apps/web/src/client/copy.ts) wires to copy the username to the clipboard.
+ */
+function discordLinkItems(value: string | undefined, iconName: IconName): string[] {
+  const url = toLinkUrl('discord', value);
+  if (url) {
+    return [
+      `<li><a href="${escapeHtml(url)}" target="_blank" rel="me noopener noreferrer">${icon(iconName, 16)}<span>Discord</span><span class="sr-only"> (opens in a new tab)</span></a></li>`,
+    ];
+  }
+  const username = discordDisplay(value);
+  if (!username || username === 'Discord profile') return [];
+  return [
+    `<li><button type="button" class="chip" data-copy="${escapeHtml(username)}" aria-label="Copy Discord username ${escapeHtml(username)}">${icon(iconName, 16)}<span>${escapeHtml(username)}</span></button></li>`,
+  ];
+}
+
 function linksBlock(p: PageProfile): string {
   const items = PROFILE_LINKS.flatMap((l) => {
+    if (l.key === 'discord') return discordLinkItems(p.links.discord, l.icon);
     const url = toLinkUrl(l.key, p.links[l.key]);
     if (!url) return [];
     const label = l.key === 'website' ? (hostLabel(url) ?? l.label) : l.label;
@@ -240,7 +262,12 @@ function reportBlock(slug: string): string {
 function iconNames(p: PageProfile): IconName[] {
   const names = new Set<IconName>(['download-outline', 'flag-outline', 'qr-code-outline']);
   if (roleLine(p.role, p.company)) names.add('briefcase-outline');
-  for (const l of PROFILE_LINKS) if (toLinkUrl(l.key, p.links[l.key])) names.add(l.icon);
+  for (const l of PROFILE_LINKS) {
+    // Discord's icon shows for either rendering (link chip or copy chip), unlike every other kind,
+    // which only shows when toLinkUrl actually produces a URL.
+    const shown = l.key === 'discord' ? discordDisplay(p.links.discord) !== null : toLinkUrl(l.key, p.links[l.key]);
+    if (shown) names.add(l.icon);
+  }
   if (p.contactChannels.length) {
     if (p.contactVisibility === 'connections') names.add('lock-closed-outline');
     else for (const key of p.contactChannels) names.add(CHANNEL_ICON[key]);

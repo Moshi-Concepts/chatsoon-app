@@ -1,7 +1,7 @@
 // API contract shared by the Worker (apps/api) and the app (apps/mobile).
 // JSON is camelCase on the wire; the database uses snake_case.
 
-export type LinkKey = 'x' | 'telegram' | 'linkedin' | 'website' | 'youtube';
+export type LinkKey = 'x' | 'telegram' | 'discord' | 'linkedin' | 'website' | 'youtube';
 
 /** Profile links. Values are stored as the user typed them, normalised to full URLs by `toLinkUrl`. */
 export type ProfileLinks = Partial<Record<LinkKey, string>>;

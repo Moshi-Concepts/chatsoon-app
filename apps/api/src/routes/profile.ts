@@ -1,5 +1,9 @@
 import {
   canonicalLinkValue,
+  isDiscordDiscriminator,
+  isDiscordId,
+  isDiscordInvite,
+  isDiscordUsername,
   LINK_KEYS,
   makeSlug,
   profileInputSchema,
@@ -29,10 +33,20 @@ const SLUG_ATTEMPTS = 5;
 const LINK_HINTS: Record<LinkKey, string> = {
   x: 'Check your X handle. Enter it like @yourhandle.',
   telegram: 'Check your Telegram username. Enter it like @username.',
+  discord: 'Add your Discord username (e.g. peterbui) or user ID',
   linkedin: 'Check your LinkedIn link. Enter it like linkedin.com/in/your-name.',
   website: 'Check your website. Enter it like yourcompany.com.',
   youtube: 'Check your YouTube link. Enter it like youtube.com/@yourchannel.',
 };
+
+/** Discord invites (discord.gg/..., discord.com/invite/...) get their own hint - they aren't a "bad
+ * format", they're the wrong thing entirely (a server, not a person). */
+const DISCORD_INVITE_HINT = 'Add your Discord username, not a server invite';
+
+/** True when a (canonicalised) Discord link value is one of the three accepted forms. */
+function isValidDiscordLink(value: string): boolean {
+  return isDiscordUsername(value) || isDiscordId(value) || isDiscordDiscriminator(value);
+}
 
 type ProfileValues = Pick<
   ProfileRow,
@@ -88,7 +102,15 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
   }
   for (const key of LINK_KEYS) {
     const link = input.links?.[key];
-    if (link && !toLinkUrl(key, link)) throw badRequest(LINK_HINTS[key]);
+    if (!link) continue;
+    // Discord validates against its own username/id/discriminator rules, not toLinkUrl: a username is
+    // a perfectly valid link value with no URL at all (toLinkUrl('discord', ...) returns null for it).
+    if (key === 'discord') {
+      if (isDiscordInvite(link)) throw badRequest(DISCORD_INVITE_HINT);
+      if (!isValidDiscordLink(link)) throw badRequest(LINK_HINTS.discord);
+      continue;
+    }
+    if (!toLinkUrl(key, link)) throw badRequest(LINK_HINTS[key]);
   }
 
   const db = getDb(c.env);

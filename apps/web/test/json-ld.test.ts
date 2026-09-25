@@ -108,6 +108,18 @@ describe('profileJsonLd', () => {
     expect(websiteUrl).toContain('/about');
   });
 
+  it('includes discord in sameAs only for the numeric-id form, never for a username', () => {
+    const withUsername = profileJsonLd({ ...BASE, links: { ...BASE.links, discord: 'peterbui' } }, ORIGIN);
+    const usernameEntity = withUsername.mainEntity as Record<string, unknown>;
+    expect(usernameEntity.sameAs as string[]).toHaveLength(5);
+    expect((usernameEntity.sameAs as string[]).join(',')).not.toContain('discord');
+
+    const withId = profileJsonLd({ ...BASE, links: { ...BASE.links, discord: '123456789012345678' } }, ORIGIN);
+    const idEntity = withId.mainEntity as Record<string, unknown>;
+    expect(idEntity.sameAs as string[]).toHaveLength(6);
+    expect(idEntity.sameAs).toContain('https://discord.com/users/123456789012345678');
+  });
+
   it('never includes telephone, contactPoint, email, tel:, wa.me, signal.me, a vCard or a booking URL, even with contactChannels set', () => {
     const withExtra = {
       ...BASE,

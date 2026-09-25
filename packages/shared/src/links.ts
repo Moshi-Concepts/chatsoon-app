@@ -8,11 +8,12 @@ import type { LinkKey } from './types';
 export type LinkTarget = LinkKey | 'email' | 'phone';
 
 /** Profile link keys in display order. */
-export const LINK_KEYS: readonly LinkKey[] = ['x', 'telegram', 'linkedin', 'website', 'youtube'];
+export const LINK_KEYS: readonly LinkKey[] = ['x', 'telegram', 'discord', 'linkedin', 'website', 'youtube'];
 
 const LINK_LABELS: Record<LinkTarget, string> = {
   x: 'X',
   telegram: 'Telegram',
+  discord: 'Discord',
   linkedin: 'LinkedIn',
   website: 'Website',
   youtube: 'YouTube',
@@ -94,6 +95,50 @@ export function isXHandle(value: string): boolean {
 /** Telegram username rules: 4 to 32 characters, starts with a letter, then letters, digits or underscores. */
 export function isTelegramHandle(value: string): boolean {
   return /^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(value);
+}
+
+// ---- Discord (issue #21) ----
+
+const DISCORD_USERNAME_CHARS = /^[a-z0-9_.]{2,32}$/i;
+const DISCORD_ID = /^\d{17,20}$/;
+/** Legacy discriminator ('name#1234'): the name half is whatever the old rules allowed (including
+ * spaces), so this is deliberately loose - only '#', '@' and newlines are excluded from it. */
+const DISCORD_DISCRIMINATOR = /^[^\r\n#@]{1,32}#\d{4}$/;
+const DISCORD_USER_URL =
+  /^(?:https?:\/\/)?(?:(?:www|ptb|canary)\.)?discord(?:app)?\.com\/users\/(\d{17,20})\/*(?:[?#].*)?$/i;
+const DISCORD_INVITE = /^(?:https?:\/\/)?(?:(?:www|ptb|canary)\.)?(?:discord\.gg\/|discord(?:app)?\.com\/invite\/)/i;
+
+/**
+ * Discord's current unique-username rules: 2 to 32 characters, lowercase letters, digits, '_' and '.',
+ * never starting or ending with a dot and never two dots in a row. Case-insensitive (storage lowercases it).
+ */
+export function isDiscordUsername(value: string): boolean {
+  return (
+    DISCORD_USERNAME_CHARS.test(value) &&
+    !value.startsWith('.') &&
+    !value.endsWith('.') &&
+    !value.includes('..')
+  );
+}
+
+/** A Discord snowflake user id: 17 to 20 digits. */
+export function isDiscordId(value: string): boolean {
+  return DISCORD_ID.test(value);
+}
+
+/** A legacy 'name#1234' discriminator. Accepted and stored exactly as typed - it has no canonical form. */
+export function isDiscordDiscriminator(value: string): boolean {
+  return DISCORD_DISCRIMINATOR.test(value);
+}
+
+/** A discord.gg or discord.com/invite server invite link - never a personal profile. */
+export function isDiscordInvite(value: string): boolean {
+  return DISCORD_INVITE.test(cleanText(value));
+}
+
+/** The numeric id out of 'https://discord.com/users/<id>' (also discordapp.com, www/ptb/canary), or null. */
+export function discordIdFromUrl(value: string): string | null {
+  return DISCORD_USER_URL.exec(cleanText(value))?.[1] ?? null;
 }
 
 // ---- Handles ----
@@ -429,6 +474,13 @@ export function toLinkUrl(key: LinkKey | 'email' | 'phone', value: string | null
       if (handleNetwork(value) === 'x' || TELEGRAM_RESERVED.has(handle.toLowerCase())) return null;
       return isTelegramHandle(handle) ? `https://t.me/${handle}` : null;
     }
+    case 'discord': {
+      // A username or legacy discriminator has no profile URL at all - only a numeric id does.
+      const v = cleanText(value);
+      if (isDiscordInvite(v)) return null;
+      const id = discordIdFromUrl(v) ?? (isDiscordId(v) ? v : null);
+      return id ? `https://discord.com/users/${id}` : null;
+    }
     case 'linkedin':
       return toLinkedInUrl(value);
     case 'website':
@@ -464,9 +516,28 @@ export function displayLink(key: LinkKey | 'email' | 'phone', value: string | nu
   }
 }
 
+/**
+ * Display label for a stored Discord value: the username or legacy discriminator itself, or
+ * 'Discord profile' for a numeric id (or a pasted profile URL). Kept separate from `displayLink`,
+ * whose contract is "null whenever toLinkUrl is null" - wrong for Discord, where a username has
+ * nothing to link to but still has a name worth showing. Null only for a value none of the three
+ * accepted forms (or an invite link) matches.
+ */
+export function discordDisplay(value: string | null | undefined): string | null {
+  const v = cleanText(value ?? '');
+  if (!v || isDiscordInvite(v)) return null;
+  if (isDiscordId(v) || discordIdFromUrl(v)) return 'Discord profile';
+  if (isDiscordUsername(v) || isDiscordDiscriminator(v)) return v;
+  return null;
+}
+
 // ---- Editable link fields (issue #18: Luma-style "fixed prefix + handle" inputs) ----
 
-/** Fixed part of the URL shown before the handle in the profile form. Website has no prefix. */
+/**
+ * Fixed part of the URL shown before the handle in the profile form. Website has no prefix, and
+ * neither does Discord: a username isn't part of any URL, so there's nothing fixed to show before it
+ * (the field shows an '@' hint in its placeholder instead - see profile-form.tsx's LINK_FIELDS).
+ */
 export const LINK_PREFIXES: Partial<Record<LinkKey, string>> = {
   x: 'x.com/',
   telegram: 't.me/',
@@ -608,6 +679,12 @@ export function linkFieldValue(key: LinkKey, stored: string | null | undefined):
   } else if (key === 'youtube') {
     const handle = youTubeHandle(v);
     if (handle) return { mode: 'handle', handle };
+  } else if (key === 'discord') {
+    const idFromUrl = discordIdFromUrl(v);
+    if (idFromUrl) return { mode: 'handle', handle: idFromUrl };
+    if (isDiscordId(v)) return { mode: 'handle', handle: v };
+    if (isDiscordUsername(v)) return { mode: 'handle', handle: v.toLowerCase() };
+    if (isDiscordDiscriminator(v)) return { mode: 'handle', handle: v };
   }
   return { mode: 'url', url: v };
 }
@@ -656,6 +733,17 @@ export function canonicalLinkValue(key: LinkKey, input: string): string {
       const handle = youTubeHandle(cleaned);
       const encoded = handle !== null ? encodeNonAscii(handle) : null;
       return encoded ? `https://www.youtube.com/@${encoded}` : cleaned;
+    }
+    case 'discord': {
+      // An invite is kept as typed, uncanonicalised - the API rejects it with its own hint rather than
+      // toLinkUrl's generic one. A URL is reduced to its bare id; a username is lowercased (Discord
+      // usernames are case-insensitive); a legacy discriminator has no canonical form and is kept as
+      // typed, like an invite or any other unrecognised value.
+      if (isDiscordInvite(cleaned)) return cleaned;
+      const idFromUrl = discordIdFromUrl(cleaned);
+      if (idFromUrl) return idFromUrl;
+      if (isDiscordUsername(cleaned)) return cleaned.toLowerCase();
+      return cleaned;
     }
     case 'website':
     default:

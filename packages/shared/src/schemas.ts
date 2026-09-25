@@ -45,6 +45,7 @@ export const linksSchema = z
   .object({
     x: publicText(200),
     telegram: publicText(200),
+    discord: publicText(100),
     linkedin: publicText(300),
     website: publicText(300),
     youtube: publicText(300),

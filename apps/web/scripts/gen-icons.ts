@@ -42,6 +42,7 @@ const PUBLIC_ICON_NAMES = [
   'flag-outline',
   'globe-outline',
   'lock-closed-outline',
+  'logo-discord',
   'logo-google',
   'logo-linkedin',
   'logo-microsoft',

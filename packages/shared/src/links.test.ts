@@ -5,7 +5,12 @@ import {
   LINK_PREFIXES,
   canonicalLinkValue,
   cleanText,
+  discordDisplay,
   displayLink,
+  isDiscordDiscriminator,
+  isDiscordId,
+  isDiscordInvite,
+  isDiscordUsername,
   isEmail,
   isTelegramHandle,
   isXHandle,
@@ -210,6 +215,37 @@ describe('toLinkUrl', () => {
     });
   });
 
+  describe('discord', () => {
+    it.each([
+      ['123456789012345678', 'https://discord.com/users/123456789012345678'],
+      ['12345678901234567', 'https://discord.com/users/12345678901234567'],
+      ['https://discord.com/users/123456789012345678', 'https://discord.com/users/123456789012345678'],
+      ['https://discordapp.com/users/123456789012345678', 'https://discord.com/users/123456789012345678'],
+      ['https://www.discord.com/users/123456789012345678/', 'https://discord.com/users/123456789012345678'],
+      ['https://ptb.discord.com/users/123456789012345678', 'https://discord.com/users/123456789012345678'],
+      ['https://canary.discord.com/users/123456789012345678', 'https://discord.com/users/123456789012345678'],
+    ])('%j -> %j', (value, expected) => {
+      expect(toLinkUrl('discord', value)).toBe(expected);
+    });
+
+    it('is null for a username or legacy discriminator - there is no URL for either', () => {
+      expect(toLinkUrl('discord', 'peterbui')).toBeNull();
+      expect(toLinkUrl('discord', 'peterbui#1234')).toBeNull();
+    });
+
+    it('rejects server invites', () => {
+      expect(toLinkUrl('discord', 'https://discord.gg/abc123')).toBeNull();
+      expect(toLinkUrl('discord', 'discord.gg/abc123')).toBeNull();
+      expect(toLinkUrl('discord', 'https://discord.com/invite/abc123')).toBeNull();
+      expect(toLinkUrl('discord', 'https://discordapp.com/invite/abc123')).toBeNull();
+    });
+
+    it('rejects an id that is too short or too long', () => {
+      expect(toLinkUrl('discord', '1234567890123456')).toBeNull();
+      expect(toLinkUrl('discord', '123456789012345678901')).toBeNull();
+    });
+  });
+
   describe('linkedin', () => {
     it.each([
       ['https://www.linkedin.com/in/peter-bui', 'https://www.linkedin.com/in/peter-bui'],
@@ -354,6 +390,7 @@ describe('linkLabel', () => {
   it('labels every link field', () => {
     expect(linkLabel('x')).toBe('X');
     expect(linkLabel('telegram')).toBe('Telegram');
+    expect(linkLabel('discord')).toBe('Discord');
     expect(linkLabel('linkedin')).toBe('LinkedIn');
     expect(linkLabel('website')).toBe('Website');
     expect(linkLabel('youtube')).toBe('YouTube');
@@ -362,7 +399,7 @@ describe('linkLabel', () => {
   });
 
   it('lists the profile link keys in display order', () => {
-    expect(LINK_KEYS).toEqual(['x', 'telegram', 'linkedin', 'website', 'youtube']);
+    expect(LINK_KEYS).toEqual(['x', 'telegram', 'discord', 'linkedin', 'website', 'youtube']);
   });
 });
 
@@ -501,7 +538,7 @@ describe('cleanText', () => {
 });
 
 describe('LINK_PREFIXES', () => {
-  it('has a fixed prefix for every handle network, and none for website', () => {
+  it('has a fixed prefix for every handle network, and none for website or discord', () => {
     expect(LINK_PREFIXES).toEqual({
       x: 'x.com/',
       telegram: 't.me/',
@@ -509,6 +546,7 @@ describe('LINK_PREFIXES', () => {
       youtube: 'youtube.com/@',
     });
     expect(LINK_PREFIXES.website).toBeUndefined();
+    expect(LINK_PREFIXES.discord).toBeUndefined();
   });
 });
 
@@ -655,6 +693,25 @@ describe('linkFieldValue', () => {
   it('is always url mode for website', () => {
     expect(linkFieldValue('website', 'example.com')).toEqual({ mode: 'url', url: 'example.com' });
   });
+
+  describe('discord', () => {
+    it.each([
+      ['peterbui', 'peterbui'],
+      ['PeterBui', 'peterbui'],
+      ['123456789012345678', '123456789012345678'],
+      ['https://discord.com/users/123456789012345678', '123456789012345678'],
+      ['peterbui#1234', 'peterbui#1234'],
+    ])('%j -> handle %j', (stored, handle) => {
+      expect(linkFieldValue('discord', stored)).toEqual({ mode: 'handle', handle });
+    });
+
+    it('falls back to url mode for a server invite', () => {
+      expect(linkFieldValue('discord', 'https://discord.gg/abc123')).toEqual({
+        mode: 'url',
+        url: 'https://discord.gg/abc123',
+      });
+    });
+  });
 });
 
 describe('canonicalLinkValue', () => {
@@ -758,6 +815,30 @@ describe('canonicalLinkValue', () => {
     });
   });
 
+  describe('discord', () => {
+    it.each([
+      ['peterbui', 'peterbui'],
+      ['@peterbui', 'peterbui'],
+      ['PeterBui', 'peterbui'],
+      ['@PeterBui', 'peterbui'],
+      ['123456789012345678', '123456789012345678'],
+      ['https://discord.com/users/123456789012345678', '123456789012345678'],
+      ['https://discordapp.com/users/123456789012345678', '123456789012345678'],
+      ['https://ptb.discord.com/users/123456789012345678/', '123456789012345678'],
+    ])('%j -> %j', (input, expected) => {
+      expect(canonicalLinkValue('discord', input)).toBe(expected);
+    });
+
+    it('stores a legacy discriminator exactly as typed', () => {
+      expect(canonicalLinkValue('discord', 'PeterBui#1234')).toBe('PeterBui#1234');
+    });
+
+    it('keeps a server invite cleaned but not reduced, so the API can reject it with its own hint', () => {
+      expect(canonicalLinkValue('discord', 'https://discord.gg/abc123')).toBe('https://discord.gg/abc123');
+      expect(canonicalLinkValue('discord', 'discord.gg/abc123')).toBe('discord.gg/abc123');
+    });
+  });
+
   it('produces values toLinkUrl always accepts', () => {
     expect(toLinkUrl('linkedin', canonicalLinkValue('linkedin', 'https://www.linkedin.com/in/x'))).toBe(
       'https://www.linkedin.com/in/x',
@@ -784,5 +865,87 @@ describe('displayLink with canonical values', () => {
     ['telegram', 'name', '@name'],
   ] as const)('%s %j -> %j', (key, value, expected) => {
     expect(displayLink(key, value)).toBe(expected);
+  });
+
+  it('is null for discord - unlike the other kinds, a username has a label but no URL (use discordDisplay)', () => {
+    expect(displayLink('discord', 'peterbui')).toBeNull();
+  });
+});
+
+describe('Discord validators (issue #21)', () => {
+  describe('isDiscordUsername', () => {
+    it.each(['peterbui', 'peter.bui', 'peter_bui', 'pb', 'a'.repeat(32)])('accepts %j', (value) => {
+      expect(isDiscordUsername(value)).toBe(true);
+    });
+
+    it.each([
+      'p',
+      'a'.repeat(33),
+      'Peter Bui',
+      '.peterbui',
+      'peterbui.',
+      'peter..bui',
+      'peter@bui',
+      'peter#1234',
+    ])('rejects %j', (value) => {
+      expect(isDiscordUsername(value)).toBe(false);
+    });
+  });
+
+  describe('isDiscordId', () => {
+    it.each(['12345678901234567', '1234567890123456789', '12345678901234567890'])('accepts %j', (value) => {
+      expect(isDiscordId(value)).toBe(true);
+    });
+
+    it.each(['1234567890123456', '123456789012345678901', 'abcdefghijklmnopq', ''])('rejects %j', (value) => {
+      expect(isDiscordId(value)).toBe(false);
+    });
+  });
+
+  describe('isDiscordDiscriminator', () => {
+    it.each(['peterbui#1234', 'Peter Bui#0001'])('accepts %j', (value) => {
+      expect(isDiscordDiscriminator(value)).toBe(true);
+    });
+
+    it.each(['peterbui', 'peterbui#123', 'peterbui#12345', 'peterbui#abcd'])('rejects %j', (value) => {
+      expect(isDiscordDiscriminator(value)).toBe(false);
+    });
+  });
+
+  describe('isDiscordInvite', () => {
+    it.each([
+      'https://discord.gg/abc123',
+      'discord.gg/abc123',
+      'https://www.discord.gg/abc123',
+      'https://discord.com/invite/abc123',
+      'https://discordapp.com/invite/abc123',
+      'https://ptb.discord.com/invite/abc123',
+    ])('flags %j', (value) => {
+      expect(isDiscordInvite(value)).toBe(true);
+    });
+
+    it.each(['peterbui', '123456789012345678', 'https://discord.com/users/123456789012345678'])(
+      'does not flag %j',
+      (value) => {
+        expect(isDiscordInvite(value)).toBe(false);
+      },
+    );
+  });
+
+  describe('discordDisplay', () => {
+    it.each([
+      ['peterbui', 'peterbui'],
+      ['PeterBui#1234', 'PeterBui#1234'],
+      ['123456789012345678', 'Discord profile'],
+      ['https://discord.com/users/123456789012345678', 'Discord profile'],
+    ])('%j -> %j', (value, expected) => {
+      expect(discordDisplay(value)).toBe(expected);
+    });
+
+    it('is null for empty input or an invite', () => {
+      expect(discordDisplay('')).toBeNull();
+      expect(discordDisplay(null)).toBeNull();
+      expect(discordDisplay('https://discord.gg/abc123')).toBeNull();
+    });
   });
 });

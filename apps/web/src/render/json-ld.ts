@@ -9,9 +9,11 @@ import { APP_NAME } from '@chatsoon/shared/src/constants';
 import { toLinkUrl } from '@chatsoon/shared/src/links';
 import type { LinkKey, PageProfile } from '@chatsoon/shared/src/types';
 
-/** §3.4's `sameAs` list: exactly these 5 kinds, in this order. Never phone/whatsapp/signal — those
- * aren't LinkKeys and PageProfile never carries their values in the first place. */
-const SAME_AS_KEYS: readonly LinkKey[] = ['linkedin', 'x', 'youtube', 'telegram', 'website'];
+/** §3.4's `sameAs` list: exactly these 6 kinds, in this order. Never phone/whatsapp/signal — those
+ * aren't LinkKeys and PageProfile never carries their values in the first place. Discord only ever
+ * contributes a URL for the numeric-id form (issue #21): `toLinkUrl` already returns null for a
+ * username or legacy discriminator, so those are silently left out here, same as any other kind. */
+const SAME_AS_KEYS: readonly LinkKey[] = ['linkedin', 'x', 'youtube', 'telegram', 'discord', 'website'];
 
 /** Removes every `utm_*` query parameter (case-insensitive), keeping every other parameter and the
  * rest of the URL untouched. Falls back to the raw url on anything `URL` can't parse (never expected
@@ -27,7 +29,7 @@ function stripUtmParams(url: string): string {
   }
 }
 
-/** `sameAs`: only the 5 link kinds above, only when `toLinkUrl` accepts the stored value, with
+/** `sameAs`: only the link kinds above, only when `toLinkUrl` accepts the stored value, with
  * `utm_*` stripped. Never includes phone, WhatsApp, Signal, email, tel:, wa.me or signal.me — none of
  * those are ever read here, and `PageProfile` doesn't carry contact values at all. */
 function sameAs(p: PageProfile): string[] {

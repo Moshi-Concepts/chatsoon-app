@@ -2,6 +2,8 @@ import { parseBookingUrl } from './booking';
 import { APP_NAME, COPYRIGHT } from './constants';
 import {
   cleanText,
+  isDiscordDiscriminator,
+  isDiscordUsername,
   isEmail,
   isTelegramHandle,
   isXHandle,
@@ -141,6 +143,15 @@ export function buildVCard(p: VCardProfile): string {
   if (x) lines.push(`X-SOCIALPROFILE;TYPE=twitter:${x}`);
   const telegram = toLinkUrl('telegram', links.telegram);
   if (telegram) lines.push(`X-SOCIALPROFILE;TYPE=telegram:${telegram}`);
+  // A Discord id writes a real URL, like the other socials. A username or legacy discriminator has no
+  // URL (toLinkUrl returns null for them), so it's written as escaped TEXT instead of a bare URI.
+  const discordUrl = toLinkUrl('discord', links.discord);
+  const discordRaw = cleanText(links.discord ?? '');
+  if (discordUrl) {
+    lines.push(`X-SOCIALPROFILE;TYPE=discord:${discordUrl}`);
+  } else if (discordRaw && (isDiscordUsername(discordRaw) || isDiscordDiscriminator(discordRaw))) {
+    lines.push(`X-SOCIALPROFILE;TYPE=discord:${escapeText(discordRaw)}`);
+  }
   const linkedin = toLinkUrl('linkedin', links.linkedin);
   if (linkedin) lines.push(`X-SOCIALPROFILE;TYPE=linkedin:${linkedin}`);
   const youtube = toLinkUrl('youtube', links.youtube);

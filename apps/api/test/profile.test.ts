@@ -286,6 +286,71 @@ describe('PUT /me/profile', () => {
     expect(profile.links?.x).toBe('tiatracked');
   });
 
+  describe('discord (issue #21)', () => {
+    it('stores a username lowercased', async () => {
+      const { token, slug } = await signUpWithProfile('discord-username@example.com', 'Dee User');
+      const profile = await saveProfile(token, { displayName: 'Dee User', links: { discord: 'PeterBui' } });
+      expect(profile.links?.discord).toBe('peterbui');
+
+      const pub = (await (await call(`/id/${slug}`)).json()) as { links?: { discord?: string } };
+      expect(pub.links?.discord).toBe('peterbui');
+    });
+
+    it('strips a leading @ from a username', async () => {
+      const { token } = await signIn('discord-at@example.com');
+      const profile = await saveProfile(token, { displayName: 'Dee At', links: { discord: '@peterbui' } });
+      expect(profile.links?.discord).toBe('peterbui');
+    });
+
+    it('accepts a numeric user id', async () => {
+      const { token } = await signIn('discord-id@example.com');
+      const profile = await saveProfile(token, {
+        displayName: 'Dee Id',
+        links: { discord: '123456789012345678' },
+      });
+      expect(profile.links?.discord).toBe('123456789012345678');
+    });
+
+    it('reduces a pasted profile URL (discord.com or discordapp.com) to the bare id', async () => {
+      const { token } = await signIn('discord-url@example.com');
+      const profile = await saveProfile(token, {
+        displayName: 'Dee Url',
+        links: { discord: 'https://discordapp.com/users/123456789012345678' },
+      });
+      expect(profile.links?.discord).toBe('123456789012345678');
+    });
+
+    it('accepts a legacy name#1234 discriminator, stored as typed', async () => {
+      const { token } = await signIn('discord-discriminator@example.com');
+      const profile = await saveProfile(token, {
+        displayName: 'Dee Legacy',
+        links: { discord: 'PeterBui#1234' },
+      });
+      expect(profile.links?.discord).toBe('PeterBui#1234');
+    });
+
+    it('rejects a server invite with its own hint, and saves nothing', async () => {
+      const { token } = await signUpWithProfile('discord-invite@example.com', 'Dee Invite');
+      for (const invite of ['https://discord.gg/abc123', 'https://discord.com/invite/abc123']) {
+        const res = await putProfile(token, { displayName: 'Dee Invite', links: { discord: invite } });
+        expect(res.status, invite).toBe(400);
+        const body = (await res.json()) as ApiErrorBody;
+        expect(body.error.code).toBe('bad_request');
+        expect(body.error.message).toBe('Add your Discord username, not a server invite');
+      }
+      expect((await getMe(token)).profile?.links).toEqual({});
+    });
+
+    it('rejects a value that is not a username, id or discriminator', async () => {
+      const { token } = await signIn('discord-bad@example.com');
+      const res = await putProfile(token, { displayName: 'Dee Bad', links: { discord: 'not a discord handle!' } });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as ApiErrorBody;
+      expect(body.error.code).toBe('bad_request');
+      expect(body.error.message).toBe('Add your Discord username (e.g. peterbui) or user ID');
+    });
+  });
+
   it('retries with a new suffix when the slug is taken', async () => {
     const first = await signIn('collide-1@example.com');
     suffixes.push('aaaa');
