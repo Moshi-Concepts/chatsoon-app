@@ -110,10 +110,15 @@ export const profiles = sqliteTable(
     searchVisibleAt: integer('search_visible_at', { mode: 'timestamp_ms' }),
     /** Ops kill switch, set only via `wrangler d1 execute`. Never exposed through the API. */
     searchBlocked: integer('search_blocked', { mode: 'boolean' }).notNull().default(false),
+    /** 8 chars, Crockford base32 (no 0/O/1/I), uppercase. Created lazily on first GET /me/referral. Never changes. */
+    referralCode: text('referral_code'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('profiles_search_idx').on(t.searchVisible, t.slug)],
+  (t) => [
+    index('profiles_search_idx').on(t.searchVisible, t.slug),
+    uniqueIndex('profiles_referral_code_idx').on(t.referralCode),
+  ],
 );
 
 export const events = sqliteTable('events', {
@@ -359,6 +364,134 @@ export const socialChecks = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.provider] })],
 );
 
+// ---------------------------------------------------------------------------
+// Referrals (issue #11, PR 2, docs/referrals.md "Data"). Every private row carries a user id and
+// every query is scoped by it, per CLAUDE.md.
+// ---------------------------------------------------------------------------
+
+export const referrals = sqliteTable(
+  'referrals',
+  {
+    id: text('id').primaryKey(),
+    referrerId: text('referrer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    referredUserId: text('referred_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'pending' | 'qualified' | 'rejected' | 'flagged' | 'void' */
+    status: text('status').notNull().default('pending'),
+    /** 'device_dup' | 'account_gone' | 'never_qualified' | 'ops_flag' | null */
+    reason: text('reason'),
+    /** 'link' | 'typed' | 'web' as reported by the client. Informational. */
+    source: text('source').notNull().default('typed'),
+    deviceId: text('device_id'),
+    ipHash: text('ip_hash'),
+    uaHash: text('ua_hash'),
+    qualifiesAfter: integer('qualifies_after', { mode: 'timestamp_ms' }),
+    qualifiedAt: integer('qualified_at', { mode: 'timestamp_ms' }),
+    /** Ops only. 'flagged' is only ever set by hand (reason 'ops_flag'); set this to let the row qualify again. */
+    flagClearedAt: integer('flag_cleared_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('referrals_referred_idx').on(t.referredUserId),
+    index('referrals_referrer_status_idx').on(t.referrerId, t.status),
+    index('referrals_qualifies_idx').on(t.status, t.qualifiesAfter),
+    index('referrals_device_idx').on(t.deviceId),
+  ],
+);
+
+export const pointsLedger = sqliteTable(
+  'points_ledger',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    /** PointsEvent */
+    event: text('event').notNull(),
+    /** The row this entry is about (a referral id for 'referral_qualified'/'referral_joined'). */
+    refId: text('ref_id'),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('points_ledger_user_idx').on(t.userId, t.createdAt),
+    uniqueIndex('points_ledger_event_ref_idx').on(t.event, t.refId),
+  ],
+);
+
+/** Permanent account badges. Never deleted except with the account; ops never revoke. */
+export const badges = sqliteTable(
+  'badges',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Badge: 'founder' | 'early_adopter' */
+    badge: text('badge').notNull(),
+    /** Founder number, 1..REFERRAL_FOUNDER_CAP. Null for other badges. */
+    seq: integer('seq'),
+    awardedAt: integer('awarded_at', { mode: 'timestamp_ms' }).notNull().default(now),
+    /** What earned it: the 10th referral's id. */
+    refId: text('ref_id'),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.badge] }), uniqueIndex('badges_badge_seq_idx').on(t.badge, t.seq)],
+);
+
+export const referralInvites = sqliteTable(
+  'referral_invites',
+  {
+    id: text('id').primaryKey(),
+    referrerId: text('referrer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Always lowercased. */
+    email: text('email').notNull(),
+    sentAt: integer('sent_at', { mode: 'timestamp_ms' }).notNull().default(now),
+    /** Set by the one-click link. Suppresses every future invite to this address from anyone. Kept
+     * forever (never swept) so this stays true even long after the invite itself would otherwise
+     * have aged out — see lib/referrals.ts `sweepReferralInvites`. */
+    unsubscribedAt: integer('unsubscribed_at', { mode: 'timestamp_ms' }),
+    /** Set by the qualification sweep when an account with this email is attributed to this referrer. */
+    convertedAt: integer('converted_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    uniqueIndex('referral_invites_pair_idx').on(t.referrerId, t.email),
+    index('referral_invites_email_idx').on(t.email),
+  ],
+);
+
+export const referralClaims = sqliteTable(
+  'referral_claims',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The qualified-referral count this claim is for (20 today). One claim per user per milestone. */
+    milestone: integer('milestone').notNull(),
+    /** SHA-256 hex of the base64url token in the URL. The token itself is never stored. Rotated on re-issue. */
+    tokenHash: text('token_hash').notNull(),
+    tokenExpiresAt: integer('token_expires_at', { mode: 'timestamp_ms' }).notNull(),
+    /** The destination the token was issued for, captured at issue time. */
+    destination: text('destination').notNull(),
+    /** Consent trail for sharing name + email with the partner: timestamp and the exact checkbox wording. */
+    shareConsentAt: integer('share_consent_at', { mode: 'timestamp_ms' }).notNull(),
+    shareConsentText: text('share_consent_text').notNull(),
+    /** 'issued' | 'redeemed' */
+    status: text('status').notNull().default('issued'),
+    redeemedAt: integer('redeemed_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('referral_claims_user_milestone_idx').on(t.userId, t.milestone),
+    uniqueIndex('referral_claims_token_idx').on(t.tokenHash),
+  ],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type ProfileRow = typeof profiles.$inferSelect;
 export type ContactRow = typeof contacts.$inferSelect;
@@ -367,3 +500,8 @@ export type EventRow = typeof events.$inferSelect;
 export type EmailLeadRow = typeof emailLeads.$inferSelect;
 export type EmailPrefsRow = typeof emailPrefs.$inferSelect;
 export type SocialCheckRow = typeof socialChecks.$inferSelect;
+export type ReferralRow = typeof referrals.$inferSelect;
+export type PointsLedgerRow = typeof pointsLedger.$inferSelect;
+export type BadgeRow = typeof badges.$inferSelect;
+export type ReferralInviteRow = typeof referralInvites.$inferSelect;
+export type ReferralClaimRow = typeof referralClaims.$inferSelect;

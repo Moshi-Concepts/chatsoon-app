@@ -101,7 +101,7 @@ profileRoutes.get('/me', requireAuth, async (c) => {
       name: user.name || null,
       image: user.image || null,
     },
-    profile: profile ? await toMyProfile(c.env, profile) : null,
+    profile: profile ? await toMyProfile(c.env, db, profile) : null,
     deletionScheduledFor: deleteAfter ? deleteAfter.toISOString() : null,
     tipsEmails,
     ...(user.discordUsername ? { socialPrefill: { discord: user.discordUsername } } : {}),
@@ -223,7 +223,7 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
   // other version, so a share right after saving never waits on a render (O9). Never fails the save.
   c.executionCtx.waitUntil(refreshOgCard(c.env, row));
 
-  return c.json(await toMyProfile(c.env, row));
+  return c.json(await toMyProfile(c.env, db, row));
 });
 
 /**

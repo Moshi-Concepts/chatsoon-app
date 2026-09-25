@@ -103,6 +103,7 @@ describe('GET /_pages/profile/:slug', () => {
         'bookingLinks',
         'contactChannels',
         'contactVisibility',
+        'badges',
         'avatarVersion',
         'updatedAt',
         'indexable',

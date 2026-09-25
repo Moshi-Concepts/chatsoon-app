@@ -5,6 +5,7 @@ import {
   parseBookingUrl,
   profileContactChannels,
   suggestBookingLabel,
+  type Badge,
   type BookingLink,
   type ChatsoonEvent,
   type Contact,
@@ -18,9 +19,11 @@ import {
   type PublicProfile,
   type Tag,
 } from '@chatsoon/shared';
+import { eq } from 'drizzle-orm';
 
-import type { ContactRow, EventRow, ProfileRow, TagRow } from '../db/schema';
+import { badges, type ContactRow, type EventRow, type ProfileRow, type TagRow } from '../db/schema';
 import type { Env } from '../env';
+import type { DB } from './db';
 import { cardsEnabled, currentOgVersion, hashKey16 } from './og';
 import { signedFileUrl } from './signing';
 
@@ -87,6 +90,15 @@ export function parseContact(json: string | null | undefined): ProfileContact {
 }
 
 /**
+ * Permanent milestone badges (issue #11, docs/referrals.md "API"): `[{ badge: 'founder', seq: 37 }]`,
+ * `[{ badge: 'early_adopter' }]` or `[]`. Shared by every profile DTO below.
+ */
+export async function loadBadges(db: DB, userId: string): Promise<{ badge: Badge; seq?: number }[]> {
+  const rows = await db.select({ badge: badges.badge, seq: badges.seq }).from(badges).where(eq(badges.userId, userId));
+  return rows.map((r) => (r.seq != null ? { badge: r.badge as Badge, seq: r.seq } : { badge: r.badge as Badge }));
+}
+
+/**
  * `contactChannels` and `contactVisibility` are always included. `contact` (usable values only) is
  * added only when `opts.contact` is set — the caller (routes/public.ts) decides who may see it, per
  * §2 of the plan: the owner, a 'public' profile, or an accepted connection. `vcardUrl` is added only
@@ -94,6 +106,7 @@ export function parseContact(json: string | null | undefined): ProfileContact {
  */
 export async function toPublicProfile(
   env: Env,
+  db: DB,
   row: ProfileRow,
   opts: { contact?: boolean; vcardUrl?: string } = {},
 ): Promise<PublicProfile> {
@@ -114,6 +127,7 @@ export async function toPublicProfile(
     bookingLinks: parseBookingLinks(row.bookingLinks),
     contactChannels: profileContactChannels(contact),
     contactVisibility,
+    badges: await loadBadges(db, row.userId),
   };
 
   if (opts.contact) {
@@ -129,8 +143,8 @@ export async function toPublicProfile(
 }
 
 /** The owner's own view: raw stored values (including legacy invalid ones), so they can fix them. */
-export async function toMyProfile(env: Env, row: ProfileRow): Promise<MyProfile> {
-  const profile = await toPublicProfile(env, row);
+export async function toMyProfile(env: Env, db: DB, row: ProfileRow): Promise<MyProfile> {
+  const profile = await toPublicProfile(env, db, row);
   return {
     ...profile,
     userId: row.userId,
@@ -169,8 +183,8 @@ export function isIndexable(
  * `ogVersion` is null whenever a personalised card can't be produced (the kill switch, or no OG
  * binding), so the caller falls back to the default image with no extra check of its own.
  */
-export async function toPageProfile(env: Env, row: ProfileRow, ownerEmail: string): Promise<PageProfile> {
-  const pub = await toPublicProfile(env, row);
+export async function toPageProfile(env: Env, db: DB, row: ProfileRow, ownerEmail: string): Promise<PageProfile> {
+  const pub = await toPublicProfile(env, db, row);
   return {
     slug: pub.slug,
     displayName: pub.displayName,
@@ -181,6 +195,7 @@ export async function toPageProfile(env: Env, row: ProfileRow, ownerEmail: strin
     bookingLinks: pub.bookingLinks,
     contactChannels: pub.contactChannels ?? [],
     contactVisibility: pub.contactVisibility ?? 'connections',
+    badges: pub.badges,
     avatarVersion: row.avatarKey ? await hashKey16(row.avatarKey) : null,
     updatedAt: row.updatedAt.toISOString(),
     indexable: isIndexable(row, ownerEmail),

@@ -22,6 +22,19 @@ function xReason(check: SocialCheckRow | undefined): 'x_not_verified' | 'x_follo
 }
 
 /**
+ * The actual eligibility check for a linked Discord/X `social_checks` row (or its absence). Exported
+ * so `lib/referrals.ts`'s `hasEligibleSocial` (issue #11, docs/referrals.md "Qualification and fraud
+ * rules") reuses this exact logic instead of re-implementing it against `discordEligible`/`xEligible`.
+ */
+export function isDiscordEligible(check: SocialCheckRow | undefined, minAgeDays: number): boolean {
+  return !!check && discordEligible({ providerAccountId: check.providerAccountId, mfaEnabled: check.mfaEnabled }, minAgeDays);
+}
+
+export function isXEligible(check: SocialCheckRow | undefined, minFollowers: number): boolean {
+  return !!check && xEligible({ verified: check.verified, identityVerified: check.identityVerified, followersCount: check.followersCount }, minFollowers);
+}
+
+/**
  * One row per linked account whose provider is in `SOCIAL_VALIDATION_PROVIDERS` (never the
  * email-OTP `credential` row - it isn't in that list). `label`:
  * - discord: `users.discord_username`, refreshed on every sign-in/link/reconnect (lib/social-checks.ts).
@@ -53,7 +66,7 @@ export async function getConnectedAccounts(db: DB, env: Env, userId: string): Pr
     const connectedAt = row.createdAt.toISOString();
     if (provider === 'discord') {
       const check = checkByProvider.get('discord');
-      const eligible = !!check && discordEligible({ providerAccountId: check.providerAccountId, mfaEnabled: check.mfaEnabled }, minAgeDays);
+      const eligible = isDiscordEligible(check, minAgeDays);
       return {
         provider,
         connectedAt,
@@ -64,8 +77,7 @@ export async function getConnectedAccounts(db: DB, env: Env, userId: string): Pr
     }
     if (provider === 'twitter') {
       const check = checkByProvider.get('twitter');
-      const eligible =
-        !!check && xEligible({ verified: check.verified, identityVerified: check.identityVerified, followersCount: check.followersCount }, minFollowers);
+      const eligible = isXEligible(check, minFollowers);
       return { provider, connectedAt, eligible, ...(eligible ? {} : { reason: xReason(check) }) };
     }
     // google, apple, linkedin: eligible as soon as they're linked (docs/referrals.md "Decisions").

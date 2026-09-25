@@ -8,6 +8,8 @@ export class ApiError extends Error {
     public status: ContentfulStatusCode,
     public code: ApiErrorCode,
     message: string,
+    /** Extra fields merged into the error body (today only `url`, for referral_claim_open). */
+    public extra?: { url?: string },
   ) {
     super(message);
   }
@@ -21,12 +23,12 @@ export const conflict = (message = 'Conflict') => new ApiError(409, 'conflict', 
 export const rateLimited = (message = 'Too many requests, try again in a minute') =>
   new ApiError(429, 'rate_limited', message);
 
-export function errorBody(code: ApiErrorCode, message: string): ApiErrorBody {
-  return { error: { code, message } };
+export function errorBody(code: ApiErrorCode, message: string, extra?: { url?: string }): ApiErrorBody {
+  return { error: { code, message, ...extra } };
 }
 
 export function onError(err: Error, c: Context) {
-  if (err instanceof ApiError) return c.json(errorBody(err.code, err.message), err.status);
+  if (err instanceof ApiError) return c.json(errorBody(err.code, err.message, err.extra), err.status);
   if (err instanceof z.ZodError) {
     const first = err.issues[0];
     const where = first?.path.length ? `${first.path.join('.')}: ` : '';

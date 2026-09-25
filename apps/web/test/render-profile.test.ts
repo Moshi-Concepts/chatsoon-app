@@ -30,6 +30,7 @@ const BASE: PageProfile = {
   ],
   contactChannels: [],
   contactVisibility: 'connections',
+  badges: [],
   avatarVersion: 'abcdef0123456789',
   updatedAt: '2026-09-25T00:00:00.000Z',
   indexable: false,

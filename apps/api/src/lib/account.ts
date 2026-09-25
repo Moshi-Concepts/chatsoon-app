@@ -12,6 +12,7 @@ import {
   emailPrefs,
   events,
   profiles,
+  referralInvites,
   reports,
   sessions,
   tags,
@@ -89,6 +90,11 @@ export async function deleteUserData(env: Env, db: DB, userId: string, email: st
     // all (a lead may predate any account), so it's found by the same lowercased email instead.
     db.delete(emailPrefs).where(eq(emailPrefs.userId, userId)),
     db.delete(emailLeads).where(eq(emailLeads.email, normalized)),
+    // Issue #11: referrals, points_ledger, badges and referral_claims all reference users.id with
+    // onDelete cascade, so they're covered automatically. referral_invites isn't - `email` is a plain
+    // column, not a FK - so any invite sent *to* this account's own address is removed explicitly
+    // (docs/referrals.md "Data": "the invitee is now gone too").
+    db.delete(referralInvites).where(eq(referralInvites.email, normalized)),
     // A pending scheduled deletion (issue #8, lib/deletion.ts) for this same account, if this is the
     // reviewer's immediate wipe or a direct DELETE /me while one happened to be pending.
     db.delete(accountDeletions).where(eq(accountDeletions.userId, userId)),

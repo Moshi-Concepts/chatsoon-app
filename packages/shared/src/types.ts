@@ -2,6 +2,7 @@
 // JSON is camelCase on the wire; the database uses snake_case.
 
 import type { SocialProvider } from './constants';
+import type { Badge } from './referrals';
 import type { SocialIneligibleReason, SocialValidationProvider } from './social';
 
 export type LinkKey = 'x' | 'telegram' | 'discord' | 'linkedin' | 'website' | 'youtube';
@@ -58,6 +59,11 @@ export interface PublicProfile {
   contact?: ProfileContact;
   /** Signed, time-limited URL to /id/:slug/vcard. Present only alongside `contact` on a 'connections' profile. */
   vcardUrl?: string;
+  /**
+   * Permanent milestone badges (issue #11, docs/referrals.md), read from `badges`. `[]` for nobody
+   * with one yet. Public: the pill shows on the profile card (app and web) and here, in every mode.
+   */
+  badges: { badge: Badge; seq?: number }[];
 }
 
 export interface MyProfile extends PublicProfile {
@@ -84,6 +90,8 @@ export interface PageProfile {
   /** Which channels exist. Never their values. */
   contactChannels: ProfileContactKey[];
   contactVisibility: ContactVisibility;
+  /** Permanent milestone badges (issue #11). See PublicProfile.badges. */
+  badges: { badge: Badge; seq?: number }[];
   /** First 16 hex of SHA-256(avatarKey), or null without a photo. */
   avatarVersion: string | null;
   /** ISO timestamp. */
@@ -291,6 +299,8 @@ export interface ApiErrorBody {
   error: {
     code: ApiErrorCode;
     message: string;
+    /** Only on `referral_claim_open`: the still-live claim link, so the client can just open it. */
+    url?: string;
   };
 }
 
@@ -305,4 +315,14 @@ export type ApiErrorCode =
   | 'payload_too_large'
   | 'extraction_failed'
   | 'invalid_token'
-  | 'internal';
+  | 'internal'
+  // Referrals (issue #11, docs/referrals.md "API")
+  | 'referral_disabled'
+  | 'referral_self'
+  | 'referral_window_closed'
+  | 'referral_already_attributed'
+  | 'referral_invite_limit'
+  | 'referral_claim_needs_social'
+  | 'referral_already_claimed'
+  | 'referral_claim_open'
+  | 'referral_claim_expired';

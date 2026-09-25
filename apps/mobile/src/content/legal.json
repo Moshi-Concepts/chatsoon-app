@@ -87,7 +87,16 @@
           "Account emails: sign-in codes, notices when someone connects with you, and account deletion notices. These are part of the service and can't be turned off while you have an account.",
           "Tips for people who connect with you: if you tick \"Email me tips to set up my own free Chatsoon profile\" on a Connect form, we send up to three emails over about a week about creating a free profile, and stop when you sign up or unsubscribe. We keep a record of when you agreed and the wording you agreed to.",
           "Tips for account holders: after you sign up, we may send up to two emails with tips for finishing your profile and sharing your link. Turn them off in Me › Tips emails or with the unsubscribe link in any tips email.",
-          "Every tips email has an unsubscribe link and identifies us, and we never include other people's messages in them."
+          "Referral invites: if you enter someone's email address to invite them to Chatsoon, we send that person one email on your behalf, naming you as the sender, and never a follow-up. If they unsubscribe, we don't email that address again for any referral.",
+          "Every tips or invite email has an unsubscribe link and identifies us, and we never include other people's messages in them."
+        ]
+      },
+      {
+        "heading": "Referrals, points and badges",
+        "paragraphs": [
+          "If you refer people to Chatsoon, we keep a record of your referral code, who signed up with it and whether it qualified, so we can credit you and show you the status. We also record a device identifier generated on the phone or browser that entered a code, and a scrambled (hashed) version of the IP address and browser/app information involved, which we use only to check for abuse such as one person creating many fake referrals; we don't use these for any other purpose.",
+          "Qualifying referrals earn points and, at set milestones, a permanent badge (such as Founding member) shown on your profile. Points and badges aren't money and can't be transferred or cashed out directly.",
+          "If you reach the reward milestone and choose to claim it, we share your name and email address with our reward partner, Learn Cardano Bounties, only after you tick the consent box to do so. What happens with your details after that is covered by that partner's own privacy policy."
         ]
       },
       {
@@ -111,7 +120,7 @@
       {
         "heading": "Sharing and international transfers",
         "paragraphs": [
-          "We don't share your personal information with anyone except the providers above, the people you choose to share with (for example through your public profile or a connection), and where the law requires it or it is needed to protect the rights, safety or property of our users, the public or Moshi Concepts Inc.",
+          "We don't share your personal information with anyone except the providers above, the people you choose to share with (for example through your public profile, a connection, or a referral reward claim as described in Referrals, points and badges), and where the law requires it or it is needed to protect the rights, safety or property of our users, the public or Moshi Concepts Inc.",
           "Our providers may process information in the United States and other countries. Where the law requires it, we use appropriate safeguards for these transfers.",
           "Apple and Google run the app stores you download Chatsoon from and handle any information they collect under their own privacy policies."
         ]
@@ -124,6 +133,7 @@
           "Our database provider keeps backups for disaster recovery. Deleted data rolls off these backups automatically, within 30 days.",
           "Reports you made, reports made about you and your blocks are deleted with your account. Copies of reports already sent to our moderation inbox may be kept until we finish reviewing them.",
           "Contacts that other people saved about you, for example from your public profile or a connection, belong to their accounts and are not removed when you delete yours. You can ask them to remove it, or email us.",
+          "An email address you invite is kept for up to 12 months, or deleted sooner once they join Chatsoon. If they unsubscribe, we keep only the fact that the address must not be emailed again, so we can honour that.",
           "Technical logs are kept for a short time, no more than 30 days, unless we need them longer to investigate abuse or a security issue."
         ]
       },
