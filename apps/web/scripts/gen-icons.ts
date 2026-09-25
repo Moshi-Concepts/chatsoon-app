@@ -56,6 +56,7 @@ const PUBLIC_ICON_NAMES = [
   'qr-code-outline',
   'radio-button-off',
   'radio-button-on',
+  'ribbon-outline',
   'scan-outline',
   'search-outline',
   'send-outline',

@@ -18,6 +18,15 @@ export const GA_MEASUREMENT_ID = 'G-9JPQ94MJLZ';
 export const REVIEWER_EMAIL = 'review@chatsoon.app';
 
 /**
+ * Store listing URLs for the `/r/<code>` referral landing page (issue #11, docs/referrals.md "Landing
+ * page"). Both `null` until the apps are actually public: v1.0 hasn't shipped to either store yet
+ * (CLAUDE.md, docs/native-pending.md), so a store button would 404. `renderReferral` (apps/web) shows
+ * the store buttons only when set, and the home page's "Coming soon" line otherwise.
+ */
+export const APP_STORE_URL: string | null = null;
+export const PLAY_STORE_URL: string | null = null;
+
+/**
  * Social sign-in providers (issue #24), in the fixed order GET /auth-providers returns them and the
  * sign-in page shows their buttons. A provider only appears once its secrets are configured on the API.
  */

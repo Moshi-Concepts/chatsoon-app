@@ -19,6 +19,7 @@ tag, not from `main`, because `main` already contains the features below.
 | Delayed account deletion with export prompt (#8) | 26 Sep 2026 | No: JS only, but native must switch off `DELETE /me` to `POST /me/deletion` | — |
 | Connect form tips opt-in and Tips emails setting (#7) | 26 Sep 2026 | No: JS only | — |
 | Social sign-in: Google, Apple, LinkedIn, Discord (#24) | 26 Sep 2026 | Yes: needs `expo-apple-authentication` (or an `expo-auth-session` browser flow) for each provider, not the web redirect flow | Apple review guideline 4.8 requires Sign in with Apple on iOS whenever another social login is offered, so the native build must ship Apple alongside any other provider, not after it |
+| Referral links (`/r/*`), landing page and badge pill (#11) | 26 Sep 2026 | Yes: add `{"/": "/r/*"}` to apple-app-site-association and the `/r/` pathPrefix intent filter in app.json in the same release as the `/r/[code]` screen | — |
 
 ## Releasing a batch to the apps
 

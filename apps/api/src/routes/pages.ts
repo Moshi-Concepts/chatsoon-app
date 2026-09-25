@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 
 import type { AppEnv } from '../env';
 import { getDb } from '../lib/db';
-import { errorBody } from '../lib/errors';
+import { errorBody, limit } from '../lib/errors';
 import { timingSafeEqual } from '../lib/signing';
 import { indexableProfiles, profileOgImage, profilePage, profilePhoto } from '../pages';
 import { referralPageLookup } from './referrals';
@@ -110,12 +110,19 @@ pagesRoutes.get('/_pages/sitemap', async (c) => {
 
 /**
  * GET /_pages/referral/:code (issue #11, docs/referrals.md "API"): mirrors GET /_pages/profile/:slug
- * for the web landing page's Pages Function (PR 3, not built yet). Same secret gate; no separate rate
- * limiting here since the shared secret is the trust boundary, same as the other /_pages/* routes.
+ * for the web landing page's Pages Function (apps/web/src/server/referral.ts). Same secret gate; a
+ * miss is rate limited per client IP like the profile lookup (below).
  */
 pagesRoutes.get('/_pages/referral/:code', async (c) => {
   if (!authorized(c)) return c.json(errorBody('not_found', 'Not found'), 404);
   const result = await referralPageLookup(c.env, getDb(c.env), c.req.param('code'));
   c.header('Cache-Control', 'no-store');
+  // A miss counts against the same per-IP bucket as /_pages/profile/:slug and GET /id/:slug misses
+  // (docs/referrals.md: "same not-found handling and PROFILE_MISS_LIMITER"), so guessing codes through
+  // chatsoon.app/r/<code> is throttled like guessing slugs. The web Function shows its 404 either way.
+  if (result.status === 'not_found') {
+    const ip = c.req.header('x-client-ip') ?? null;
+    await limit(c.env.PROFILE_MISS_LIMITER, ip ? `profile-miss:${ip}` : null);
+  }
   return c.json(result);
 });

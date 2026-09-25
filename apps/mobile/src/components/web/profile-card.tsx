@@ -1,4 +1,4 @@
-import { discordDisplay, toLinkUrl, type LinkKey, type PublicProfile } from '@chatsoon/shared';
+import { BADGE_LABELS, discordDisplay, toLinkUrl, type Badge, type LinkKey, type PublicProfile } from '@chatsoon/shared';
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
@@ -41,6 +41,40 @@ export function firstName(displayName: string): string {
   return displayName.trim().split(/\s+/)[0] || displayName;
 }
 
+/** Visible vs. accessible label for a badge (issue #11, docs/referrals.md "Referral hub"): "Founding
+ * member #37" is shown, "Founding member number 37" is what VoiceOver/TalkBack read instead, so "#"
+ * never gets sounded out as "hash" or "pound". Matches apps/web/src/render/profile.ts's badgePillBlock. */
+function badgeLabels(badge: { badge: Badge; seq?: number }): { visible: string; accessible: string } {
+  const base = BADGE_LABELS[badge.badge];
+  const founder = badge.badge === 'founder';
+  return {
+    visible: founder && badge.seq ? `${base} #${badge.seq}` : base,
+    accessible: founder && badge.seq ? `${base} number ${badge.seq}` : base,
+  };
+}
+
+/** The founder/early-adopter pill next to the display name (docs/profile-page-dom.md's web contract
+ * gets the matching markup in the same PR). Founder uses the brand primary colour (the design system
+ * has no magenta, per apps/web's css.ts); early adopter is the quieter neutral pairing. `accessible`
+ * replaces the whole node's accessible name (icon included) so "#37" isn't read literally. */
+function BadgePill({ badge }: { badge: { badge: Badge; seq?: number } }) {
+  const theme = useTheme();
+  const { visible, accessible } = badgeLabels(badge);
+  const founder = badge.badge === 'founder';
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={accessible}
+      style={[styles.badgePill, { backgroundColor: founder ? theme.primarySoft : theme.surfaceAlt }]}>
+      <Icon name="ribbon-outline" size={14} color={founder ? 'primaryText' : 'textSecondary'} />
+      <Text variant="captionStrong" color={founder ? 'primaryText' : 'textSecondary'} numberOfLines={1}>
+        {visible}
+      </Text>
+    </View>
+  );
+}
+
 /** Every link pill to show, in LINKS order. Discord renders a copy pill when it's a username or
  * legacy discriminator (no URL exists for those), and a normal link pill for a numeric id. */
 function profileLinkPills(profile: PublicProfile): LinkPillData[] {
@@ -67,9 +101,12 @@ export function ProfileCard({ profile }: { profile: PublicProfile }) {
     <Card style={styles.card}>
       <Avatar name={profile.displayName} uri={profile.avatarUrl} size={208} />
       <View style={styles.names}>
-        <Text variant="title" align="center" role="heading">
-          {profile.displayName}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text variant="title" align="center" role="heading">
+            {profile.displayName}
+          </Text>
+          {profile.badges.length ? <BadgePill badge={profile.badges[0]!} /> : null}
+        </View>
         {profile.headline ? (
           <Text variant="body" color="textSecondary" align="center">
             {profile.headline}
@@ -181,6 +218,15 @@ function CopyPill({ icon, value }: { icon: IconName; value: string }) {
 const styles = StyleSheet.create({
   card: { alignItems: 'center', gap: Spacing.four, paddingVertical: Spacing.six, paddingHorizontal: Spacing.five },
   names: { alignItems: 'center', gap: Spacing.one, alignSelf: 'stretch' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.two, flexWrap: 'wrap' },
+  badgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 24,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Radius.pill,
+  },
   roleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.one, flexWrap: 'wrap', justifyContent: 'center' },
   links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Spacing.two },
   pill: {

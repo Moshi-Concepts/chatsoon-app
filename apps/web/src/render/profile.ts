@@ -14,6 +14,7 @@ import { bookingEmbedUrl, bookingOpenUrl, bookingProviderName } from '@chatsoon/
 import { discordDisplay, toLinkUrl } from '@chatsoon/shared/src/links';
 import { CONTACT_LABELS } from '@chatsoon/shared/src/profile-contact';
 import { CONNECT_FORM_MAX, firstName, roleLine } from '@chatsoon/shared/src/profile-page';
+import { BADGE_LABELS } from '@chatsoon/shared/src/referrals';
 import type { BookingLink, LinkKey, PageProfile, ProfileContactKey } from '@chatsoon/shared/src/types';
 
 import { consentCss, consentScript, cookieSettingsLinkHtml } from './consent';
@@ -181,12 +182,34 @@ function contactChipsBlock(p: PageProfile): string {
   return `<div id="contact-chips" data-channels="${channelsAttr}">${chips}</div>`;
 }
 
+/**
+ * The founder/early-adopter pill (issue #11, docs/referrals.md "Referral hub", docs/profile-page-dom.md):
+ * rendered next to the display name whenever `p.badges` carries one. At most one badge exists in
+ * practice (`awardMilestoneBadge` in apps/api/src/lib/referrals.ts skips a user who already has either),
+ * so only the first entry is ever shown. The visible label ("Founding member #37") and the accessible
+ * one ("Founding member number 37") differ only so a screen reader doesn't try to sound out "#" — the
+ * `aria-label` replaces the element's whole accessible name, icon included.
+ */
+function badgePillBlock(badges: PageProfile['badges']): string {
+  const b = badges[0];
+  if (!b) return '';
+  const base = BADGE_LABELS[b.badge];
+  const founder = b.badge === 'founder';
+  const visible = founder && b.seq ? `${base} #${b.seq}` : base;
+  const accessible = founder && b.seq ? `${base} number ${b.seq}` : base;
+  const cls = founder ? 'badge-pill badge-pill-founder' : 'badge-pill badge-pill-early';
+  return `<span class="${cls}" aria-label="${escapeHtml(accessible)}">${icon('ribbon-outline', 14)}<span>${escapeHtml(visible)}</span></span>`;
+}
+
 function profileCardBlock(p: PageProfile, assets: ProfileAssets): string {
   const role = roleLine(p.role, p.company);
   const vcardUrl = `${assets.apiOrigin}/id/${encodeURIComponent(p.slug)}/vcard`;
   return `<div class="card profile-card">
 ${avatarBlock(p)}
+<div class="profile-name-row">
 <h1>${escapeHtml(p.displayName)}</h1>
+${badgePillBlock(p.badges)}
+</div>
 ${p.headline ? `<p class="profile-headline">${escapeHtml(p.headline)}</p>` : ''}
 ${role ? `<p class="profile-role">${icon('briefcase-outline', 15)}<span>${escapeHtml(role)}</span></p>` : ''}
 ${contactChipsBlock(p)}
@@ -280,6 +303,7 @@ function reportBlock(slug: string): string {
 function iconNames(p: PageProfile): IconName[] {
   const names = new Set<IconName>(['download-outline', 'flag-outline', 'qr-code-outline']);
   if (roleLine(p.role, p.company)) names.add('briefcase-outline');
+  if (p.badges.length) names.add('ribbon-outline');
   for (const l of PROFILE_LINKS) {
     // Discord's icon shows for either rendering (link chip or copy chip), unlike every other kind,
     // which only shows when toLinkUrl actually produces a URL.

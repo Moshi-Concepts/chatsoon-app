@@ -25,6 +25,7 @@ import { LEGAL_KEYS, renderLegal, type LegalDoc, type LegalKey } from '../src/re
 import { DEFAULT_OG_IMAGE } from '../src/render/og-asset';
 import type { SpaAssets } from '../src/render/handoff';
 import { injectShellOg } from '../src/render/shell';
+import { ROUTES_JSON_INCLUDE } from '../src/server/routes-config';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, 'dist');
@@ -38,6 +39,14 @@ const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 const ISLAND_ENTRY = path.join(root, 'src/client/profile.ts');
 const ISLAND_OUT_DIR = path.join(outDir, '_p');
 const ISLAND_GZIP_BUDGET = 10 * 1024;
+
+// Issue #11: the /r/<code> landing page's own tiny island (apps/web/src/client/referral.ts), bundled
+// the same way as the profile island but to its own dist/_p/referral-<hash>.js — a separate Function
+// (functions/r/[code].ts) loads it, so it gets its own entry point rather than folding into the
+// profile bundle above. Same gzip budget: docs/referrals.md doesn't set a different one, and it's
+// small enough that 10 KB is generous for it alone.
+const REFERRAL_ISLAND_ENTRY = path.join(root, 'src/client/referral.ts');
+const REFERRAL_ISLAND_GZIP_BUDGET = 10 * 1024;
 
 // WP-C5: apps/mobile/.env.production (or CHATSOON_ENV_FILE) supplies the Turnstile site key and the
 // API origin the profile page's data attributes carry (docs/profile-page-dom.md).
@@ -200,44 +209,55 @@ async function assertOgImage(): Promise<void> {
 
 // `functions/` doesn't exist until WP-5 adds the /id/* Pages Function; until then there's nothing for
 // `_routes.json` to scope and Pages should keep invoking no Function at all. `/sitemap-profiles.xml`
-// (Stage D, WP-D2) is the other Function-backed path (§2.1: "Nothing else invokes a Function").
+// (Stage D, WP-D2) and `/r/*` (issue #11) are the other Function-backed paths — every one of them lives
+// in ROUTES_JSON_INCLUDE (src/server/routes-config.ts) so a test can check the list directly.
 async function writeRoutesJson(): Promise<void> {
   if (!existsSync(path.join(root, 'functions'))) return;
   await writeFileLogged(
     path.join(outDir, '_routes.json'),
-    JSON.stringify({ version: 1, include: ['/id/*', '/sitemap-profiles.xml'], exclude: [] }),
+    JSON.stringify({ version: 1, include: [...ROUTES_JSON_INCLUDE], exclude: [] }),
   );
 }
 
-// WP-C5: esbuild's own JS API, straight to dist/_p/profile-<contenthash>.js (docs/public-pages-plan.md
-// §2.5, §4 WP-C5). Returns the island's public URL for profile.ts's ProfileAssets. `entryNames` with a
-// `[hash]` placeholder is esbuild's content hash, i.e. exactly the "contenthash" the plan asks for.
-async function bundleIsland(): Promise<string> {
-  await rm(ISLAND_OUT_DIR, { recursive: true, force: true }); // no stale hashed files from an earlier run
+// WP-C5: esbuild's own JS API, straight to dist/_p/<name>-<contenthash>.js (docs/public-pages-plan.md
+// §2.5, §4 WP-C5). Returns the island's public URL. `entryNames` with a `[hash]` placeholder is
+// esbuild's content hash, i.e. exactly the "contenthash" the plan asks for. Shared by the profile
+// island and, from issue #11, the referral island — each call gets its own `name` prefix so the two
+// never collide inside the shared dist/_p output directory.
+async function bundleClientIsland(entry: string, name: string, gzipBudget: number): Promise<string> {
   const result = await esbuildBuild({
     absWorkingDir: root,
-    entryPoints: [ISLAND_ENTRY],
+    entryPoints: [entry],
     bundle: true,
     format: 'esm',
     minify: true,
     target: 'es2020',
     outdir: ISLAND_OUT_DIR,
-    entryNames: 'profile-[hash]',
+    entryNames: `${name}-[hash]`,
     write: true,
     metafile: true,
   });
   const outputs = Object.keys(result.metafile.outputs);
   if (outputs.length !== 1) {
-    throw new Error(`build: expected exactly one profile island output, got ${outputs.length}`);
+    throw new Error(`build: expected exactly one ${name} island output, got ${outputs.length}`);
   }
   const outputPath = path.resolve(root, outputs[0]!);
   const gzipped = gzipSync(await readFile(outputPath)).byteLength;
-  if (gzipped > ISLAND_GZIP_BUDGET) {
-    throw new Error(`build: the profile island is ${gzipped} B gzipped, over the ${ISLAND_GZIP_BUDGET} B budget`);
+  if (gzipped > gzipBudget) {
+    throw new Error(`build: the ${name} island is ${gzipped} B gzipped, over the ${gzipBudget} B budget`);
   }
   const fileName = path.basename(outputPath);
   console.log(`build: wrote dist/_p/${fileName} (${gzipped} B gzipped)`);
   return `/_p/${fileName}`;
+}
+
+/** Bundles both islands. The output dir is cleared once, up front, so neither call's fresh files get
+ * deleted by the other's own "no stale hashed files from an earlier run" cleanup. */
+async function bundleIslands(): Promise<{ profileIslandUrl: string; referralIslandUrl: string }> {
+  await rm(ISLAND_OUT_DIR, { recursive: true, force: true });
+  const profileIslandUrl = await bundleClientIsland(ISLAND_ENTRY, 'profile', ISLAND_GZIP_BUDGET);
+  const referralIslandUrl = await bundleClientIsland(REFERRAL_ISLAND_ENTRY, 'referral', REFERRAL_ISLAND_GZIP_BUDGET);
+  return { profileIslandUrl, referralIslandUrl };
 }
 
 // WP-C5: dist/index.html, once inlineSpaStylesheets and injectSpaShellOg have both already run on it,
@@ -279,10 +299,10 @@ async function readEnvValue(envFile: string, key: string): Promise<string | unde
 }
 
 // WP-C5: functions/_generated/assets.ts (gitignored — see apps/web/.gitignore's Stage C note), the one
-// file functions/id/[[path]].ts imports for the ProfileAssets it hands to handle(). `CHATSOON_ENV_FILE`
-// overrides the default production env file, resolved the same way both are given on the command line:
-// relative to apps/web (`root`).
-async function writeGeneratedAssets(islandUrl: string, spa: SpaAssets): Promise<void> {
+// file functions/id/[[path]].ts (and, from issue #11, functions/r/[code].ts) imports for the assets it
+// hands to handle()/serveReferral(). `CHATSOON_ENV_FILE` overrides the default production env file,
+// resolved the same way both are given on the command line: relative to apps/web (`root`).
+async function writeGeneratedAssets(profileIslandUrl: string, referralIslandUrl: string, spa: SpaAssets): Promise<void> {
   const envFile = path.resolve(root, process.env.CHATSOON_ENV_FILE ?? DEFAULT_PROFILE_ENV_FILE);
   const siteKey = await readEnvValue(envFile, 'EXPO_PUBLIC_TURNSTILE_SITE_KEY');
   const apiOrigin = (await readEnvValue(envFile, 'EXPO_PUBLIC_API_URL')) ?? API_ORIGIN;
@@ -292,11 +312,13 @@ async function writeGeneratedAssets(islandUrl: string, spa: SpaAssets): Promise<
 
   const generatedDir = path.join(root, 'functions/_generated');
   await mkdir(generatedDir, { recursive: true });
-  const contents = `// Written by scripts/build.ts (WP-C5) from ${path.relative(root, envFile)}.
+  const contents = `// Written by scripts/build.ts (WP-C5, extended for issue #11) from ${path.relative(root, envFile)}.
 // Gitignored: never hand-edited or committed (see apps/web/.gitignore).
 import type { ProfileAssets } from '../../src/render/profile';
+import type { ReferralAssets } from '../../src/render/referral';
 
-export const PROFILE_ASSETS: ProfileAssets = ${JSON.stringify({ islandUrl, siteKey, apiOrigin, spa }, null, 2)};
+export const PROFILE_ASSETS: ProfileAssets = ${JSON.stringify({ islandUrl: profileIslandUrl, siteKey, apiOrigin, spa }, null, 2)};
+export const REFERRAL_ASSETS: ReferralAssets = ${JSON.stringify({ islandUrl: referralIslandUrl }, null, 2)};
 `;
   await writeFileLogged(path.join(generatedDir, 'assets.ts'), contents);
 }
@@ -307,9 +329,9 @@ await writeRedirects();
 await inlineSpaStylesheets();
 await injectSpaShellOg();
 await assertOgImage();
-const islandUrl = await bundleIsland();
+const { profileIslandUrl, referralIslandUrl } = await bundleIslands();
 const spaAssets = await parseSpaShellAssets();
 await injectConsentIntoShell();
-await writeGeneratedAssets(islandUrl, spaAssets);
+await writeGeneratedAssets(profileIslandUrl, referralIslandUrl, spaAssets);
 await assertProductionBundle(); // last: dist/_p and functions/_generated must exist for it to scan them
 await writeRoutesJson();

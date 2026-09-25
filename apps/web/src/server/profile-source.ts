@@ -7,6 +7,7 @@
 // og-image.ts, photo.ts and sitemap.ts each fall back to their own "as if nothing was found" path.
 
 import { API_ORIGIN, DEFAULT_AVATAR_WIDTH, normalizeAvatarWidth } from '@chatsoon/shared/src/constants';
+import type { ReferralPageResult } from '@chatsoon/shared/src/referrals';
 import type { ProfilePageResult, SitemapProfilesResult } from '@chatsoon/shared/src/types';
 
 import type { PagesEnv, PagesFetcher } from './types';
@@ -119,6 +120,31 @@ export async function fetchProfilePhoto(
   if (width !== DEFAULT_AVATAR_WIDTH) url.searchParams.set('w', String(width));
   try {
     return await withTimeout(api.fetch(url, { headers }), PROFILE_PHOTO_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /_pages/referral/:code (issue #11, docs/referrals.md "Web files"): mirrors `fetchProfilePage`
+ * exactly, same secret gate and timeout budget, for src/server/referral.ts's /r/<code> lookup. A
+ * network error, a non-2xx response, an unparseable body or the timeout all come back as `null`, which
+ * referral.ts treats as "not found" — there's no SPA-shell fallback for a code the way there is for a
+ * slug, so a transient failure here shows the same 404 as an unknown code, never a 503.
+ */
+export async function fetchReferralPage(
+  api: PagesFetcher,
+  env: PagesEnv,
+  code: string,
+  ip: string | null,
+): Promise<ReferralPageResult | null> {
+  try {
+    const res = await withTimeout(
+      api.fetch(`${API_ORIGIN}/_pages/referral/${encodeURIComponent(code)}`, { headers: pagesHeaders(env, ip) }),
+      PROFILE_LOOKUP_TIMEOUT_MS,
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as ReferralPageResult;
   } catch {
     return null;
   }

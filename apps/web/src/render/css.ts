@@ -111,6 +111,7 @@ footer .copy{color:var(--text-tertiary);font-size:13px;margin:${Spacing.two}px 0
 ${homeCss()}
 ${legalCss()}
 ${profileCss()}
+${referralCss()}
 `.trim();
 }
 
@@ -216,6 +217,17 @@ function profileCss(): string {
 #avatar{width:208px;height:208px;border-radius:${Radius.pill}px;object-fit:cover;display:block}
 .avatar.initials{width:208px;height:208px;font-size:79px}
 .profile-card h1{font-size:26px;line-height:1.25;font-weight:700;margin:0}
+.profile-name-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+
+/* Badge pill (issue #11, docs/referrals.md "Referral hub"): next to the display name, matching the
+   app's ProfileCard (docs/profile-page-dom.md). Founder uses --primary-soft/--primary-text ("brand
+   colour", the closest token to the spec's brand magenta — the design system has no magenta — that
+   clears 4.5:1 in both schemes; render-css.test.ts holds it to that). Early adopter is the quieter
+   --surface-alt/--text-secondary pairing already used for neutral pills elsewhere. */
+.badge-pill{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px;border-radius:${Radius.pill}px;font-size:12px;font-weight:700;white-space:nowrap}
+.badge-pill .icon{flex:none}
+.badge-pill-founder{background:var(--primary-soft);color:var(--primary-text)}
+.badge-pill-early{background:var(--surface-alt);color:var(--text-secondary)}
 .profile-headline{color:var(--text-secondary);font-size:16px;line-height:1.4;margin:0}
 .profile-role{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--text-secondary);font-size:15px;margin:0}
 
@@ -277,5 +289,23 @@ function profileCss(): string {
 .status{padding:${Spacing.seven}px 0;text-align:center;display:flex;flex-direction:column;align-items:center;gap:${Spacing.four}px}
 .status h1{font-size:28px;line-height:1.3;margin:0}
 .status p{color:var(--text-secondary)}
+`;
+}
+
+/** The /r/<code> referral landing page only (issue #11, docs/referrals.md "Landing page"): a single
+ * narrow card, reusing `.card`/`.button`/`.avatar`/`.coming-soon` from the rules above. `.referral-avatar`
+ * is its own class (not `#avatar`, which `profileCss()` already sizes at 208px) so the two pages' photo
+ * markup can't collide in this one shared stylesheet. */
+function referralCss(): string {
+  return `
+.referral-wrap{max-width:420px;padding-top:${Spacing.seven}px;padding-bottom:${Spacing.seven}px}
+.referral-card{align-items:center;text-align:center;display:flex;flex-direction:column;gap:${Spacing.four}px;padding:${Spacing.six}px ${Spacing.five}px}
+.referral-avatar{width:96px;height:96px;border-radius:${Radius.pill}px;object-fit:cover;display:block}
+.referral-card h1{font-size:22px;line-height:1.3;font-weight:700;margin:0}
+.referral-tagline{color:var(--text-secondary);font-size:15px;margin:0}
+.referral-card .coming-soon{justify-content:center}
+.referral-code-row{display:flex;flex-direction:column;align-items:center;gap:${Spacing.two}px;padding-top:${Spacing.four}px;margin-top:${Spacing.two}px;border-top:1px solid var(--border);width:100%}
+.referral-code-row p{color:var(--text-secondary);font-size:14px;margin:0}
+.referral-code-row strong{color:var(--text);letter-spacing:1px}
 `;
 }

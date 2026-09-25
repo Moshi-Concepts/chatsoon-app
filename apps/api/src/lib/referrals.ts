@@ -41,6 +41,7 @@ import type { DB } from './db';
 import { referralInviteEmail, referralClaimReadyEmail, referralMilestoneEmail, referralQualifiedEmail, sendEmail } from './email';
 import { ApiError, badRequest, forbidden, notFound } from './errors';
 import { newId } from './ids';
+import { cardsEnabled, currentOgVersion, hashKey16 } from './og';
 import { findProfileByUserId, findVisibleProfileByUserId } from './profiles';
 import {
   referralAttributionDays,
@@ -198,7 +199,14 @@ async function findReferralOwner(db: DB, code: string): Promise<{ userId: string
  * be trimmed/uppercased by the caller. */
 export async function findPublicReferralProfile(env: Env, db: DB, code: string): Promise<PublicReferralProfile | null> {
   const [row] = await db
-    .select({ slug: profiles.slug, displayName: profiles.displayName, headline: profiles.headline, avatarKey: profiles.avatarKey })
+    .select({
+      slug: profiles.slug,
+      displayName: profiles.displayName,
+      headline: profiles.headline,
+      role: profiles.role,
+      company: profiles.company,
+      avatarKey: profiles.avatarKey,
+    })
     .from(profiles)
     .where(and(eq(profiles.referralCode, code), notPendingDeletion(db)))
     .limit(1);
@@ -206,8 +214,13 @@ export async function findPublicReferralProfile(env: Env, db: DB, code: string):
   return {
     displayName: row.displayName,
     slug: row.slug,
-    avatarUrl: row.avatarKey ? await signedFileUrl(env, row.avatarKey, 7 * 24 * 3600) : null,
+    // avatarVersion/ogVersion, not a signed avatarUrl (PR 3): mirrors toPageProfile's PageProfile
+    // fields exactly, so the web landing page builds `/id/<slug>/photo?v=` and `/id/<slug>/og.jpg?v=`
+    // itself instead of being handed a signed, time-limited R2 URL for a page anyone can request by
+    // guessing a code.
+    avatarVersion: row.avatarKey ? await hashKey16(row.avatarKey) : null,
     headline: row.headline,
+    ogVersion: cardsEnabled(env) ? await currentOgVersion(row) : null,
   };
 }
 
