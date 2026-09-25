@@ -15,6 +15,7 @@ tag, not from `main`, because `main` already contains the features below.
 | Phone and messaging on profiles ([plan](profile-contact.md)) | 25 Sep 2026 | No: JS only | [store/listing.md](../store/listing.md), "1.1 update" |
 | Accessible colour tokens (web now; native appearance changes) | 25 Sep 2026 | No: JS only | — |
 | Privacy text: link previews | 25 Sep 2026 | No: policy only | — |
+| Search visibility switch (#14) | 25 Sep 2026 | No: JS only | — |
 
 ## Releasing a batch to the apps
 

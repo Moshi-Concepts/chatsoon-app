@@ -2,10 +2,11 @@ import type { ContactVisibility, LinkKey, MyProfile, ProfileContactKey, ProfileI
 import { CONTACT_KEYS, changedKeys, LINK_KEYS, profileInputSchema } from '@chatsoon/shared';
 import * as Crypto from 'expo-crypto';
 import { useRef } from 'react';
-import { StyleSheet, View, type TextInput, type TextInputProps } from 'react-native';
+import { StyleSheet, Switch, View, type TextInput, type TextInputProps } from 'react-native';
 
 import { Text, TextField, type IconName } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 import { BookingLinksEditor, type BookingLinkFormValue } from './booking-links-editor';
 import { ContactFields } from './contact-fields';
@@ -19,6 +20,8 @@ export type ProfileFormValues = {
   contact: Record<ProfileContactKey, string>;
   contactVisibility: ContactVisibility;
   bookingLinks: BookingLinkFormValue[];
+  /** "Show my profile in search engines" (off by default). */
+  searchVisible: boolean;
 };
 
 export type ProfileField =
@@ -29,6 +32,7 @@ export type ProfileField =
   | LinkKey
   | ProfileContactKey
   | 'contactVisibility'
+  | 'searchVisible'
   | 'bookingLinks'
   | `bookingLinks.${number}.url`
   | `bookingLinks.${number}.label`;
@@ -62,6 +66,8 @@ export function profileToForm(profile: MyProfile | null | undefined): ProfileFor
       label: link.label,
       url: link.url,
     })),
+    // Off by default, and for profiles fetched before this field existed.
+    searchVisible: profile?.searchVisible ?? false,
   };
 }
 
@@ -78,6 +84,7 @@ export function sameProfileForm(a: ProfileFormValues, b: ProfileFormValues): boo
     LINK_KEYS.every((k) => a.links[k] === b.links[k]) &&
     CONTACT_KEYS.every((k) => a.contact[k] === b.contact[k]) &&
     a.contactVisibility === b.contactVisibility &&
+    a.searchVisible === b.searchVisible &&
     sameBookingLinks(a.bookingLinks, b.bookingLinks)
   );
 }
@@ -108,6 +115,8 @@ export function parseProfileForm(
     withLinks && (!initial || initial.contactVisibility !== values.contactVisibility)
       ? values.contactVisibility
       : undefined;
+  const searchVisible =
+    withLinks && (!initial || initial.searchVisible !== values.searchVisible) ? values.searchVisible : undefined;
   const result = profileInputSchema.safeParse({
     displayName: values.displayName,
     headline: values.headline,
@@ -117,6 +126,7 @@ export function parseProfileForm(
     bookingLinks: withLinks ? bookingRows.map(({ link }) => ({ label: link.label, url: link.url })) : undefined,
     contact,
     contactVisibility,
+    searchVisible,
     avatarKey,
   });
   if (result.success) return { ok: true, input: result.data };
@@ -207,11 +217,15 @@ export function ProfileFields({
   onSubmit,
   editable = true,
 }: ProfileFieldsProps) {
+  const theme = useTheme();
   const headlineRef = useRef<TextInput>(null);
   const companyRef = useRef<TextInput>(null);
   const roleRef = useRef<TextInput>(null);
   const mobileRef = useRef<TextInput>(null);
   const linkRefs = useRef<Partial<Record<LinkKey, TextInput | null>>>({});
+  // Captured once, on mount, as the loaded value: lets the "turned off" note below fire only when the
+  // switch moves from on to off during this edit, not just because it loaded off.
+  const loadedSearchVisible = useRef(values.searchVisible).current;
 
   const set = <K extends 'displayName' | 'headline' | 'company' | 'role'>(key: K, value: string) =>
     onChange({ ...values, [key]: value });
@@ -348,10 +362,50 @@ export function ProfileFields({
             listError={errors.bookingLinks}
             editable={editable}
           />
+
+          <View style={styles.group}>
+            <GroupHeader title="Search engines" hint="Your profile is private by default." />
+            <View style={styles.searchRow}>
+              <Text variant="body" style={styles.flex}>
+                Show my profile in search engines
+              </Text>
+              <Switch
+                value={values.searchVisible}
+                onValueChange={(v) => onChange({ ...values, searchVisible: v })}
+                disabled={!editable}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor={theme.surface}
+                ios_backgroundColor={theme.border}
+              />
+            </View>
+            <Text variant="caption" color="textTertiary" style={styles.searchCaption}>
+              {values.searchVisible
+                ? 'Google and other search engines can list your name, photo, headline, role, company and links, so people can find you by searching your name. Your phone and messaging details are never shown to search engines.'
+                : 'Only people with your link or QR code can find your profile.'}
+            </Text>
+            {values.searchVisible && hasContactChannel(values.contact) ? (
+              <Text variant="caption" color="textTertiary" style={styles.searchCaption}>
+                {values.contactVisibility === 'public'
+                  ? 'Anyone with your link can still get your number.'
+                  : 'Anyone who connects with you can still get your number.'}
+              </Text>
+            ) : null}
+            {!values.searchVisible && loadedSearchVisible ? (
+              <Text variant="caption" color="textTertiary" style={styles.searchCaption}>
+                Search engines will be asked to remove your profile. It usually disappears within a few
+                days to a few weeks.
+              </Text>
+            ) : null}
+          </View>
         </>
       ) : null}
     </View>
   );
+}
+
+/** Whether the form has a phone, WhatsApp or Signal value entered. */
+function hasContactChannel(contact: Record<ProfileContactKey, string>): boolean {
+  return CONTACT_KEYS.some((key) => contact[key].trim().length > 0);
 }
 
 /** Per-row `{ url, label }` errors for BookingLinksEditor, read out of the flat ProfileFormErrors map. */
@@ -382,4 +436,7 @@ const styles = StyleSheet.create({
   group: { gap: Spacing.four },
   groupHeader: { gap: Spacing.half, paddingHorizontal: Spacing.one, marginBottom: -Spacing.one },
   groupTitle: { letterSpacing: 0.4 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.one },
+  flex: { flex: 1 },
+  searchCaption: { paddingHorizontal: Spacing.one },
 });

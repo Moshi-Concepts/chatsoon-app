@@ -17,7 +17,7 @@
         ],
         "bullets": [
           "Account: your email address. We use it to send you one-time sign-in codes, to identify your account and to let you know when someone sends you their details with the Connect form. Chatsoon doesn't use passwords.",
-          "Your public profile: the name, photo, headline, company, role and links (X, Telegram, LinkedIn, website, YouTube) you choose to publish, and, if you add them, your mobile number, WhatsApp and Signal details and who can see them.",
+          "Your public profile: the name, photo, headline, company, role and links (X, Telegram, LinkedIn, website, YouTube) you choose to publish, and, if you add them, your mobile number, WhatsApp and Signal details and who can see them, and whether you want it shown in search engines.",
           "Your contacts: the people you add and what you record about them, such as their name, company, role, email, phone, social handles, notes, tags, priority and the event where you met.",
           "Card and badge photos: photos you take of business cards or event badges so Chatsoon can read the details for you.",
           "Connections: when you connect with another Chatsoon user by scanning their QR code, we record that you are connected and, if you set one, the event where you met.",
@@ -30,7 +30,7 @@
         "heading": "How we use your information",
         "bullets": [
           "To sign you in and keep your account secure.",
-          "To show your public profile to the people you share it with.",
+          "To show your public profile to the people you share it with and, if you turn on search visibility, to search engines.",
           "To store your contacts, notes and tags and keep them in sync across your devices.",
           "To read the details from card and badge photos when you use card scanning.",
           "To deliver connections and connect form submissions to you.",
@@ -49,7 +49,8 @@
         "paragraphs": [
           "Your public profile is public. Anyone who scans your QR code or has your link, which looks like chatsoon.app/id/alex-rivera-7f3a, can see it and save it as a contact card. It shows only what you add to your profile: your name, photo, headline, role, company and links.",
           "Your email address is never shown on your public profile.",
-          "Your contacts, notes, tags and priorities are private to you. If you add a mobile number, WhatsApp or Signal, you choose who can see them: people you connect with (Chatsoon users you connect with, and people who send you their details with the Connect form on your page), or anyone with your link. They're never shown to search engines. Tapping WhatsApp or Signal opens that app; Chatsoon doesn't send your details to WhatsApp or Signal.",
+          "Your contacts, notes, tags and priorities are private to you. If you add a mobile number, WhatsApp or Signal, you choose who can see them: people you connect with (Chatsoon users you connect with, and people who send you their details with the Connect form on your page), or anyone with your link. They're never included in the page we give search engines, in our sitemap or in link previews. Tapping WhatsApp or Signal opens that app; Chatsoon doesn't send your details to WhatsApp or Signal.",
+          "Search engines: your public profile isn't shown in search engines unless you turn on Show my profile in search engines in Edit profile. When it's on, search engines such as Google and Bing, and AI search services that follow the same rules, can show your name, photo, headline, role, company and links, and we list your profile in our sitemap. We ask AI companies' training crawlers not to collect public profiles. When you turn it off or delete your account, we tell search engines to drop your profile and take it out of our sitemap straight away. Most search engines drop it within a few weeks, but we can't control copies they or other sites have already made.",
           "People you connect with see your public profile and, if you added them, your phone and messaging details. If you let anyone with your link see them, blocking someone doesn't hide them from that person when they're signed out.",
           "Booking links you add (such as Calendly or Google Calendar) are shown on your public profile. When someone books, they do it on that service's page, under its own terms and privacy policy. Chatsoon doesn't see or store the booking.",
           "When you share your profile link in apps such as LinkedIn, WhatsApp, Slack, X or iMessage, the app shows a link preview made from your public profile: an image with your name, photo, role, company and headline, and the same details as text. Your phone, WhatsApp and Signal details are never included in link previews. When you change your profile, new previews show the change, but apps that already made a preview may keep showing their copy for a while, and we can't remove copies they've made."
@@ -140,7 +141,7 @@
   },
   "terms": {
     "title": "Terms of Use",
-    "updated": "24 September 2026",
+    "updated": "25 September 2026",
     "intro": "These Terms of Use (\"Terms\") are an agreement between you and Moshi Concepts Inc. (\"we\", \"us\") and apply to your use of Chatsoon, including the iOS and Android apps and chatsoon.app. By creating an account or using Chatsoon, you agree to these Terms and to our Privacy Policy. If you don't agree, please don't use Chatsoon.",
     "sections": [
       {
@@ -159,9 +160,9 @@
       {
         "heading": "Your content",
         "paragraphs": [
-          "You own the content you add to Chatsoon, including your profile, contacts, notes, tags and photos (\"your content\"). You give us a worldwide, non-exclusive, royalty-free licence to host, store, process, display and transmit your content only as needed to run Chatsoon for you, for example to show your public profile to the people you share it with, or to read a card photo when you ask us to. This licence ends when you delete the content or your account, apart from backups that roll off automatically.",
+          "You own the content you add to Chatsoon, including your profile, contacts, notes, tags and photos (\"your content\"). You give us a worldwide, non-exclusive, royalty-free licence to host, store, process, display and transmit your content only as needed to run Chatsoon for you, for example to show your public profile to the people you share it with, and to search engines if you turn that on, or to read a card photo when you ask us to. This licence ends when you delete the content or your account, apart from backups that roll off automatically.",
           "You are responsible for your content and must have the right to add it. When you save details about other people, you are responsible for having a lawful reason to keep them and for using them respectfully and in line with the privacy laws that apply to you.",
-          "Your public profile can be seen by anyone who has its link or scans your QR code, so don't put anything on it that you want to keep private."
+          "Your public profile can be seen by anyone who has its link or scans your QR code, and anyone searching the web if you turn on search visibility, so don't put anything on it that you want to keep private."
         ]
       },
       {
@@ -306,6 +307,12 @@
         "heading": "How do I export my contacts?",
         "paragraphs": [
           "Open the Me tab and tap Export contacts (CSV). Chatsoon creates a CSV file of all your contacts that you can open in Excel, Google Sheets or Numbers, or import into another tool."
+        ]
+      },
+      {
+        "heading": "How do I show or hide my profile on Google?",
+        "paragraphs": [
+          "Open Edit profile, then Search engines, and turn Show my profile in search engines on or off. It's off by default. Your phone and messaging details are never shown to search engines. If you turn it off, removal from search engines usually takes a few days to a few weeks."
         ]
       },
       {

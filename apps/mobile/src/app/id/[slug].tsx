@@ -181,7 +181,8 @@ function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport
     );
   }
 
-  if (me.data?.profile?.slug === profile.slug) {
+  const myProfile = me.data?.profile;
+  if (myProfile?.slug === profile.slug) {
     return (
       <Card style={styles.ownCard}>
         <View style={styles.ownRow}>
@@ -200,6 +201,11 @@ function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport
                   : 'Your number is shown only to people you connect with.'}
               </Text>
             ) : null}
+            <Text variant="caption" color="textSecondary">
+              {(myProfile.searchVisible ?? false)
+                ? 'Your profile is shown in search engines'
+                : 'Your profile is only shown to people with your link'}
+            </Text>
           </View>
         </View>
         <Button title="Edit profile" icon="create-outline" variant="secondary" onPress={() => router.push('/profile-edit')} />
