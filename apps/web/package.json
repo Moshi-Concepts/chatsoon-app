@@ -14,6 +14,7 @@
     "@chatsoon/shared": "workspace:*"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260923.1",
     "ionicons": "^7.4.0",
     "qrcode": "^1.5.4",
     "tsx": "^4.23.15",
