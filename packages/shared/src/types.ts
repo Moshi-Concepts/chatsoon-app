@@ -62,6 +62,36 @@ export interface MyProfile extends PublicProfile {
   avatarKey: string | null;
 }
 
+/**
+ * Whitelisted fields for the server-rendered public page and its link-preview tags
+ * (docs/public-pages-plan.md §3.1, docs/og-plan.md §3.1). The API builds it field by field from
+ * `toPublicProfile` with default options, so it never carries `contact` values, `avatarUrl` or anything
+ * else a page or preview shouldn't see.
+ */
+export interface PageProfile {
+  slug: string;
+  displayName: string;
+  headline: string | null;
+  company: string | null;
+  role: string | null;
+  links: ProfileLinks;
+  bookingLinks: BookingLink[];
+  /** Which channels exist. Never their values. */
+  contactChannels: ProfileContactKey[];
+  contactVisibility: ContactVisibility;
+  /** First 16 hex of SHA-256(avatarKey), or null without a photo. */
+  avatarVersion: string | null;
+  /** ISO timestamp. */
+  updatedAt: string;
+  /** False until the search-visibility setting ships (Stage D). */
+  indexable: boolean;
+  /** Version of the personalised share card (16 hex), or null when cards are off, so the default image is used. */
+  ogVersion: string | null;
+}
+
+/** GET /_pages/profile/:slug response body (apps/api/src/routes/pages.ts), and later the Stage C RPC result. */
+export type ProfilePageResult = { status: 'ok'; profile: PageProfile } | { status: 'not_found' } | { status: 'rate_limited' };
+
 export interface Me {
   user: { id: string; email: string; createdAt: string };
   /** Null until onboarding has created the profile. */
