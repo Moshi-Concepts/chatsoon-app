@@ -9,7 +9,8 @@ import { hmacHex, timingSafeEqual } from './signing';
 // time. That means POST /email/unsubscribe (routes/email.ts) needs no lookup to know which table to
 // update, and there is no `*_token_hash` column to keep in sync with it.
 
-export type UnsubscribeKind = 'lead' | 'user';
+/** 'invite' (issue #11): keyed on the lowercased invitee email, same shape as 'lead'. */
+export type UnsubscribeKind = 'lead' | 'user' | 'invite';
 
 function base64UrlEncodeText(value: string): string {
   const bytes = new TextEncoder().encode(value);
@@ -58,7 +59,7 @@ export async function verifyUnsubscribeToken(env: Env, token: string): Promise<P
   const kind = raw.slice(0, firstColon);
   const id = raw.slice(firstColon + 1, lastColon);
   const sig = raw.slice(lastColon + 1);
-  if ((kind !== 'lead' && kind !== 'user') || !id || !sig) return null;
+  if ((kind !== 'lead' && kind !== 'user' && kind !== 'invite') || !id || !sig) return null;
 
   const expected = await hmacHex(env.FILE_SIGNING_SECRET, `unsub:${kind}:${id}`);
   return timingSafeEqual(expected, sig) ? { kind, id } : null;

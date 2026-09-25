@@ -6,6 +6,7 @@ import type { Env } from '../env';
 import { getDb, type DB } from './db';
 import { leadStepEmail, nudgeEmail, sendEmail } from './email';
 import { findProfileByUserId } from './profiles';
+import { suppressInviteEmail } from './referrals';
 import { isReviewerEmail } from './reviewer';
 import { parseLinks } from './serialize';
 import { listUnsubscribeHeaders, unsubscribeToken, unsubscribeUrl } from './unsubscribe';
@@ -127,9 +128,13 @@ async function unsubscribeLead(db: DB, email: string, now: number): Promise<void
     .where(and(eq(emailLeads.email, email), isNull(emailLeads.unsubscribedAt)));
 }
 
-/** POST /email/unsubscribe (routes/email.ts), after the token verifies. `id` is the lead email or user id it names. */
-export async function unsubscribeByToken(db: DB, kind: 'lead' | 'user', id: string, now = Date.now()): Promise<void> {
+/**
+ * POST /email/unsubscribe (routes/email.ts), after the token verifies. `id` is the lead email, the
+ * user id, or (issue #11) the lowercased invitee email a referral invite token names.
+ */
+export async function unsubscribeByToken(db: DB, kind: 'lead' | 'user' | 'invite', id: string, now = Date.now()): Promise<void> {
   if (kind === 'lead') await unsubscribeLead(db, id, now);
+  else if (kind === 'invite') await suppressInviteEmail(db, id, now);
   else await setTipsEmailsEnabled(db, id, false, now);
 }
 

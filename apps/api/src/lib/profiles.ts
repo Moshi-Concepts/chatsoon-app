@@ -49,6 +49,20 @@ export async function findProfileByUserId(db: DB, userId: string): Promise<Profi
 }
 
 /**
+ * Like `findProfileByUserId`, but null while `userId` has a pending account deletion (issue #11: the
+ * referrals hub looks up *someone else's* profile - a referrer's own referral list, the "Invited by"
+ * card's referrer - and those lookups must honour deletions the same way every public lookup does).
+ */
+export async function findVisibleProfileByUserId(db: DB, userId: string): Promise<ProfileRow | null> {
+  const [row] = await db
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.userId, userId), notPendingDeletion(db)))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
  * Same lookup as `findProfileBySlug`, plus the owner's email in the same query (one D1 round trip,
  * not two) — `isIndexable` needs it, and page/photo lookups are on the hot path. Also excludes a
  * profile whose owner has a pending deletion, same as `findProfileBySlug`.

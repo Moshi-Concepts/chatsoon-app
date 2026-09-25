@@ -3,18 +3,26 @@ import type { Env } from '../env';
 // Daily caps on paid calls (Claude card extraction). Checked before the call is made, so a bug,
 // a scripted account or a runaway client can never spend more than the caps allow in a day.
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** UTC date, YYYY-MM-DD - the `usage_counters.day` format. Exported for lib/referrals.ts's invite cap. */
+export const today = () => new Date().toISOString().slice(0, 10);
 
-/** Adds one to a daily counter and returns the new count. Atomic in D1. */
-async function bump(env: Env, key: string, day: string): Promise<number> {
+/** Adds `amount` to a daily counter and returns the new count. Atomic in D1. Exported for
+ * lib/referrals.ts's invite daily cap (`refinvite:user:<id>:<day>`, docs/referrals.md "API"), which
+ * needs to reserve more than one at a time (a batch of invites in one request). */
+export async function bumpBy(env: Env, key: string, day: string, amount: number): Promise<number> {
   const row = await env.DB.prepare(
-    `insert into usage_counters (key, day, count) values (?1, ?2, 1)
-     on conflict (key) do update set count = count + 1
+    `insert into usage_counters (key, day, count) values (?1, ?2, ?3)
+     on conflict (key) do update set count = count + ?3
      returning count`,
   )
-    .bind(key, day)
+    .bind(key, day, amount)
     .first<{ count: number }>();
   return row?.count ?? 0;
+}
+
+/** Adds one to a daily counter and returns the new count. */
+async function bump(env: Env, key: string, day: string): Promise<number> {
+  return bumpBy(env, key, day, 1);
 }
 
 const intVar = (value: string | undefined, fallback: number) => {

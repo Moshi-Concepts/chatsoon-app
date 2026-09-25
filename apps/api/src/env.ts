@@ -25,6 +25,8 @@ export interface Env {
   WRITE_LIMITER: RateLimit;
   /** Per IP, on profile lookups that find nothing. Shared by GET /id/:slug and GET /_pages/*. */
   PROFILE_MISS_LIMITER: RateLimit;
+  /** Per IP, on POST /me/referral/attribute (code guessing). */
+  REFERRAL_ATTRIBUTE_LIMITER: RateLimit;
 
   /** Kill switch for personalised share cards (O20). "false", or no OG binding, uses the default image. */
   OG_CARDS_ENABLED: string;
@@ -84,6 +86,34 @@ export interface Env {
   REFERRAL_DISCORD_MIN_AGE_DAYS?: string;
   /** Minimum X follower count for a linked X account to count as eligible. Default 50. */
   REFERRAL_X_MIN_FOLLOWERS?: string;
+  /** Kill switch (docs/referrals.md "Release" step 1): "false" (the shipped default) makes
+   * POST /me/referral/attribute, /me/referral/invites and /me/referral/claims answer
+   * `referral_disabled`; GET /me/referral and GET /referral/:code still work either way. */
+  REFERRAL_ENABLED?: string;
+  /** Qualified referrals for the permanent milestone badge (founder/early_adopter). Default 10. */
+  REFERRAL_FOUNDER_THRESHOLD?: string;
+  /** How many people can ever be numbered 'founder'; everyone after gets 'early_adopter'. Default 100. */
+  REFERRAL_FOUNDER_CAP?: string;
+  /** Qualified referrals to unlock the reward claim. Default 20. */
+  REFERRAL_CLAIM_THRESHOLD?: string;
+  /** Points credited to the referrer once a referral qualifies. Default 100. */
+  REFERRAL_POINTS_PER_REFERRAL?: string;
+  /** Points credited to the referred person the moment their attribution is accepted. Default 1. */
+  REFERRAL_POINTS_FOR_JOINING?: string;
+  /** Days after attribution before a pending referral can qualify. Default 7. */
+  REFERRAL_HOLD_DAYS?: string;
+  /** A caller's account must be this many days old (or younger) to attribute a code. Default 14. */
+  REFERRAL_ATTRIBUTION_DAYS?: string;
+  /** Days a pending/rejected referral gets before the sweep gives up on it (status 'void'). Default 60. */
+  REFERRAL_MAX_PENDING_DAYS?: string;
+  /** Invites one account can send per UTC day (usage_counters `refinvite:user:<id>:<day>`). Default 20. */
+  REFERRAL_INVITE_DAILY_PER_USER?: string;
+  /** The partner's landing page; POST /me/referral/claims appends `?token=`. */
+  REFERRAL_CLAIM_URL?: string;
+  /** Bearer secret for the two partner endpoints (GET/POST /referral/claims/*). Unset: always 401 - never open. */
+  REFERRAL_PARTNER_SECRET?: string;
+  /** HMAC key for `referrals.ip_hash`/`ua_hash`. Unset: both columns are stored null. */
+  REFERRAL_HASH_SECRET?: string;
 }
 
 export interface AuthedUser {

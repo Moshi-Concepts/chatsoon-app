@@ -44,7 +44,9 @@
     // Per user, on writes that add rows (contacts, tags, events). Room for the offline outbox to sync.
     { "name": "WRITE_LIMITER", "namespace_id": "1009", "simple": { "limit": 120, "period": 60 } },
     // Per IP, on profile lookups that find nothing, so slugs can't be guessed in bulk.
-    { "name": "PROFILE_MISS_LIMITER", "namespace_id": "1010", "simple": { "limit": 60, "period": 60 } }
+    { "name": "PROFILE_MISS_LIMITER", "namespace_id": "1010", "simple": { "limit": 60, "period": 60 } },
+    // Per IP, on POST /me/referral/attribute (issue #11): guards against guessing another referral code.
+    { "name": "REFERRAL_ATTRIBUTE_LIMITER", "namespace_id": "1012", "simple": { "limit": 10, "period": 60 } }
   ],
   "vars": {
     "WEB_ORIGIN": "https://chatsoon.app",
@@ -68,7 +70,21 @@
     // Referrals (issue #11), account linking / social_checks eligibility (docs/referrals.md).
     // Parsed as numbers with defaults by lib/referral-config.ts.
     "REFERRAL_DISCORD_MIN_AGE_DAYS": "90",
-    "REFERRAL_X_MIN_FOLLOWERS": "50"
+    "REFERRAL_X_MIN_FOLLOWERS": "50",
+    // Referrals (issue #11, PR 2, docs/referrals.md "Config"). Release step 1 ships this "false":
+    // attribute, invites and claims answer referral_disabled; GET /me/referral and GET /referral/:code
+    // still work. Flip to "true" once the migration is applied and the two secrets below are set.
+    "REFERRAL_ENABLED": "false",
+    "REFERRAL_FOUNDER_THRESHOLD": "10",
+    "REFERRAL_FOUNDER_CAP": "100",
+    "REFERRAL_CLAIM_THRESHOLD": "20",
+    "REFERRAL_POINTS_PER_REFERRAL": "100",
+    "REFERRAL_POINTS_FOR_JOINING": "1",
+    "REFERRAL_HOLD_DAYS": "7",
+    "REFERRAL_ATTRIBUTION_DAYS": "14",
+    "REFERRAL_MAX_PENDING_DAYS": "60",
+    "REFERRAL_INVITE_DAILY_PER_USER": "20",
+    "REFERRAL_CLAIM_URL": "https://bounties.learncardano.io/claim/chatsoon"
   }
   // Secrets (wrangler secret put <NAME>):
   //   BETTER_AUTH_SECRET  RESEND_API_KEY  ANTHROPIC_API_KEY
@@ -79,4 +95,8 @@
   //   DISCORD_CLIENT_ID   DISCORD_CLIENT_SECRET
   //   APPLE_CLIENT_ID     APPLE_TEAM_ID  APPLE_KEY_ID  APPLE_PRIVATE_KEY (the .p8 file's contents)
   //   X / Twitter (issue #11), link-only, optional: TWITTER_CLIENT_ID  TWITTER_CLIENT_SECRET
+  //   Referrals (issue #11, PR 2), both optional:
+  //     REFERRAL_PARTNER_SECRET  bearer secret for GET/POST /referral/claims/*. Unset: those two
+  //                              routes always answer 401 - never open with nothing configured.
+  //     REFERRAL_HASH_SECRET     HMAC key for referrals.ip_hash/ua_hash. Unset: both columns stay null.
 }

@@ -6,8 +6,10 @@ import { cors } from 'hono/cors';
 
 import type { AppEnv, Env } from './env';
 import { allowedOrigins, buildSocialProviders, createAuth, otpRateLimit } from './lib/auth';
+import { getDb } from './lib/db';
 import { runDueDeletions } from './lib/deletion';
 import { errorBody, onError } from './lib/errors';
+import { runReferralQualification, sweepReferralInvites } from './lib/referrals';
 import { runEmailSequences } from './lib/sequences';
 import { accountRoutes } from './routes/account';
 import { connectionsRoutes } from './routes/connections';
@@ -20,6 +22,7 @@ import { moderationRoutes } from './routes/moderation';
 import { pagesRoutes } from './routes/pages';
 import { profileRoutes } from './routes/profile';
 import { publicRoutes } from './routes/public';
+import { referralsRoutes } from './routes/referrals';
 import { tagsRoutes } from './routes/tags';
 
 // Route table (MVP). Each module owns its paths:
@@ -46,7 +49,8 @@ app.use('*', async (c, next) => {
   const origins = allowedOrigins(c.env);
   return cors({
     origin: (origin) => (origins.includes(origin) ? origin : null),
-    allowHeaders: ['Content-Type', 'Authorization'],
+    // X-Chatsoon-Device (issue #11): sent on POST /me/referral/attribute only.
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Chatsoon-Device'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     exposeHeaders: ['set-auth-token', 'Content-Disposition'],
     credentials: true,
@@ -105,16 +109,22 @@ app.route('/', extractRoutes);
 app.route('/', moderationRoutes);
 app.route('/', pagesRoutes);
 app.route('/', emailRoutes);
+app.route('/', referralsRoutes);
 
 /**
  * The wrangler.jsonc `triggers.crons` entry (every 10 minutes): finishes any account deletion
- * (issue #8) whose grace period has passed, and sends any due tips-email (issue #7) step or nudge.
- * Each job gets its own `waitUntil`/`catch` so a failure in one never affects the other; within each
- * job, `runDueDeletions`/`runEmailSequences` isolate failures row by row the same way.
+ * (issue #8) whose grace period has passed, sends any due tips-email (issue #7) step or nudge, runs
+ * the referral qualification sweep (issue #11), and sweeps expired/converted referral invites.
+ * Each job gets its own `waitUntil`/`catch` so a failure in one never affects the others; within each
+ * job, the row-processing functions isolate failures row by row the same way.
  */
 async function scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
   ctx.waitUntil(runDueDeletions(env, Date.now()).catch((err) => console.error('runDueDeletions failed', err)));
   ctx.waitUntil(runEmailSequences(env, Date.now()).catch((err) => console.error('runEmailSequences failed', err)));
+  ctx.waitUntil(
+    runReferralQualification(env, getDb(env), Date.now()).catch((err) => console.error('runReferralQualification failed', err)),
+  );
+  ctx.waitUntil(sweepReferralInvites(getDb(env), Date.now()).catch((err) => console.error('sweepReferralInvites failed', err)));
 }
 
 // Cloudflare calls `.fetch` and `.scheduled` on whatever this module exports as default; `app.fetch`

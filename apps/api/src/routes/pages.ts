@@ -1,9 +1,11 @@
 import { Hono, type Context } from 'hono';
 
 import type { AppEnv } from '../env';
+import { getDb } from '../lib/db';
 import { errorBody } from '../lib/errors';
 import { timingSafeEqual } from '../lib/signing';
 import { indexableProfiles, profileOgImage, profilePage, profilePhoto } from '../pages';
+import { referralPageLookup } from './referrals';
 
 // GET /_pages/profile/:slug, GET /_pages/og/:slug and GET /_pages/photo/:slug: the Pages Function
 // transport for public page tags, share-card images and avatars (docs/og-plan.md §3.3, decision O14;
@@ -102,6 +104,18 @@ pagesRoutes.get('/_pages/photo/:slug', async (c) => {
 pagesRoutes.get('/_pages/sitemap', async (c) => {
   if (!authorized(c)) return c.json(errorBody('not_found', 'Not found'), 404);
   const result = await indexableProfiles(c.env);
+  c.header('Cache-Control', 'no-store');
+  return c.json(result);
+});
+
+/**
+ * GET /_pages/referral/:code (issue #11, docs/referrals.md "API"): mirrors GET /_pages/profile/:slug
+ * for the web landing page's Pages Function (PR 3, not built yet). Same secret gate; no separate rate
+ * limiting here since the shared secret is the trust boundary, same as the other /_pages/* routes.
+ */
+pagesRoutes.get('/_pages/referral/:code', async (c) => {
+  if (!authorized(c)) return c.json(errorBody('not_found', 'Not found'), 404);
+  const result = await referralPageLookup(c.env, getDb(c.env), c.req.param('code'));
   c.header('Cache-Control', 'no-store');
   return c.json(result);
 });

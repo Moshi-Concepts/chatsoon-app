@@ -147,6 +147,7 @@ describe('GET /id/:slug', () => {
       bookingLinks: [],
       contactChannels: [],
       contactVisibility: 'connections',
+      badges: [],
     });
     expect(profile).not.toHaveProperty('email');
     expect(profile).not.toHaveProperty('userId');

@@ -12,3 +12,5 @@ export * from './vcard';
 // Referrals (issue #11): plain string/BigInt helpers, no `URL` class. apps/web imports the module
 // path directly (`@chatsoon/shared/src/social`) rather than this barrel, same as og.ts.
 export * from './social';
+// Referrals (issue #11, PR 2): same rule as social.ts above - no zod, no `URL` class.
+export * from './referrals';

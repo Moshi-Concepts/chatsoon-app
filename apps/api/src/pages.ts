@@ -42,7 +42,7 @@ async function lookupProfile(env: Env, slug: string, ip: string | null): Promise
 export async function profilePage(env: Env, slug: string, ip: string | null): Promise<ProfilePageResult> {
   const found = await lookupProfile(env, slug, ip);
   if (found.status !== 'ok') return found;
-  return { status: 'ok', profile: await toPageProfile(env, found.row, found.email) };
+  return { status: 'ok', profile: await toPageProfile(env, getDb(env), found.row, found.email) };
 }
 
 /**

@@ -101,7 +101,7 @@ publicRoutes.get('/id/:slug', optionalAuth, async (c) => {
   // the plain vCard (a 'public' profile's vcard route already includes it with no signature needed).
   const vcardUrl = contact && profile.contactVisibility !== 'public' ? await signedVcardUrl(c.env, profile.slug) : undefined;
 
-  const body: PublicProfile = await toPublicProfile(c.env, profile, { contact, vcardUrl });
+  const body: PublicProfile = await toPublicProfile(c.env, db, profile, { contact, vcardUrl });
   if (viewer && viewer.id !== profile.userId) body.blockedByMe = blockedByMe;
   return c.json(body);
 });

@@ -1,4 +1,4 @@
-import { APP_NAME, COPYRIGHT, SUPPORT_EMAIL, TAGLINE } from '@chatsoon/shared';
+import { APP_NAME, BADGE_LABELS, COPYRIGHT, SUPPORT_EMAIL, TAGLINE, type Badge } from '@chatsoon/shared';
 
 import type { Env } from '../env';
 
@@ -403,4 +403,114 @@ export function nudgeEmail(step: 1 | 2, ctaUrl: string, unsubscribeUrl: string):
             <p style="margin:0 0 24px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">Add <strong style="color:${INK};">${escapeHtml(linkText)}</strong> to your X and LinkedIn bios so the people you meet can find you.</p>
             ${ctaButtonHtml(ctaUrl, 'View my profile')}`;
   return { subject, text, html: shellHtml(subject, lead, cardHtml, tipsFooterHtml(NUDGE_CONSENT_LINE, unsubscribeUrl)) };
+}
+
+// ---------------------------------------------------------------------------
+// Referrals (issue #11, docs/referrals.md "Emails"). The Invite email is marketing-style, same
+// consent/unsubscribe shape as the tips emails above (one send, never a follow-up, per the doc's
+// "Compliance" section). Qualified is tips-gated (email_prefs.tips_opt_out_at) so it reuses the same
+// footer; Milestone badge and Claim ready are transactional (always sent, plain footer, no unsubscribe).
+// ---------------------------------------------------------------------------
+
+/** Collapses to one line and trims: profile fields (a display name, headline, company) are free text
+ * a user chose, and none of it may ever break a subject line or inject a second header line. */
+function oneLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+const REFERRAL_INVITE_CONSENT_LINE_PREFIX = 'You were sent this because';
+
+/**
+ * To the invitee, from EMAIL_FROM, no reply-to override. `inviterName` is always present (a display
+ * name is required to have a profile at all); `inviterHeadline`/`inviterCompany` are optional, both
+ * escaped and collapsed to one line, same as `inviterName`, before they ever reach the subject or body.
+ * Nothing the invitee typed goes anywhere near this template - there is no invitee input at all.
+ */
+export function referralInviteEmail(opts: {
+  inviterName: string;
+  inviterHeadline: string | null;
+  inviterCompany: string | null;
+  link: string;
+  unsubscribeUrl: string;
+}): RenderedEmail {
+  const name = oneLine(opts.inviterName);
+  const subject = `${name} invited you to Chatsoon`;
+  const about = [opts.inviterHeadline, opts.inviterCompany].map((v) => (v ? oneLine(v) : null)).filter(Boolean).join(' at ');
+  const consentLine = `${REFERRAL_INVITE_CONSENT_LINE_PREFIX} ${name} entered your address in Chatsoon. We won't email you again unless you sign up.`;
+
+  const introLines = [
+    `${name}${about ? ` (${about})` : ''} thinks you'd like Chatsoon.`,
+    `Chatsoon is a digital business card and contact book: a QR code and link people can scan or tap to save your details instantly, then keep track of everyone they meet.`,
+  ];
+
+  const text = [...introLines, '', 'Set up your profile:', opts.link, '', tipsFooterText(consentLine, opts.unsubscribeUrl)].join('\n');
+
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">${escapeHtml(subject)}</p>
+            <p style="margin:0 0 12px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">${escapeHtml(introLines[0]!)}</p>
+            <p style="margin:0 0 24px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">${escapeHtml(introLines[1]!)}</p>
+            ${ctaButtonHtml(opts.link, 'Set up my profile')}`;
+
+  return { subject, text, html: shellHtml(subject, introLines[0]!, cardHtml, tipsFooterHtml(consentLine, opts.unsubscribeUrl)) };
+}
+
+const REFERRAL_CONSENT_LINE = "You're getting this because someone you referred to Chatsoon just qualified. Turn these off in Me › Tips emails.";
+
+/**
+ * To the referrer, tips-gated (email_prefs.tips_opt_out_at - lib/sequences.ts's `tipsEmailsEnabled`).
+ * `referredName` is the qualified referral's own display name (their profile is public by definition
+ * once qualified: it must exist and be published). `progressLine` is one of "N of 10 to Founding
+ * member" / "N of 10 to Early adopter" / "N of 20 to your reward", built by lib/referrals.ts.
+ */
+export function referralQualifiedEmail(referredName: string, progressLine: string, unsubscribeUrl: string): RenderedEmail {
+  const name = oneLine(referredName);
+  const subject = `${name} just qualified as your referral. ${progressLine}`;
+  const lead = `${name} just qualified as your referral.`;
+
+  const text = [lead, progressLine, '', tipsFooterText(REFERRAL_CONSENT_LINE, unsubscribeUrl)].join('\n');
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">${escapeHtml(lead)}</p>
+            <p style="margin:0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">${escapeHtml(progressLine)}</p>`;
+  return { subject, text, html: shellHtml(subject, lead, cardHtml, tipsFooterHtml(REFERRAL_CONSENT_LINE, unsubscribeUrl)) };
+}
+
+/**
+ * To the referrer, always sent (transactional): once, when the 10th qualified referral lands.
+ * `seq` is the founder number (1..REFERRAL_FOUNDER_CAP), present only for `badge === 'founder'`.
+ */
+export function referralMilestoneEmail(badge: Badge, seq: number | null, awardedAt: Date): RenderedEmail {
+  const label = BADGE_LABELS[badge];
+  const subject = badge === 'founder' ? `You're Chatsoon Founding member #${seq}` : `You're a Chatsoon ${label}`;
+  const when = formatDeletionTime(awardedAt); // same "Sunday 27 September 2026 at 09:30 UTC" formatting
+
+  const lead = `${subject}.`;
+  const body = `You've referred enough people to Chatsoon to earn the ${label} badge, awarded on ${when}. It shows next to your name on your profile card and public page, for good.`;
+
+  const text = [
+    lead,
+    '',
+    body,
+    '',
+    '--',
+    `${APP_NAME}. ${TAGLINE}`,
+    `Questions? ${SUPPORT_EMAIL}`,
+    `© ${new Date().getUTCFullYear()} ${COPYRIGHT}`,
+  ].join('\n');
+
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">${escapeHtml(lead)}</p>
+            <p style="margin:0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">${escapeHtml(body)}</p>`;
+  return { subject, text, html: shellHtml(subject, lead, cardHtml) };
+}
+
+/** To the referrer, always sent (transactional): once, when the 20th qualified referral lands. */
+export function referralClaimReadyEmail(): RenderedEmail {
+  const subject = 'You can claim your Chatsoon reward';
+  const lead = "You've referred 20 people who qualified. Your reward on Learn Cardano Bounties is ready to claim.";
+  const body = 'Open the Referrals tab in Chatsoon and tap Claim reward.';
+
+  const text = [lead, '', body, '', '--', `${APP_NAME}. ${TAGLINE}`, `Questions? ${SUPPORT_EMAIL}`, `© ${new Date().getUTCFullYear()} ${COPYRIGHT}`].join(
+    '\n',
+  );
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">${escapeHtml(subject)}</p>
+            <p style="margin:0 0 20px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">${escapeHtml(lead)}</p>
+            <p style="margin:0;font-family:${FONT};font-size:14px;line-height:21px;color:${FAINT};">${escapeHtml(body)}</p>`;
+  return { subject, text, html: shellHtml(subject, lead, cardHtml) };
 }

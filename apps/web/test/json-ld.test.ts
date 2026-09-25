@@ -24,6 +24,7 @@ const BASE: PageProfile = {
   bookingLinks: [{ label: 'Intro call', url: 'https://cal.com/peterbui/intro', provider: 'calcom' }],
   contactChannels: [],
   contactVisibility: 'connections',
+  badges: [],
   avatarVersion: 'abcdef0123456789',
   updatedAt: '2026-09-25T00:00:00.000Z',
   indexable: true,

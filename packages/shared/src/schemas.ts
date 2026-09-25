@@ -11,6 +11,7 @@ import {
 import { REPORT_REASONS } from './constants';
 import { hasObjectionableText } from './moderation';
 import { CONTACT_HINTS, CONTACT_MAX, contactUrl } from './profile-contact';
+import { isValidReferralCode } from './referrals';
 import type { ProfileContactKey } from './types';
 
 /** Optional free text: trims, turns '' into null, caps length. */
@@ -217,3 +218,32 @@ export type CancelDeletionInput = z.input<typeof cancelDeletionSchema>;
 /** PUT /me/email-prefs (issue #7): turns the new-account "tips" nudge emails on or off. */
 export const emailPrefsInputSchema = z.object({ tipsEmails: z.boolean() });
 export type EmailPrefsInput = z.input<typeof emailPrefsInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Referrals (issue #11, docs/referrals.md)
+// ---------------------------------------------------------------------------
+
+/** POST /me/referral/attribute: trims and uppercases, then validates the Crockford-minus alphabet and length. */
+export const attributeReferralSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine(isValidReferralCode, 'Enter a valid referral code'),
+  /** Reported by the client for bookkeeping only (docs/referrals.md `referrals.source`). */
+  source: z.enum(['link', 'typed', 'web']).optional(),
+});
+export type AttributeReferralInput = z.input<typeof attributeReferralSchema>;
+
+/** POST /me/referral/invites: 1 to 20 valid email addresses. */
+export const inviteEmailsSchema = z.object({
+  emails: z.array(emailSchema).min(1, 'Add at least one email').max(20, 'Add up to 20 emails at a time'),
+});
+export type InviteEmailsInput = z.input<typeof inviteEmailsSchema>;
+
+/** POST /me/referral/claims: the consent checkbox must be ticked, and its exact wording is kept for the record. */
+export const claimReferralSchema = z.object({
+  shareConsent: z.literal(true),
+  consentText: z.string().trim().min(1).max(500),
+});
+export type ClaimReferralInput = z.input<typeof claimReferralSchema>;

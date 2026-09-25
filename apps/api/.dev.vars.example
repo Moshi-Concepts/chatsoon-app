@@ -25,3 +25,8 @@ APPLE_CLIENT_ID=
 APPLE_TEAM_ID=
 APPLE_KEY_ID=
 APPLE_PRIVATE_KEY=
+
+# Referrals (issue #11, PR 2). Both optional: with no REFERRAL_PARTNER_SECRET, GET/POST
+# /referral/claims/* always answer 401; with no REFERRAL_HASH_SECRET, ip_hash/ua_hash are stored null.
+REFERRAL_PARTNER_SECRET=
+REFERRAL_HASH_SECRET=
