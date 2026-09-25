@@ -72,7 +72,11 @@ if(n==='_ga'||n.indexOf('_ga_')===0)hosts.forEach(function(h){document.cookie=n+
 })
 }
 var el=null;
-function hide(){if(el){el.remove();el=null}}
+// 2.4.11 Focus Not Obscured: keeps a keyboard-focused element from landing under the fixed banner.
+// --consent-h (html{scroll-padding-bottom:var(--consent-h,0)} in bannerRules()) is the banner's own
+// height plus its 16px bottom inset; kept live across reflow (text wrap, rotation) via 'resize'.
+function setPad(){if(el)document.documentElement.style.setProperty('--consent-h',(el.offsetHeight+16)+'px')}
+function hide(){if(el){el.remove();el=null;document.documentElement.style.removeProperty('--consent-h')}}
 function show(){
 if(el)return;
 var text=ce('p',{className:'cc-text'});
@@ -97,7 +101,9 @@ el.setAttribute('role','region');
 el.setAttribute('aria-label','Cookie consent');
 el.appendChild(text);
 el.appendChild(row);
-document.body.appendChild(el)
+document.body.appendChild(el);
+setPad();
+window.addEventListener('resize',setPad)
 }
 window.chatsoonConsent={open:function(){clear();disable(false);show()}};
 var v=get();
@@ -113,7 +119,10 @@ b.addEventListener('click',function(){window.chatsoonConsent.open()})
 /** Structural + colour rules shared by every surface. Colours come in as CSS custom properties so
  * callers can point them at the site's own tokens (consentCss) or hard-coded hex (consentCssStandalone). */
 function bannerRules(): string {
-  return `.cc-banner{position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--cc-border);border-radius:12px;background:var(--cc-bg);color:var(--cc-text);font:14px/1.4 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;box-shadow:0 12px 28px -12px rgba(0,0,0,.35)}
+  // 2.4.11 Focus Not Obscured: consentScript()'s setPad() keeps --consent-h at the banner's live
+  // height (plus its 16px inset) while it's shown; 0 the rest of the time, so this is a no-op.
+  return `html{scroll-padding-bottom:var(--consent-h,0)}
+.cc-banner{position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--cc-border);border-radius:12px;background:var(--cc-bg);color:var(--cc-text);font:14px/1.4 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;box-shadow:0 12px 28px -12px rgba(0,0,0,.35)}
 @media (min-width:640px){.cc-banner{right:auto;max-width:420px}}
 .cc-text{margin:0;flex:1 1 220px}
 .cc-text a{color:var(--cc-link);text-decoration:underline}

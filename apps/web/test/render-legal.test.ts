@@ -6,7 +6,7 @@ import { renderLegal, type LegalDoc, type LegalKey } from '../src/render/legal';
 import { DEFAULT_OG_IMAGE } from '../src/render/og-asset';
 
 const legal = legalContent as Record<LegalKey, LegalDoc>;
-const KEYS: LegalKey[] = ['privacy', 'terms', 'support'];
+const KEYS: LegalKey[] = ['privacy', 'terms', 'support', 'accessibility'];
 
 function anchor(heading: string): string {
   return heading

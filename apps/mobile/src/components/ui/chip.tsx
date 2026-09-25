@@ -65,5 +65,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
   },
-  countSelected: { opacity: 0.75 },
+  // 0.75 measured 4.25:1 (onPrimary text over a primary background) — under the 4.5:1 minimum.
+  // 0.9 clears it with a small margin in both light and dark.
+  countSelected: { opacity: 0.9 },
 });

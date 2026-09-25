@@ -11,7 +11,13 @@ export type TextProps = RNTextProps & {
 
 // Some theme colours are tuned for solid fills (buttons, badges) and don't meet 4.5:1 as text.
 // These aliases swap them for a text-safe token at render time, so callers keep saying color="primary".
-const TEXT_ALIAS = { primary: 'primaryText', success: 'successText', danger: 'dangerText' } as const;
+const TEXT_ALIAS = {
+  primary: 'primaryText',
+  success: 'successText',
+  danger: 'dangerText',
+  accent: 'accentText',
+  warning: 'warningText',
+} as const;
 
 export function Text({ variant = 'body', color = 'text', align, style, ...rest }: TextProps) {
   const theme = useTheme();

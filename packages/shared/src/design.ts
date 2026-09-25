@@ -27,6 +27,10 @@ export const Colors = {
     primaryText: '#5146E5',
     successText: '#0E7A3E',
     dangerText: '#B42D2D',
+    // `accent`/`warning` (#FF6B4A on accentSoft, #B86E00 on warningSoft) fall under 4.5:1 as text — 2.5:1
+    // and 3.6:1 respectively. Darkened the same way successText/dangerText darken their base colour.
+    accentText: '#A83D1D',
+    warningText: '#8A5300',
   },
   dark: {
     background: '#0B0B10',
@@ -52,6 +56,10 @@ export const Colors = {
     primaryText: '#8F88FF',
     successText: '#34C372',
     dangerText: '#FF6464',
+    // Dark mode's accent/warning already clear 4.5:1 on their *Soft backgrounds; kept as-is for parity
+    // with successText/dangerText above, which also just repeat their base colour in dark mode.
+    accentText: '#FF7D5E',
+    warningText: '#F0A93B',
   },
 } as const;
 

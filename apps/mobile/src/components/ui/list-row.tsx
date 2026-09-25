@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -44,6 +44,9 @@ export function ListRow({
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={accessibilityLabel ?? title}
+      // Rows usually span an unpadded, overflow:hidden Card (Section); global.css gives this an
+      // inward focus ring instead of the default outward one, which the card would clip.
+      {...(Platform.OS === 'web' ? { dataSet: { focusRing: 'inset' } } : {})}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: pressed && onPress ? theme.surfaceAlt : 'transparent' },

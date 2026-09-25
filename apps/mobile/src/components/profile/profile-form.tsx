@@ -453,6 +453,7 @@ export function ProfileFields({
                 trackColor={{ false: theme.border, true: theme.primary }}
                 thumbColor={theme.surface}
                 ios_backgroundColor={theme.border}
+                accessibilityLabel="Show my profile in search engines"
               />
             </View>
             <Text variant="caption" color="textTertiary" style={styles.searchCaption}>

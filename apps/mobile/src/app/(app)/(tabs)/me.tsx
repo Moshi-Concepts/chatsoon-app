@@ -174,6 +174,12 @@ export default function MeScreen() {
           divider
         />
         <ListRow icon="document-text-outline" title="Terms of use" onPress={() => router.push('/terms')} divider />
+        <ListRow
+          icon="accessibility-outline"
+          title="Accessibility statement"
+          onPress={() => router.push('/accessibility')}
+          divider
+        />
         {Platform.OS === 'web' ? (
           <ListRow
             icon="settings-outline"

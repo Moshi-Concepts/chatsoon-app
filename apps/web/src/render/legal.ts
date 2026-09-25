@@ -9,7 +9,7 @@ import { escapeHtml } from './escape';
 import { page } from './layout';
 import { DEFAULT_OG_IMAGE } from './og-asset';
 
-export type LegalKey = 'privacy' | 'terms' | 'support';
+export type LegalKey = 'privacy' | 'terms' | 'support' | 'accessibility';
 
 export interface LegalSection {
   heading: string;
@@ -24,9 +24,9 @@ export interface LegalDoc {
   sections: LegalSection[];
 }
 
-/** The three legal pages a build script needs to render — avoids repeating the key list elsewhere.
- * The footer's Privacy/Terms/Support links live in layout.ts, shared by every page. */
-export const LEGAL_KEYS: readonly LegalKey[] = ['privacy', 'terms', 'support'];
+/** The legal pages a build script needs to render — avoids repeating the key list elsewhere.
+ * The footer's Privacy/Terms/Support/Accessibility links live in layout.ts, shared by every page. */
+export const LEGAL_KEYS: readonly LegalKey[] = ['privacy', 'terms', 'support', 'accessibility'];
 
 /** Escapes text and turns the support address and chatsoon.app URLs into links (D17 wraps the mailto in email_off). */
 function rich(s: string): string {

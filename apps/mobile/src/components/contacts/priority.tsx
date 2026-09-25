@@ -34,6 +34,9 @@ export function PriorityPicker({
               onPress={() => onChange(on ? null : level)}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
+              // react-native-web doesn't bridge accessibilityState.checked to aria-checked for a
+              // custom role="radio" (axe: aria-required-attr) — the cross-platform aria-* prop does.
+              aria-checked={on}
               accessibilityLabel={`Priority ${level}, ${priorityLabel(level)}`}
               accessibilityHint={on ? 'Tap again to clear' : undefined}
               style={({ pressed }) => [

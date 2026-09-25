@@ -41,6 +41,7 @@ const FOOTER_LINKS = [
   { href: '/privacy', label: 'Privacy' },
   { href: '/terms', label: 'Terms' },
   { href: '/support', label: 'Support' },
+  { href: '/accessibility', label: 'Accessibility' },
 ];
 
 /** Renders one complete `<html>` document. */

@@ -17,7 +17,7 @@ export type LegalDoc = {
   sections: LegalSection[];
 };
 
-export type LegalDocKey = 'privacy' | 'terms' | 'support';
+export type LegalDocKey = 'privacy' | 'terms' | 'support' | 'accessibility';
 
 export const legal: Record<LegalDocKey, LegalDoc> = data;
 
@@ -26,4 +26,5 @@ export const LEGAL_LINKS: { key: LegalDocKey; href: `/${LegalDocKey}`; label: st
   { key: 'privacy', href: '/privacy', label: 'Privacy' },
   { key: 'terms', href: '/terms', label: 'Terms' },
   { key: 'support', href: '/support', label: 'Support' },
+  { key: 'accessibility', href: '/accessibility', label: 'Accessibility' },
 ];

@@ -369,5 +369,53 @@
         ]
       }
     ]
+  },
+  "accessibility": {
+    "title": "Accessibility Statement",
+    "updated": "26 September 2026",
+    "intro": "We want chatsoon.app and the Chatsoon web app to work for everyone, including people who use a screen reader, navigate by keyboard, zoom or resize text, or turn on reduced motion. This page explains what we've done, what we know still needs work, and how to tell us about a problem.",
+    "sections": [
+      {
+        "heading": "Our commitment",
+        "paragraphs": [
+          "We aim to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA for chatsoon.app (the public pages and your public profile) and for the signed-in Chatsoon web app. We test with automated tools and by using the app with a keyboard and a screen reader, and we keep working through anything we find."
+        ]
+      },
+      {
+        "heading": "What's supported",
+        "bullets": [
+          "Keyboard: every screen, form and dialog can be used with Tab, Enter, Space and Escape alone, with a visible focus ring.",
+          "Screen readers: pages use headings, landmarks, labelled form fields and live regions for errors and status updates, and icon-only buttons carry a text label.",
+          "Light and dark mode: the app follows your device or browser's system setting automatically.",
+          "Text resizing and zoom: text can be resized or the page zoomed to 200% without losing content or function.",
+          "Reduced motion: if you've turned on \"reduce motion\" on your device or in your browser, Chatsoon's loading animations turn off.",
+          "Colour contrast: text and interactive elements meet WCAG AA contrast ratios."
+        ]
+      },
+      {
+        "heading": "Known limitations",
+        "paragraphs": [
+          "We're not aware of any WCAG 2.2 AA failures on chatsoon.app or the web app today, but a few things are worth calling out:"
+        ],
+        "bullets": [
+          "Some screens group content into fewer landmark regions (such as \"main\" or \"navigation\") than we'd like, which can make jumping between sections by landmark slower with a screen reader, even though every control on the page is still reachable.",
+          "Scanning a QR code or a business card uses your camera and needs you to see and aim it. If that's not possible, ask the other person to share their profile link instead, or use \"Add manually\" to type in a contact's details.",
+          "Booking links (such as Calendly or Google Calendar) open that provider's own page, which follows its own accessibility standards, not ours.",
+          "We test with the latest versions of common screen readers and browsers. If you use an older or less common combination and something doesn't work, please tell us."
+        ]
+      },
+      {
+        "heading": "The iPhone and Android apps",
+        "paragraphs": [
+          "The Chatsoon iPhone and Android apps share the same design, wording and navigation as the web app, and support your device's screen reader (VoiceOver or TalkBack), Dynamic Type or font scaling, and system light and dark mode. We improve their accessibility in every release, using the same testing we do for the web app."
+        ]
+      },
+      {
+        "heading": "How to report a problem",
+        "paragraphs": [
+          "If you hit an accessibility barrier anywhere in Chatsoon, on the web or in the app, email hello@chatsoon.app with the page or screen, what happened, and the assistive technology or browser you were using. We'll respond within 5 business days."
+        ]
+      }
+    ]
   }
 }

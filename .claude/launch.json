@@ -13,6 +13,22 @@
       "port": 8787
     },
     {
+      "name": "api-logmail",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@chatsoon/api",
+        "exec",
+        "wrangler",
+        "dev",
+        "--var",
+        "EMAIL_PROVIDER:log",
+        "--port",
+        "8789"
+      ],
+      "port": 8789
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

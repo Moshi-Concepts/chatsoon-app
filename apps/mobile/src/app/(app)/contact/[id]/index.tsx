@@ -81,7 +81,9 @@ export default function ContactDetailScreen() {
     const notFound = !id || gone;
     return (
       <Screen>
-        <Stack.Screen options={{ title: 'Contact', headerTitle: '' }} />
+        {/* headerTitle as a function returning null (not '') so react-navigation's web header doesn't
+            render an empty, screen-reader-visible heading element. */}
+        <Stack.Screen options={{ title: 'Contact', headerTitle: () => null }} />
         {notFound || query.isError ? (
           <EmptyState
             icon={notFound ? 'person-outline' : 'cloud-offline-outline'}
@@ -193,7 +195,9 @@ export default function ContactDetailScreen() {
         options={{
           // The name is in the hero below; `title` still names the browser tab on web.
           title: c.name,
-          headerTitle: '',
+          // A function returning null (not '') so react-navigation's web header doesn't render an
+          // empty, screen-reader-visible heading element (see the loading branch above).
+          headerTitle: () => null,
           headerRight: () => (
             <HeaderTextButton title="Edit" disabled={busy} onPress={() => router.push(`/contact/${c.id}/edit`)} />
           ),
@@ -203,7 +207,7 @@ export default function ContactDetailScreen() {
       <View style={styles.hero}>
         <Avatar name={c.name} size={88} />
         <View style={styles.heroText}>
-          <Text variant="title" align="center" selectable>
+          <Text variant="title" align="center" selectable accessibilityRole="header">
             {c.name}
           </Text>
           {subtitle ? (

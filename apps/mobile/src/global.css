@@ -29,3 +29,45 @@
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
   mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
 }
+
+/* WCAG 2.2 2.4.7 Focus Visible: react-native-web Pressables (buttons, chips, list rows, tab bar
+   items, header icon buttons) are divs/anchors with a role and tabIndex, not real <button>s, so they
+   don't reliably pick up a browser default ring. One consistent ring for all of them: 2px solid
+   `primary` (design.ts), 2px outside the element. Colours are literal (not a CSS var) because this
+   file is a static stylesheet loaded before the RN theme runs; they mirror design.ts's `primary` and
+   must be kept in sync with it by hand. */
+[role='button']:focus-visible,
+[role='tab']:focus-visible,
+[role='radio']:focus-visible,
+[role='switch']:focus-visible,
+[role='menuitem']:focus-visible,
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #5146e5;
+  outline-offset: 2px;
+}
+@media (prefers-color-scheme: dark) {
+  [role='button']:focus-visible,
+  [role='tab']:focus-visible,
+  [role='radio']:focus-visible,
+  [role='switch']:focus-visible,
+  [role='menuitem']:focus-visible,
+  a:focus-visible,
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    outline-color: #5a50f0;
+  }
+}
+/* ListRow (apps/mobile/src/components/ui/list-row.tsx) usually spans the full width of an
+   overflow:hidden Card (Section renders it unpadded), so an outward ring would be clipped at the
+   card's rounded corners. It opts into an inward ring instead via `data-focus-ring="inset"`. */
+[data-focus-ring='inset']:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px #5146e5;
+}
+@media (prefers-color-scheme: dark) {
+  [data-focus-ring='inset']:focus-visible {
+    box-shadow: inset 0 0 0 2px #5a50f0;
+  }
+}

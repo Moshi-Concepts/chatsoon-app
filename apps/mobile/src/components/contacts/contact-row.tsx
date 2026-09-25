@@ -4,6 +4,7 @@ import { Animated, Platform, Pressable, StyleSheet, View, type ViewStyle } from 
 
 import { Avatar, Icon, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTheme } from '@/hooks/use-theme';
 import { roleLine } from '@/lib/format';
 
@@ -106,9 +107,15 @@ export function ContactRow({
 /** Placeholder rows while the first page of contacts loads. */
 export function ContactListSkeleton({ rows = 6 }: { rows?: number }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [opacity] = useState(() => new Animated.Value(0.5));
 
   useEffect(() => {
+    if (reducedMotion) {
+      // A static mid-tone, not the fully-off end of the pulse, so the skeleton is still visible.
+      opacity.setValue(0.75);
+      return;
+    }
     const useNativeDriver = Platform.OS !== 'web';
     const pulse = Animated.loop(
       Animated.sequence([
@@ -118,7 +125,7 @@ export function ContactListSkeleton({ rows = 6 }: { rows?: number }) {
     );
     pulse.start();
     return () => pulse.stop();
-  }, [opacity]);
+  }, [opacity, reducedMotion]);
 
   const block = { backgroundColor: theme.surfaceAlt, borderRadius: Radius.sm };
   return (

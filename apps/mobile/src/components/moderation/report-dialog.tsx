@@ -163,6 +163,8 @@ function ReportSheet({ onClose, targetSlug, targetUserId, contactId, targetName 
                     disabled={report.isPending}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected, disabled: report.isPending }}
+                    // See priority.tsx: react-native-web needs the explicit aria-* prop for aria-checked.
+                    aria-checked={selected}
                     accessibilityLabel={REASON_LABELS[r].title}
                     style={({ pressed }) => [
                       styles.reason,

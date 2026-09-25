@@ -9,7 +9,9 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: theme.primary,
+        // `primaryText`, not `primary`: the tab bar label/icon sit directly on `surface`, and dark
+        // mode's `primary` (tuned for a solid button fill) is only 3.28:1 there — under 4.5:1.
+        tabBarActiveTintColor: theme.primaryText,
         tabBarInactiveTintColor: theme.textTertiary,
         tabBarStyle: {
           backgroundColor: theme.surface,

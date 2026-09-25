@@ -61,6 +61,7 @@ function RootStack() {
         <Stack.Screen name="privacy" options={{ title: 'Privacy policy' }} />
         <Stack.Screen name="terms" options={{ title: 'Terms of use' }} />
         <Stack.Screen name="support" options={{ title: 'Support' }} />
+        <Stack.Screen name="accessibility" options={{ title: 'Accessibility statement' }} />
       </Stack>
       {status === 'signedIn' ? <OutboxSync /> : null}
     </>

@@ -96,6 +96,14 @@ describe('consentScript', () => {
     expect(script).toContain('data-consent-open');
   });
 
+  it('2.4.11 Focus Not Obscured: sets --consent-h to the banner height while shown, and clears it on hide', () => {
+    expect(script).toContain("setProperty('--consent-h'");
+    expect(script).toContain('offsetHeight');
+    expect(script).toContain("removeProperty('--consent-h')");
+    // Kept in sync with reflow (text wrap, rotation), not just measured once at open.
+    expect(script).toContain("addEventListener('resize',setPad)");
+  });
+
   it('stays under about 1.5 KB gzipped (it ships inline on every page)', () => {
     expect(gzipSync(Buffer.from(script, 'utf8')).byteLength).toBeLessThan(1536);
   });
@@ -127,6 +135,11 @@ describe('consent CSS', () => {
   it('the banner never shifts layout: position is fixed', () => {
     expect(consentCss()).toMatch(/\.cc-banner\{position:fixed/);
     expect(consentCssStandalone()).toMatch(/\.cc-banner\{position:fixed/);
+  });
+
+  it('2.4.11 Focus Not Obscured: html gets scroll-padding-bottom from --consent-h, defaulting to 0', () => {
+    expect(consentCss()).toContain('html{scroll-padding-bottom:var(--consent-h,0)}');
+    expect(consentCssStandalone()).toContain('html{scroll-padding-bottom:var(--consent-h,0)}');
   });
 
   describe('AA contrast (banner text and buttons) in light and dark', () => {
