@@ -200,3 +200,11 @@ export const blockSchema = z
   .object(target)
   .refine((v) => v.targetSlug || v.targetUserId, { message: 'targetSlug or targetUserId is required' });
 export type BlockInput = z.input<typeof blockSchema>;
+
+/** POST /me/deletion (issue #8): typing the literal word proves the user meant it. */
+export const deleteAccountSchema = z.object({ confirm: z.literal('DELETE') });
+export type DeleteAccountInput = z.input<typeof deleteAccountSchema>;
+
+/** POST /account-deletion/cancel: the token from the "scheduled" email's cancel link. */
+export const cancelDeletionSchema = z.object({ token: z.string().trim().min(1).max(512) });
+export type CancelDeletionInput = z.input<typeof cancelDeletionSchema>;

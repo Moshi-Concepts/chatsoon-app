@@ -8,9 +8,9 @@ import {
   parseIntlPhone,
   toLinkUrl,
 } from '@chatsoon/shared';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, notExists, or, sql } from 'drizzle-orm';
 
-import { blocks, profiles, users, type ContactRow, type ProfileRow } from '../db/schema';
+import { accountDeletions, blocks, profiles, users, type ContactRow, type ProfileRow } from '../db/schema';
 import type { DB } from './db';
 import { parseContact, parseLinks } from './serialize';
 import { ownsKey, userPrefix } from './signing';
@@ -19,14 +19,30 @@ import { ownsKey, userPrefix } from './signing';
 // Lookups
 // ---------------------------------------------------------------------------
 
-/** Profile for a public slug. Null for unknown or malformed slugs. */
+/**
+ * NOT EXISTS a pending scheduled deletion (issue #8, lib/deletion.ts) for this profile's owner. Every
+ * public, slug-based lookup below is filtered by it: while a deletion is pending, the account's
+ * public presence must read as not found everywhere (the profile page, its vCard, the web Connect
+ * form, QR scan-connect, and the /_pages/* sitemap and preview routes). A fresh query builder is
+ * needed per call site (drizzle can't reuse one across queries), so this is a function, not a
+ * constant, and is inlined at each `where(and(...))` below rather than composed once.
+ */
+const notPendingDeletion = (db: DB) =>
+  notExists(db.select({ one: sql`1` }).from(accountDeletions).where(eq(accountDeletions.userId, profiles.userId)));
+
+/** Profile for a public slug. Null for unknown or malformed slugs, or while its owner's deletion is pending. */
 export async function findProfileBySlug(db: DB, slug: string): Promise<ProfileRow | null> {
   const normalized = slug.trim().toLowerCase();
   if (!isValidSlug(normalized)) return null;
-  const [row] = await db.select().from(profiles).where(eq(profiles.slug, normalized)).limit(1);
+  const [row] = await db
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.slug, normalized), notPendingDeletion(db)))
+    .limit(1);
   return row ?? null;
 }
 
+/** Unfiltered by design: the owner's own profile (GET /me, PUT /me/profile) works even while a deletion is pending. */
 export async function findProfileByUserId(db: DB, userId: string): Promise<ProfileRow | null> {
   const [row] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
   return row ?? null;
@@ -34,7 +50,8 @@ export async function findProfileByUserId(db: DB, userId: string): Promise<Profi
 
 /**
  * Same lookup as `findProfileBySlug`, plus the owner's email in the same query (one D1 round trip,
- * not two) — `isIndexable` needs it, and page/photo lookups are on the hot path.
+ * not two) — `isIndexable` needs it, and page/photo lookups are on the hot path. Also excludes a
+ * profile whose owner has a pending deletion, same as `findProfileBySlug`.
  */
 export async function findProfileBySlugWithEmail(
   db: DB,
@@ -46,7 +63,7 @@ export async function findProfileBySlugWithEmail(
     .select({ row: profiles, email: users.email })
     .from(profiles)
     .innerJoin(users, eq(users.id, profiles.userId))
-    .where(eq(profiles.slug, normalized))
+    .where(and(eq(profiles.slug, normalized), notPendingDeletion(db)))
     .limit(1);
   return found ?? null;
 }

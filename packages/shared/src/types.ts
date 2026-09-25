@@ -103,6 +103,21 @@ export interface Me {
   user: { id: string; email: string; createdAt: string };
   /** Null until onboarding has created the profile. */
   profile: MyProfile | null;
+  /** ISO timestamp of a pending account deletion (issue #8), or null. See POST/DELETE /me/deletion. */
+  deletionScheduledFor: string | null;
+}
+
+/** POST /me/deletion (issue #8): schedules (or, for the reviewer account, immediately runs) deletion. */
+export type ScheduleDeletionResponse = { status: 'deleted' } | { status: 'scheduled'; deleteAfter: string };
+/** DELETE /me/deletion. */
+export interface CancelDeletionResponse {
+  status: 'cancelled';
+}
+/** POST /account-deletion/cancel (no auth): cancels by the token from the "scheduled" email. */
+export interface CancelDeletionByTokenResponse {
+  status: 'cancelled';
+  /** The account's email, masked (e.g. "p***@example.com"). */
+  email: string;
 }
 
 export type ContactSource =
@@ -227,4 +242,5 @@ export type ApiErrorCode =
   | 'captcha_failed'
   | 'payload_too_large'
   | 'extraction_failed'
+  | 'invalid_token'
   | 'internal';

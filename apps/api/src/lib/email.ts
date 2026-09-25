@@ -169,3 +169,135 @@ export function signInCodeEmail(code: string): RenderedEmail {
 
   return { subject, text, html };
 }
+
+// ---------------------------------------------------------------------------
+// Account deletion (issue #8). Nothing the user typed ever goes into either of these.
+// ---------------------------------------------------------------------------
+
+/** "Sunday 27 September 2026 at 09:30 UTC". Always UTC, spelled out so it reads the same in every timezone. */
+function formatDeletionTime(date: Date): string {
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+  const month = date.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+  const day = date.getUTCDate();
+  const year = date.getUTCFullYear();
+  const hh = String(date.getUTCHours()).padStart(2, '0');
+  const mm = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${weekday} ${day} ${month} ${year} at ${hh}:${mm} UTC`;
+}
+
+/** Shared footer, identical to signInCodeEmail's, factored out for the two templates below. */
+function footerHtml(year: number): string {
+  return `<tr>
+          <td style="padding:24px 8px 0 8px;font-family:${FONT};font-size:12px;line-height:18px;color:${FAINT};">
+            ${APP_NAME}. ${TAGLINE}<br>
+            Questions? <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};text-decoration:none;">${SUPPORT_EMAIL}</a><br>
+            &copy; ${year} ${escapeHtml(COPYRIGHT)}
+          </td>
+        </tr>`;
+}
+
+function shellHtml(subject: string, preheader: string, cardHtml: string): string {
+  const year = new Date().getUTCFullYear();
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:${PAGE};-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${PAGE};">${escapeHtml(preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${PAGE};">
+  <tr>
+    <td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <tr>
+          <td style="padding:0 8px 20px 8px;font-family:${FONT};font-size:22px;line-height:28px;font-weight:700;color:${BRAND};letter-spacing:-0.3px;">${APP_NAME}</td>
+        </tr>
+        <tr>
+          <td style="background-color:#FFFFFF;border-radius:16px;padding:36px 32px;border:1px solid #E2E2EC;">
+            ${cardHtml}
+          </td>
+        </tr>
+        ${footerHtml(year)}
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+}
+
+/**
+ * Sent when a deletion is first scheduled (POST /me/deletion, everyone but the reviewer account).
+ * The cancel link carries the one-time token; the account can also be cancelled by signing in.
+ */
+export function scheduledDeletionEmail(deleteAfter: Date, cancelUrl: string): RenderedEmail {
+  const subject = 'Your Chatsoon account will be deleted';
+  const when = formatDeletionTime(deleteAfter);
+
+  const text = [
+    `Your ${APP_NAME} account is scheduled to be deleted on ${when}.`,
+    '',
+    "Your public profile is already offline: it can't be found, scanned or connected with while this is pending.",
+    '',
+    'Changed your mind? Cancel here:',
+    cancelUrl,
+    '',
+    'or sign in and tap Cancel deletion.',
+    '',
+    `If you didn't ask for this, cancel it and contact ${SUPPORT_EMAIL}.`,
+    '',
+    '--',
+    `${APP_NAME}. ${TAGLINE}`,
+    `Questions? ${SUPPORT_EMAIL}`,
+    `© ${new Date().getUTCFullYear()} ${COPYRIGHT}`,
+  ].join('\n');
+
+  const safeWhen = escapeHtml(when);
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">Your account will be deleted</p>
+            <p style="margin:0 0 20px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">Your ${APP_NAME} account is scheduled to be deleted on <strong style="color:${INK};">${safeWhen}</strong>.</p>
+            <p style="margin:0 0 24px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">Your public profile is already offline: it can't be found, scanned or connected with while this is pending.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-radius:10px;background-color:${BRAND};">
+                  <a href="${cancelUrl}" style="display:inline-block;padding:14px 24px;font-family:${FONT};font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;">Cancel deletion</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:20px 0 0 0;font-family:${FONT};font-size:14px;line-height:21px;color:${MUTED};">Or sign in and tap Cancel deletion.</p>
+            <p style="margin:12px 0 0 0;font-family:${FONT};font-size:13px;line-height:19px;color:${FAINT};">If you didn't ask for this, use the button above and contact <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};">${SUPPORT_EMAIL}</a>.</p>`;
+
+  return { subject, text, html: shellHtml(subject, `Your ${APP_NAME} account is scheduled to be deleted on ${when}.`, cardHtml) };
+}
+
+/** Sent once the account and every row and file it owned are actually gone (runDueDeletions, or immediately for the reviewer). */
+export function accountDeletedEmail(): RenderedEmail {
+  const subject = 'Your Chatsoon account has been deleted';
+
+  const text = [
+    `Your ${APP_NAME} account and everything in it have been permanently deleted.`,
+    '',
+    'Backups that include your data will roll off within 30 days.',
+    '',
+    "This is the last email we'll send you.",
+    '',
+    '--',
+    `${APP_NAME}. ${TAGLINE}`,
+    `Questions? ${SUPPORT_EMAIL}`,
+    `© ${new Date().getUTCFullYear()} ${COPYRIGHT}`,
+  ].join('\n');
+
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">Your account has been deleted</p>
+            <p style="margin:0 0 20px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">Your ${APP_NAME} account and everything in it have been permanently deleted.</p>
+            <p style="margin:0 0 20px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">Backups that include your data will roll off within 30 days.</p>
+            <p style="margin:0;font-family:${FONT};font-size:14px;line-height:21px;color:${FAINT};">This is the last email we'll send you.</p>`;
+
+  return {
+    subject,
+    text,
+    html: shellHtml(subject, `Your ${APP_NAME} account and everything in it have been permanently deleted.`, cardHtml),
+  };
+}

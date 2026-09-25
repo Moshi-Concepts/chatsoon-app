@@ -241,6 +241,28 @@ export const blocks = sqliteTable(
   (t) => [primaryKey({ columns: [t.blockerId, t.blockedId] }), index('blocks_blocked_idx').on(t.blockedId)],
 );
 
+/**
+ * A pending, delayed account deletion (issue #8). One row per user: `POST /me/deletion` inserts it,
+ * `DELETE /me/deletion` or the token link removes it, and the scheduled job (wrangler.jsonc cron)
+ * deletes the account once `delete_after` has passed. While a row exists here, the account's public
+ * profile reads as not found everywhere (lib/profiles.ts, pages.ts).
+ */
+export const accountDeletions = sqliteTable(
+  'account_deletions',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The address to send the final "deleted" email to, captured at request time. */
+    email: text('email').notNull(),
+    requestedAt: integer('requested_at', { mode: 'timestamp_ms' }).notNull().default(now),
+    deleteAfter: integer('delete_after', { mode: 'timestamp_ms' }).notNull(),
+    /** SHA-256 hex of the (base64url) cancel token emailed to the user. The token itself is never stored. */
+    cancelTokenHash: text('cancel_token_hash').notNull(),
+  },
+  (t) => [index('account_deletions_delete_after_idx').on(t.deleteAfter)],
+);
+
 /** Daily counters for paid calls (card extraction), keyed like 'extract:user:<id>:2026-09-24'. */
 export const usageCounters = sqliteTable(
   'usage_counters',

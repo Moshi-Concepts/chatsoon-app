@@ -57,6 +57,13 @@
       "when": 1790321106590,
       "tag": "0007_search_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790347968509,
+      "tag": "0008_account_deletions",
+      "breakpoints": true
     }
   ]
 }

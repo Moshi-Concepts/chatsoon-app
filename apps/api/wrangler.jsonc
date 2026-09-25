@@ -6,6 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "routes": [{ "pattern": "api.chatsoon.app", "custom_domain": true }],
   "observability": { "enabled": true },
+  // Finishes due account deletions (issue #8, lib/deletion.ts's runDueDeletions), every 10 minutes.
+  "triggers": { "crons": ["*/10 * * * *"] },
   "d1_databases": [
     {
       "binding": "DB",

@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 
-import type { AppEnv } from './env';
+import type { AppEnv, Env } from './env';
 import { allowedOrigins, createAuth, otpRateLimit } from './lib/auth';
+import { runDueDeletions } from './lib/deletion';
 import { errorBody, onError } from './lib/errors';
 import { accountRoutes } from './routes/account';
 import { connectionsRoutes } from './routes/connections';
@@ -21,7 +22,8 @@ import { tagsRoutes } from './routes/tags';
 //   /auth/*                                   Better Auth (email OTP), lib/auth.ts
 //   GET  /id/:slug  GET /id/:slug/vcard  POST /id/:slug/connect      routes/public.ts
 //   GET  /me  PUT /me/profile                                         routes/profile.ts
-//   DELETE /me  GET /me/export.csv                                    routes/account.ts
+//   DELETE /me  POST/DELETE /me/deletion  GET /me/export.csv           routes/account.ts
+//   POST /account-deletion/cancel (no auth)                            routes/account.ts
 //   POST /connections/scan                                            routes/connections.ts
 //   GET/POST /contacts  GET/PUT/DELETE /contacts/:id                  routes/contacts.ts
 //   GET/POST /tags  DELETE /tags/:id                                  routes/tags.ts
@@ -77,4 +79,16 @@ app.route('/', extractRoutes);
 app.route('/', moderationRoutes);
 app.route('/', pagesRoutes);
 
-export default app;
+/**
+ * The wrangler.jsonc `triggers.crons` entry (every 10 minutes): finishes any account deletion
+ * (issue #8) whose grace period has passed. All the logic lives in `runDueDeletions`, which is
+ * plain and directly testable; this just wires it up and keeps it alive past the response.
+ */
+async function scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  ctx.waitUntil(runDueDeletions(env, Date.now()).catch((err) => console.error('runDueDeletions failed', err)));
+}
+
+// Cloudflare calls `.fetch` and `.scheduled` on whatever this module exports as default; `app.fetch`
+// is already bound to `app` (a Hono class-field arrow function), so pulling it out here doesn't
+// change how requests are handled, or how existing tests that import `app`'s default export work.
+export default { fetch: app.fetch, scheduled };

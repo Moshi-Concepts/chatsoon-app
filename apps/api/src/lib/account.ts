@@ -2,6 +2,7 @@ import { profileUrl } from '@chatsoon/shared';
 import { and, asc, eq, inArray, or } from 'drizzle-orm';
 
 import {
+  accountDeletions,
   accounts,
   blocks,
   connections,
@@ -81,6 +82,9 @@ export async function deleteUserData(env: Env, db: DB, userId: string, email: st
     db.delete(sessions).where(eq(sessions.userId, userId)),
     db.delete(accounts).where(eq(accounts.userId, userId)),
     db.delete(verifications).where(inArray(verifications.identifier, identifiers)),
+    // A pending scheduled deletion (issue #8, lib/deletion.ts) for this same account, if this is the
+    // reviewer's immediate wipe or a direct DELETE /me while one happened to be pending.
+    db.delete(accountDeletions).where(eq(accountDeletions.userId, userId)),
     db.delete(users).where(eq(users.id, userId)),
   ]);
 

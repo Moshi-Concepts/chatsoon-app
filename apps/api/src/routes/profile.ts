@@ -18,6 +18,7 @@ import { profiles, users, type ProfileRow } from '../db/schema';
 import type { AppEnv } from '../env';
 import { avatarVariantKey } from '../lib/avatar';
 import { getDb, type DB } from '../lib/db';
+import { pendingDeletionFor } from '../lib/deletion';
 import { ApiError, badRequest, parseJson, unauthorized } from '../lib/errors';
 import { shortSuffix } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
@@ -74,10 +75,11 @@ profileRoutes.get('/me', requireAuth, async (c) => {
     .limit(1);
   if (!user) throw unauthorized();
 
-  const profile = await findProfileByUserId(db, id);
+  const [profile, deleteAfter] = await Promise.all([findProfileByUserId(db, id), pendingDeletionFor(db, id)]);
   const body: Me = {
     user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
     profile: profile ? await toMyProfile(c.env, profile) : null,
+    deletionScheduledFor: deleteAfter ? deleteAfter.toISOString() : null,
   };
   c.header('Cache-Control', 'private, no-store');
   return c.json(body);

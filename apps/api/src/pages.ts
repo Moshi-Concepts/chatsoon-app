@@ -1,8 +1,8 @@
 import { toOgCard } from '@chatsoon/shared/src/og';
 import type { ProfilePageResult, SitemapProfilesResult } from '@chatsoon/shared';
-import { and, asc, eq, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, notExists, notInArray, sql } from 'drizzle-orm';
 
-import { profiles, users, type ProfileRow } from './db/schema';
+import { accountDeletions, profiles, users, type ProfileRow } from './db/schema';
 import type { Env } from './env';
 import { avatarVariantKey, sweepAvatarVariants } from './lib/avatar';
 import { getDb } from './lib/db';
@@ -50,7 +50,8 @@ export async function profilePage(env: Env, slug: string, ip: string | null): Pr
  * rows (§3.2): a sitemap file has no pagination.
  */
 export async function indexableProfiles(env: Env): Promise<SitemapProfilesResult> {
-  const rows = await getDb(env)
+  const db = getDb(env);
+  const rows = await db
     .select({ slug: profiles.slug, updatedAt: profiles.updatedAt, email: users.email })
     .from(profiles)
     .innerJoin(users, eq(users.id, profiles.userId))
@@ -62,6 +63,9 @@ export async function indexableProfiles(env: Env): Promise<SitemapProfilesResult
         sql`${users.email} not like 'demo+%@chatsoon.app'`,
         sql`lower(${users.email}) <> 'review@chatsoon.app'`,
         sql`(coalesce(${profiles.headline}, '') <> '' or coalesce(${profiles.role}, '') <> '' or coalesce(${profiles.company}, '') <> '' or coalesce(${profiles.avatarKey}, '') <> '')`,
+        // A pending scheduled deletion (issue #8) takes the profile off the sitemap immediately, same
+        // as every other public lookup (lib/profiles.ts's notPendingDeletion).
+        notExists(db.select({ one: sql`1` }).from(accountDeletions).where(eq(accountDeletions.userId, profiles.userId))),
       ),
     )
     .orderBy(asc(profiles.slug))
