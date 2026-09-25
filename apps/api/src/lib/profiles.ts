@@ -6,9 +6,7 @@ import {
   isXHandle,
   normalizeHandle,
   parseIntlPhone,
-  parseSocialUrl,
   toLinkUrl,
-  type LinkKey,
 } from '@chatsoon/shared';
 import { and, eq, or, sql } from 'drizzle-orm';
 
@@ -116,14 +114,6 @@ const CONTACT_FIELD_MAX: Record<ContactLinkField, number> = {
 const fits = (field: ContactLinkField, value: string | null) =>
   value !== null && value.length <= CONTACT_FIELD_MAX[field] ? value : null;
 
-/** The toLinkUrl kind the app uses to make each contact field tappable. Email follows emailSchema instead. */
-const LINK_KIND: Partial<Record<ContactLinkField, LinkKey>> = {
-  telegram: 'telegram',
-  xHandle: 'x',
-  linkedinUrl: 'linkedin',
-  website: 'website',
-};
-
 export type ProfileContactFields = Pick<
   ContactRow,
   'name' | 'company' | 'role' | 'telegram' | 'xHandle' | 'linkedinUrl' | 'website' | 'phone'
@@ -162,79 +152,15 @@ export type ConnectValueFields = Partial<Pick<ContactRow, ContactLinkField>> & {
   unmatched?: string;
 };
 
-const PHONE = /^\+?[\d\s().-]{6,24}$/;
-const HOSTNAME = /^([a-z0-9-]+\.)+[a-z]{2,}$/i;
-
-const X_HOSTS = ['x.com', 'twitter.com'];
-const LINKEDIN_HOSTS = ['linkedin.com', 'lnkd.in'];
-
-const hostIn = (host: string, list: string[]) => list.some((h) => host === h || host.endsWith(`.${h}`));
-
-/** http(s) URL with a real hostname and no credentials, with or without the scheme typed. */
-function parseWebUrl(value: string): URL | null {
-  if (/\s/.test(value)) return null;
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
-  try {
-    const url = new URL(withScheme);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    // 'name:pw@host' and 'mailto:me@host' parse as credentials; neither is a website.
-    if (url.username || url.password) return null;
-    return HOSTNAME.test(url.hostname) ? url : null;
-  } catch {
-    return null;
-  }
-}
-
-/** URL without fragment or trailing slash. */
-function cleanUrl(url: URL, keepQuery = true): string {
-  const path = url.pathname.replace(/\/+$/, '');
-  return `${url.origin}${path}${keepQuery ? url.search : ''}`;
-}
-
-function routeConnectValue(value: string): [ContactLinkField, string] | null {
-  const email = emailSchema.safeParse(value.replace(/^mailto:/i, ''));
-  if (email.success) return ['email', email.data];
-
-  // Telegram, X and LinkedIn profile links, including tg:// and twitter:// app links.
-  const social = parseSocialUrl(value);
-  if (social?.network === 'linkedin') return ['linkedinUrl', social.url];
-  if (social) return [social.network === 'x' ? 'xHandle' : 'telegram', social.handle];
-
-  const url = parseWebUrl(value);
-  if (url) {
-    const host = url.hostname.toLowerCase();
-    // Company pages and lnkd.in short links: still LinkedIn, minus tracking parameters.
-    if (hostIn(host, LINKEDIN_HOSTS)) return ['linkedinUrl', cleanUrl(url, false)];
-    if (hostIn(host, X_HOSTS)) {
-      // x.com/<handle>/status/<id> is a post: keep its author.
-      const [author, kind] = url.pathname.split('/').filter(Boolean);
-      if (author && kind === 'status' && isXHandle(author)) return ['xHandle', author];
-    }
-    // Everything else, including Telegram invites and other X pages, stays tappable as the website.
-    return ['website', cleanUrl(url)];
-  }
-
-  if (PHONE.test(value) && value.replace(/\D/g, '').length >= 6) return ['phone', value];
-
-  const handle = value.replace(/^@/, '');
-  if (isTelegramHandle(handle)) return ['telegram', handle];
-  // Too short (or starting with a digit) for Telegram, but a valid X handle.
-  if (isXHandle(handle)) return ['xHandle', handle];
-  return null;
-}
-
 /**
- * Routes the free-text "email or handle" from the web Connect form to a contact field:
- * email, then a profile link or URL by host (LinkedIn, X, Telegram, else website), then a phone
- * number, then a bare or @handle (Telegram, or X when it can't be a Telegram username).
- * Only values that make a working link are routed. Anything else comes back as `unmatched`.
+ * Puts the web Connect form's `contact` value in the new contact's `email` field. Issue #10 made
+ * `connectFormSchema.contact` an email address only, so the LinkedIn/X/Telegram/phone/handle routing
+ * this used to do (matching the old "email or handle" field) is gone — the schema already guarantees
+ * a valid email by the time this runs. `unmatched` is kept for a caller that bypasses the schema, or
+ * a value the schema accepts but that's too long for the contact's `email` column.
  */
 export function contactFieldsFromConnectValue(raw: string): ConnectValueFields {
   const value = cleanText(raw);
-  const routed = routeConnectValue(value);
-  if (!routed) return { unmatched: value };
-  const [field, routedValue] = routed;
-  const kind = LINK_KIND[field];
-  const works = !kind || toLinkUrl(kind, routedValue) !== null;
-  return works && fits(field, routedValue) !== null ? { [field]: routedValue } : { unmatched: value };
+  const email = emailSchema.safeParse(value);
+  return email.success && fits('email', email.data) !== null ? { email: email.data } : { unmatched: value };
 }

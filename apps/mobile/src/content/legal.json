@@ -21,7 +21,7 @@
           "Your contacts: the people you add and what you record about them, such as their name, company, role, email, phone, social handles, notes, tags, priority and the event where you met.",
           "Card and badge photos: photos you take of business cards or event badges so Chatsoon can read the details for you.",
           "Connections: when you connect with another Chatsoon user by scanning their QR code, we record that you are connected and, if you set one, the event where you met.",
-          "Connect form submissions: when someone sends you their details from your public profile page, we store the name, email or handle and note they entered, and email you to say they connected.",
+          "Connect form submissions: when someone sends you their details from your public profile page, we store the name, email address and note they entered, and email you to say they connected.",
           "Reports and blocks: if you report or block someone, we store the block, or the report (who or what it's about, the reason and any details you add, and for a reported Connect form message, a copy of that message), and send the report to our moderation inbox for review.",
           "Technical logs: basic information our servers record when the app or website makes a request, such as IP address, device and browser type, and the time and result of the request."
         ]
@@ -60,7 +60,7 @@
         "heading": "Connecting with people",
         "paragraphs": [
           "When two Chatsoon users connect by scanning a QR code in the app, each of them receives the other's public profile, including their mobile number if they added one, as a contact. That copy stays in their contacts if you later change or remove your number.",
-          "When you fill in the Connect form on someone's public profile page, the name, email or handle and note you enter are sent to that profile's owner and saved in their contacts. Only share details you're happy for them to have. Once they have your details, the profile owner is responsible for how they use them. The form is protected by Cloudflare Turnstile, which checks that a person, not a bot, is sending it."
+          "When you fill in the Connect form on someone's public profile page, the name, email address and note you enter are sent to that profile's owner and saved in their contacts. Only share details you're happy for them to have. Once they have your details, the profile owner is responsible for how they use them. The form is protected by Cloudflare Turnstile, which checks that a person, not a bot, is sending it."
         ]
       },
       {

@@ -45,7 +45,7 @@ Present only when there are booking links.
 - `<section id="connect" aria-labelledby="connect-h"><h2 id="connect-h">Connect with {first}</h2>`
 - `<form id="connect-form" novalidate>` holds:
   - `<label for="cf-name">`, then `<input id="cf-name" name="name" autocomplete="name" maxlength=CONNECT_FORM_MAX.name required>`
-  - `<label for="cf-contact">`, then `<input id="cf-contact" name="contact" autocomplete="email" maxlength=CONNECT_FORM_MAX.contact required>`
+  - `<label for="cf-contact">Email</label>`, then `<input id="cf-contact" name="contact" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength=CONNECT_FORM_MAX.contact required>` (issue #10: email address only, still named `contact` on the wire)
   - `<label for="cf-note">`, then `<textarea id="cf-note" name="note" maxlength=CONNECT_FORM_MAX.note>`
   - `<div id="turnstile-slot" style="min-height:65px"></div>` (not `id="turnstile"`: an element id becomes a `window` global and would shadow the Turnstile API)
   - `<p id="connect-error" role="alert" hidden></p>`

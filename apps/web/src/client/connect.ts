@@ -24,6 +24,9 @@ export interface ConnectFormValues {
 
 export type ConnectFieldErrors = Partial<Record<'name' | 'contact' | 'note', string>>;
 
+/** Good-enough shape check, not full RFC validation: keeps this island small. The server (connectFormSchema, zod) is the real check. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** Required fields and CONNECT_FORM_MAX lengths, checked before any network call. */
 export function validateConnectForm(values: ConnectFormValues): ConnectFieldErrors | null {
   const errors: ConnectFieldErrors = {};
@@ -33,10 +36,11 @@ export function validateConnectForm(values: ConnectFormValues): ConnectFieldErro
   if (!name) errors.name = 'Name is required';
   else if (name.length > CONNECT_FORM_MAX.name) errors.name = `Keep it under ${CONNECT_FORM_MAX.name} characters`;
 
-  if (!contact) errors.contact = 'Add an email or handle';
+  // A simple, safe check that keeps this island small (no zod here) — the server is the real check.
+  if (!contact) errors.contact = 'Add your email address';
   else if (contact.length > CONNECT_FORM_MAX.contact) {
     errors.contact = `Keep it under ${CONNECT_FORM_MAX.contact} characters`;
-  }
+  } else if (!EMAIL_RE.test(contact)) errors.contact = 'Enter a valid email address';
 
   if (values.note.length > CONNECT_FORM_MAX.note) errors.note = `Keep it under ${CONNECT_FORM_MAX.note} characters`;
 

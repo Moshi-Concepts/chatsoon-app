@@ -198,8 +198,8 @@ function connectSection(p: PageProfile): string {
 <input id="cf-name" name="name" autocomplete="name" maxlength="${CONNECT_FORM_MAX.name}" required>
 </div>
 <div class="field">
-<label for="cf-contact">Email or handle</label>
-<input id="cf-contact" name="contact" autocomplete="email" maxlength="${CONNECT_FORM_MAX.contact}" required>
+<label for="cf-contact">Email</label>
+<input id="cf-contact" name="contact" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="${CONNECT_FORM_MAX.contact}" required>
 </div>
 <div class="field">
 <label for="cf-note">Note (optional)</label>

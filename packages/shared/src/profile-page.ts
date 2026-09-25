@@ -82,9 +82,9 @@ export const REPORT_REASON_LABELS: Record<ReportReason, { title: string; subtitl
 
 /**
  * Max lengths for the public Connect form's fields (`apps/mobile/src/components/web/connect-form.tsx`),
- * matching `connectFormSchema` in schemas.ts: `name` and `contact` are plain `.max()`, `note` is
- * `publicText(1000)`. Kept as a literal, not imported from the schema, so this module stays zod-free;
- * profile-page.test.ts checks the two stay equal.
+ * matching `connectFormSchema` in schemas.ts: `name` is a plain `.max()`, `contact` is an email address
+ * capped at `.max()`, `note` is `publicText(1000)`. Kept as a literal, not imported from the schema, so
+ * this module stays zod-free; profile-page.test.ts checks the two stay equal.
  */
 export const CONNECT_FORM_MAX = { name: 120, contact: 200, note: 1000 } as const;
 

@@ -146,9 +146,13 @@ describe('REPORT_REASON_LABELS', () => {
 describe('CONNECT_FORM_MAX', () => {
   // A payload that sits exactly at CONNECT_FORM_MAX for every field. If these ever drift from
   // connectFormSchema's real .max()s, the "exactly at the max" parse below starts failing.
+  // `contact` must still be a syntactically valid email at both lengths, so going one over the max
+  // fails because of the length cap, not the email format.
+  const contactAtMax = `${'a'.repeat(CONNECT_FORM_MAX.contact - 6)}@a.com`;
+  const contactOverMax = `${'a'.repeat(CONNECT_FORM_MAX.contact - 5)}@a.com`;
   const atMax = {
     name: 'A'.repeat(CONNECT_FORM_MAX.name),
-    contact: 'b'.repeat(CONNECT_FORM_MAX.contact),
+    contact: contactAtMax,
     note: 'c'.repeat(CONNECT_FORM_MAX.note),
     turnstileToken: 'token',
   };
@@ -156,7 +160,7 @@ describe('CONNECT_FORM_MAX', () => {
   it('equals connectFormSchema\'s real max lengths: valid exactly at the max, invalid one over', () => {
     expect(connectFormSchema.safeParse(atMax).success).toBe(true);
     expect(connectFormSchema.safeParse({ ...atMax, name: atMax.name + 'x' }).success).toBe(false);
-    expect(connectFormSchema.safeParse({ ...atMax, contact: atMax.contact + 'x' }).success).toBe(false);
+    expect(connectFormSchema.safeParse({ ...atMax, contact: contactOverMax }).success).toBe(false);
     expect(connectFormSchema.safeParse({ ...atMax, note: atMax.note + 'x' }).success).toBe(false);
   });
 });

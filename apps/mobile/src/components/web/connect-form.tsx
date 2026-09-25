@@ -140,9 +140,9 @@ export function ConnectForm({
       />
       <TextField
         ref={contactRef}
-        label="Email or handle"
-        placeholder="you@company.com or @handle"
-        hint={`Email, phone, Telegram, X or LinkedIn. Only ${firstName} will see it.`}
+        label="Email"
+        placeholder="you@company.com"
+        hint={`Only ${firstName} will see it.`}
         value={contact}
         onChangeText={(v) => {
           setContact(v);

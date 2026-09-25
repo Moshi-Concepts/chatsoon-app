@@ -607,39 +607,37 @@ describe('POST /id/:slug/connect', () => {
     expect(errors).toHaveBeenCalledWith('Connect notification failed', expect.any(Error));
   });
 
-  it('routes the contact value to the right field', async () => {
+  it('rejects a handle or other non-email contact value with 400 (issue #10: email only)', async () => {
     const person = await signUpWithProfile('connect-routing@example.com', 'Rita Routing');
-    const cases: [string, Partial<ContactDbRow>][] = [
-      ['https://www.linkedin.com/in/nina-n/?utm_source=qr', { linkedin_url: 'https://www.linkedin.com/in/nina-n' }],
-      ['x.com/nina_x', { x_handle: 'nina_x' }],
-      ['@nina_tg', { telegram: 'nina_tg' }],
-      ['+65 9123 4567', { phone: '+65 9123 4567' }],
-      ['nina.dev', { website: 'https://nina.dev' }],
+    const cases = [
+      'https://www.linkedin.com/in/nina-n/?utm_source=qr',
+      'x.com/nina_x',
+      '@nina_tg',
+      '+65 9123 4567',
+      'nina.dev',
+      'find me at booth 12',
     ];
-    for (const [contact] of cases) {
+    for (const contact of cases) {
       const res = await connect(person.slug, form({ contact, note: null }));
-      expect(res.status, contact).toBe(201);
+      expect(res.status, contact).toBe(400);
+      expect(((await res.json()) as ApiErrorBody).error.message, contact).toBe('contact: Enter a valid email address');
     }
-    const rows = await contactsOf(person.userId);
-    expect(rows).toHaveLength(cases.length);
-    cases.forEach(([contact, expected], i) => {
-      expect(rows[i], contact).toMatchObject({ ...expected, notes: null, source: 'web_connect' });
-    });
+    expect(await contactsOf(person.userId)).toHaveLength(0);
   });
 
-  it('keeps an unrecognised contact value in the notes and collapses whitespace in the name', async () => {
-    const person = await signUpWithProfile('connect-unmatched@example.com', 'Uma Unmatched');
+  it('saves a valid email to the contact, trimmed and lowercased, and collapses whitespace in the name', async () => {
+    const person = await signUpWithProfile('connect-email@example.com', 'Ed Email');
     const res = await connect(
       person.slug,
-      form({ name: 'Nina\n\n‮Newcomer\u0007', contact: 'find me at booth 12', note: 'Loved the demo' }),
+      form({ name: 'Nina\n\n‮Newcomer\u0007', contact: '  Nina@Example.ORG  ', note: 'Loved the demo' }),
     );
     expect(res.status).toBe(201);
     const [row] = await contactsOf(person.userId);
     expect(row).toMatchObject({
       name: 'Nina Newcomer',
-      email: null,
+      email: 'nina@example.org',
       telegram: null,
-      notes: 'Loved the demo\n\nContact: find me at booth 12',
+      notes: 'Loved the demo',
     });
   });
 
@@ -707,47 +705,26 @@ describe('POST /id/:slug/connect', () => {
   });
 });
 
+// Issue #10: connectFormSchema.contact is now an email address only, so this only ever sees a
+// value the schema already validated as an email — its old LinkedIn/X/Telegram/phone/handle
+// routing is gone. These cases exercise the function directly (bypassing the schema) to check it
+// still does the right thing with a non-email value, and with an email too long for the column.
 describe('contactFieldsFromConnectValue', () => {
   it.each([
     ['Nina@Example.org', { email: 'nina@example.org' }],
-    ['mailto:nina@example.org', { email: 'nina@example.org' }],
-    ['linkedin.com/in/nina', { linkedinUrl: 'https://www.linkedin.com/in/nina' }],
-    ['https://uk.linkedin.com/in/nina/', { linkedinUrl: 'https://www.linkedin.com/in/nina' }],
-    [
-      'https://www.linkedin.com/company/chatsoon/?trk=qr',
-      { linkedinUrl: 'https://www.linkedin.com/company/chatsoon' },
-    ],
-    ['https://twitter.com/nina_x', { xHandle: 'nina_x' }],
-    ['https://x.com/nina_x/status/1', { xHandle: 'nina_x' }],
-    ['https://x.com/intent/user?screen_name=nina_x', { xHandle: 'nina_x' }],
-    ['https://x.com/home', { website: 'https://x.com/home' }],
-    ['t.me/nina_tg', { telegram: 'nina_tg' }],
-    ['tg://resolve?domain=nina_tg', { telegram: 'nina_tg' }],
-    // An invite is not a username: keep it as a link that still opens Telegram.
-    ['https://t.me/+AbCdEf', { website: 'https://t.me/+AbCdEf' }],
-    ['https://nina.dev/about?ref=card#top', { website: 'https://nina.dev/about?ref=card' }],
-    ['http://nina.dev/', { website: 'http://nina.dev' }],
-    ['@nina_tg', { telegram: 'nina_tg' }],
-    ['nina_tg', { telegram: 'nina_tg' }],
-    ['@nina_tg​', { telegram: 'nina_tg' }],
-    // Too short for a Telegram username, fine for X.
-    ['@abc', { xHandle: 'abc' }],
-    ['+1 (415) 555-0100', { phone: '+1 (415) 555-0100' }],
-    ['a'.repeat(40), { unmatched: 'a'.repeat(40) }],
-    // Parses as a URL, but the app would refuse to open it.
-    ['nina.dev/?q=`x`', { unmatched: 'nina.dev/?q=`x`' }],
-    ['javascript:alert(1)', { unmatched: 'javascript:alert(1)' }],
-    ['ftp://files.nina.dev', { unmatched: 'ftp://files.nina.dev' }],
-    ['nina:secret@evil.example', { unmatched: 'nina:secret@evil.example' }],
-    ['https://nina@evil.example/login', { unmatched: 'https://nina@evil.example/login' }],
+    ['  nina@example.org  ', { email: 'nina@example.org' }],
+    ['mailto:nina@example.org', { unmatched: 'mailto:nina@example.org' }],
+    ['linkedin.com/in/nina', { unmatched: 'linkedin.com/in/nina' }],
+    ['@nina_tg', { unmatched: '@nina_tg' }],
+    ['+1 (415) 555-0100', { unmatched: '+1 (415) 555-0100' }],
     ['Nina at booth 4', { unmatched: 'Nina at booth 4' }],
   ])('%s', (value, expected) => {
     expect(contactFieldsFromConnectValue(value)).toEqual(expected);
   });
 
-  it('keeps a value that is too long for its contact field in the notes', () => {
-    // Percent-encoding pushes this LinkedIn URL past the 300 characters a contact's linkedinUrl allows.
-    const value = `linkedin.com/in/${'名'.repeat(60)}`;
+  it('keeps an email that is too long for the contact field in the notes', () => {
+    // Over CONTACT_FIELD_MAX.email (254), even though it's a perfectly valid email address.
+    const value = `${'a'.repeat(250)}@example.org`;
     expect(contactFieldsFromConnectValue(value)).toEqual({ unmatched: value });
   });
 });

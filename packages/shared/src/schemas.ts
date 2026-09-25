@@ -157,8 +157,8 @@ export type ContactUpdateInput = z.input<typeof contactUpdateSchema>;
 /** Lands in the owner's contacts and notification email, so name and note are filtered too. */
 export const connectFormSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(120).refine(clean, OFFENSIVE),
-  /** Email address or a handle (Telegram, X, etc). */
-  contact: z.string().trim().min(1, 'Add an email or handle').max(200),
+  /** Email address only (issue #10): still named `contact` on the wire so older clients' payload shape still parses. */
+  contact: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address').max(200)),
   note: publicText(1000),
   turnstileToken: z.string().min(1).max(4096),
 });

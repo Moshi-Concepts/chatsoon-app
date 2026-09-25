@@ -14,7 +14,16 @@ describe('validateConnectForm', () => {
   });
 
   it('requires a contact', () => {
-    expect(validateConnectForm({ ...valid, contact: '' })).toEqual({ contact: 'Add an email or handle' });
+    expect(validateConnectForm({ ...valid, contact: '' })).toEqual({ contact: 'Add your email address' });
+  });
+
+  it('rejects a contact that is not an email address', () => {
+    expect(validateConnectForm({ ...valid, contact: '@jordan_tg' })).toEqual({
+      contact: 'Enter a valid email address',
+    });
+    expect(validateConnectForm({ ...valid, contact: 'not an email' })).toEqual({
+      contact: 'Enter a valid email address',
+    });
   });
 
   it('rejects a name over CONNECT_FORM_MAX.name characters', () => {
