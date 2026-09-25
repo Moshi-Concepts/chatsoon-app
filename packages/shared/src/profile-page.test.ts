@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
+import { REPORT_REASONS } from './constants';
 import type { OgCard } from './og';
-import { describeProfile, firstName, profileOgTitle, profileTitle, roleLine } from './profile-page';
+import {
+  CONNECT_FORM_MAX,
+  REPORT_REASON_LABELS,
+  connectErrorMessage,
+  describeProfile,
+  firstName,
+  profileOgTitle,
+  profileTitle,
+  roleLine,
+  SESSION_STORAGE_KEY,
+} from './profile-page';
+import { connectFormSchema } from './schemas';
 
 // Fixtures mirror apps/mobile/src/app/id/[slug].tsx's describe() exactly, so describeProfile's
 // output can be compared against it by hand.
@@ -106,3 +118,81 @@ describe('profileOgTitle', () => {
     expect(profileOgTitle(p)).toBe(p.displayName);
   });
 });
+
+describe('REPORT_REASON_LABELS', () => {
+  it('covers every reason in REPORT_REASONS, with no extras', () => {
+    expect(Object.keys(REPORT_REASON_LABELS).sort()).toEqual([...REPORT_REASONS].sort());
+  });
+
+  it('gives every reason a title and a subtitle', () => {
+    for (const reason of REPORT_REASONS) {
+      expect(REPORT_REASON_LABELS[reason].title.length).toBeGreaterThan(0);
+      expect(REPORT_REASON_LABELS[reason].subtitle.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("matches today's report-dialog.tsx copy for a couple of reasons", () => {
+    expect(REPORT_REASON_LABELS.spam).toEqual({
+      title: 'Spam or scam',
+      subtitle: 'Unwanted messages, fake offers or phishing',
+    });
+    expect(REPORT_REASON_LABELS.other).toEqual({
+      title: 'Something else',
+      subtitle: 'Tell us what happened below',
+    });
+  });
+});
+
+describe('CONNECT_FORM_MAX', () => {
+  // A payload that sits exactly at CONNECT_FORM_MAX for every field. If these ever drift from
+  // connectFormSchema's real .max()s, the "exactly at the max" parse below starts failing.
+  const atMax = {
+    name: 'A'.repeat(CONNECT_FORM_MAX.name),
+    contact: 'b'.repeat(CONNECT_FORM_MAX.contact),
+    note: 'c'.repeat(CONNECT_FORM_MAX.note),
+    turnstileToken: 'token',
+  };
+
+  it('equals connectFormSchema\'s real max lengths: valid exactly at the max, invalid one over', () => {
+    expect(connectFormSchema.safeParse(atMax).success).toBe(true);
+    expect(connectFormSchema.safeParse({ ...atMax, name: atMax.name + 'x' }).success).toBe(false);
+    expect(connectFormSchema.safeParse({ ...atMax, contact: atMax.contact + 'x' }).success).toBe(false);
+    expect(connectFormSchema.safeParse({ ...atMax, note: atMax.note + 'x' }).success).toBe(false);
+  });
+});
+
+describe('connectErrorMessage', () => {
+  it("matches today's connect-form.tsx errorMessage for a captcha failure", () => {
+    expect(connectErrorMessage(400, 'captcha_failed')).toBe(
+      'The spam check failed. Please complete it again and resend.',
+    );
+  });
+
+  it("matches today's connect-form.tsx errorMessage for a rate limit", () => {
+    expect(connectErrorMessage(429, 'rate_limited')).toBe('Too many attempts. Please wait a minute and try again.');
+  });
+
+  it("matches today's connect-form.tsx errorMessage for a 404, regardless of code", () => {
+    expect(connectErrorMessage(404, 'not_found')).toBe("This profile isn't available any more.");
+  });
+
+  it('returns null for anything else, so the caller falls back to the server message (or its own generic one)', () => {
+    expect(connectErrorMessage(500, 'internal')).toBeNull();
+    expect(connectErrorMessage(400, 'validation_error')).toBeNull();
+  });
+});
+
+describe('SESSION_STORAGE_KEY', () => {
+  it("is the localStorage key apps/mobile/src/lib/auth.tsx stores the web session's bearer token under", () => {
+    expect(SESSION_STORAGE_KEY).toBe('chatsoon.session');
+  });
+});
+
+// No module-purity (read-file) test here: packages/shared/tsconfig.json has "types": [] and a
+// DOM-less "lib": ["ES2022"] (og.ts documents why — this package also runs in Hermes and
+// react-native-web), so neither `node:fs`/`node:url` nor the `URL` / `import.meta.url` globals a
+// read-file check needs are available, and `tsc --noEmit` fails on all four. Skipped per WP-C2;
+// `describe('connectFormSchema')`'s import from './schemas' above is exempt only because it's the
+// test file, not profile-page.ts itself — the real guarantee is still just eyeballing
+// profile-page.ts's imports (APP_NAME/ReportReason from constants.ts, OgCard type from og.ts, no zod
+// or schemas).

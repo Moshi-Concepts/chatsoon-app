@@ -3,11 +3,12 @@ import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../env';
 import { errorBody } from '../lib/errors';
 import { timingSafeEqual } from '../lib/signing';
-import { profileOgImage, profilePage } from '../pages';
+import { profileOgImage, profilePage, profilePhoto } from '../pages';
 
-// GET /_pages/profile/:slug and GET /_pages/og/:slug: the Pages Function transport for public page
-// tags and share-card images (docs/og-plan.md §3.3, decision O14). Both routes exist only for the web
-// Function's service-binding call; nothing else should ever have `PAGES_SHARED_SECRET`.
+// GET /_pages/profile/:slug, GET /_pages/og/:slug and GET /_pages/photo/:slug: the Pages Function
+// transport for public page tags, share-card images and avatars (docs/og-plan.md §3.3, decision O14;
+// docs/public-pages-plan.md decision D8). All three routes exist only for the web Function's
+// service-binding call; nothing else should ever have `PAGES_SHARED_SECRET`.
 
 /** True only when `x-pages-key` matches the shared secret. Checked before `x-client-ip` is trusted. */
 function authorized(c: Context<AppEnv>): boolean {
@@ -59,5 +60,30 @@ pagesRoutes.get('/_pages/og/:slug', async (c) => {
           'Cache-Control': `public, max-age=${result.maxAge}`,
         },
       });
+  }
+});
+
+pagesRoutes.get('/_pages/photo/:slug', async (c) => {
+  if (!authorized(c)) return c.json(errorBody('not_found', 'Not found'), 404);
+  const ip = c.req.header('x-client-ip') ?? null;
+  const v = c.req.query('v') ?? null;
+  const result = await profilePhoto(c.env, c.req.param('slug'), ip, v);
+
+  switch (result.status) {
+    case 'not_found':
+      return c.json(errorBody('not_found', 'Not found'), 404);
+    case 'rate_limited':
+      return c.json(errorBody('rate_limited', 'Too many requests, try again in a minute'), 429);
+    case 'ok': {
+      const headers = {
+        'Content-Type': result.contentType,
+        'Content-Length': String(result.contentLength),
+        ETag: `"${result.version}"`,
+        'Cache-Control': `public, max-age=${result.maxAge}`,
+      };
+      // Same headers either way (D8): a 304 just drops the body once the caller's own copy proves current.
+      if (c.req.header('if-none-match') === headers.ETag) return c.body(null, 304, headers);
+      return new Response(result.body, { headers });
+    }
   }
 });

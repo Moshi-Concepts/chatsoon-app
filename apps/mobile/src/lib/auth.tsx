@@ -1,4 +1,5 @@
 import type { Me } from '@chatsoon/shared';
+import { SESSION_STORAGE_KEY } from '@chatsoon/shared/src/profile-page';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
@@ -9,7 +10,10 @@ import { deleteExportedFiles } from './export';
 import { clearOutbox } from './outbox';
 import { getJson, removeKey, secureDelete, secureGet, secureSet, setJson } from './storage';
 
-const TOKEN_KEY = 'chatsoon.session';
+// The web SPA's session key: SESSION_STORAGE_KEY (packages/shared/src/profile-page.ts) is the
+// localStorage key the server-rendered /id/:slug page reads to decide whether to hand the visit
+// over to this app.
+const TOKEN_KEY = SESSION_STORAGE_KEY;
 /** Who the outbox belongs to, so an expired session keeps its offline captures for the same user. */
 const OUTBOX_OWNER_KEY = 'chatsoon.outboxOwner';
 /**

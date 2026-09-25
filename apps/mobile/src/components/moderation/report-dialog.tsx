@@ -1,4 +1,5 @@
 import { REPORT_REASONS, type ReportReason } from '@chatsoon/shared';
+import { REPORT_REASON_LABELS } from '@chatsoon/shared/src/profile-page';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -33,13 +34,9 @@ export type ReportDialogProps = {
   targetName: string;
 };
 
-const REASON_LABELS: Record<ReportReason, { title: string; subtitle: string }> = {
-  spam: { title: 'Spam or scam', subtitle: 'Unwanted messages, fake offers or phishing' },
-  harassment: { title: 'Harassment or bullying', subtitle: 'Threats, abuse or unwanted contact' },
-  impersonation: { title: 'Pretending to be someone else', subtitle: 'A fake profile or a stolen identity' },
-  inappropriate: { title: 'Inappropriate content', subtitle: 'Offensive, hateful, violent or sexual content' },
-  other: { title: 'Something else', subtitle: 'Tell us what happened below' },
-};
+// Labels moved to packages/shared/src/profile-page.ts (REPORT_REASON_LABELS) so the web island can
+// share them without importing this component.
+const REASON_LABELS: Record<ReportReason, { title: string; subtitle: string }> = REPORT_REASON_LABELS;
 
 /** Modal to pick a reason, add details and send POST /reports. Works signed in or out. */
 export function ReportDialog({ visible, onClose, ...target }: ReportDialogProps) {

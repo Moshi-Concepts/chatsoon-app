@@ -5,14 +5,14 @@ import type { ProfileRow } from './db/schema';
 import type { Env } from './env';
 import { getDb } from './lib/db';
 import { ApiError, limit } from './lib/errors';
-import { cardsEnabled, currentOgVersion, loadOgAvatar, ogKey, sweepOgKeys } from './lib/og';
+import { cardsEnabled, currentOgVersion, hashKey16, loadOgAvatar, ogKey, sweepOgKeys } from './lib/og';
 import { findProfileBySlug } from './lib/profiles';
 import { toPageProfile } from './lib/serialize';
 
-// Core logic behind the two secret-gated routes in routes/pages.ts: GET /_pages/profile/:slug and
-// GET /_pages/og/:slug (docs/og-plan.md §3.3). Kept independent of Hono and of how the caller's IP
-// arrived, so Stage C's PagesEntrypoint RPC (§3.3's "Handover to Stage C") can call the exact same
-// functions instead of re-implementing them.
+// Core logic behind the three secret-gated routes in routes/pages.ts: GET /_pages/profile/:slug,
+// GET /_pages/og/:slug (docs/og-plan.md §3.3) and GET /_pages/photo/:slug (docs/public-pages-plan.md's
+// "Stage C as built on top of #5" note and decision D8). Kept independent of Hono and of how the
+// caller's IP arrived.
 
 /** The bucket routes/public.ts already uses for GET /id/:slug misses: one limit, shared by both paths. */
 const missKey = (ip: string | null) => (ip ? `profile-miss:${ip}` : null);
@@ -102,4 +102,39 @@ export async function profileOgImage(
     console.error('OG image render failed', err);
     return { status: 'unavailable' };
   }
+}
+
+export type ProfilePhotoResult =
+  | { status: 'not_found' }
+  | { status: 'rate_limited' }
+  | { status: 'ok'; body: ReadableStream; contentType: string; contentLength: number; version: string; maxAge: number };
+
+/**
+ * GET /_pages/photo/:slug's body (D8): the profile's own avatar, streamed straight from R2 exactly
+ * as stored — no resizing, no re-encoding. No avatar, a missing R2 object, or a stored object whose
+ * declared type isn't an image, all read as `not_found`, same as an unknown slug: a photo URL never
+ * hints at which case applies. `version` is the same 16-hex hash `toPageProfile` puts in
+ * `avatarVersion`, so the caller's own `?v=` either matches it or doesn't.
+ */
+export async function profilePhoto(
+  env: Env,
+  slug: string,
+  ip: string | null,
+  v: string | null,
+): Promise<ProfilePhotoResult> {
+  const found = await lookupProfile(env, slug, ip);
+  if (found.status !== 'ok') return found;
+
+  const avatarKey = found.row.avatarKey;
+  if (!avatarKey) return { status: 'not_found' };
+
+  const object = await env.FILES.get(avatarKey);
+  if (!object) return { status: 'not_found' };
+
+  const contentType = object.httpMetadata?.contentType;
+  if (!contentType?.startsWith('image/')) return { status: 'not_found' };
+
+  const version = await hashKey16(avatarKey);
+  const maxAge = v !== null && V_PATTERN.test(v) && v === version ? 3600 : 60;
+  return { status: 'ok', body: object.body, contentType, contentLength: object.size, version, maxAge };
 }

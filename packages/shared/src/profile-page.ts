@@ -6,9 +6,18 @@
 // `roleLine` and `apps/mobile/src/app/id/[slug].tsx`'s `describe()`. Those call sites are NOT
 // changed by this file: it's a second, shared copy for code that can't import from apps/mobile.
 //
+// `REPORT_REASON_LABELS`, `CONNECT_FORM_MAX`, `connectErrorMessage` and `SESSION_STORAGE_KEY` (WP-C2
+// remainder) are different: they move the source of truth out of apps/mobile, so those call sites
+// (`report-dialog.tsx`, `connect-form.tsx`, `auth.tsx`) now import from here instead of keeping a
+// local copy.
+//
+// No zod, no schemas import: the web Worker deep-imports this module and must not pull in input
+// validation. `CONNECT_FORM_MAX` is a plain literal kept in sync with `connectFormSchema` by hand
+// (checked in profile-page.test.ts), not derived from the schema.
+//
 // Deep import only: `@chatsoon/shared/src/profile-page` (see og.ts).
 
-import { APP_NAME } from './constants';
+import { APP_NAME, type ReportReason } from './constants';
 import type { OgCard } from './og';
 
 /** First word of a display name, or the whole name if it's one word. Matches profile-card.tsx. */
@@ -57,3 +66,48 @@ export function profileOgTitle(p: OgCard): string {
   const full = suffix ? `${p.displayName} – ${suffix}` : p.displayName;
   return full.length > MAX_OG_TITLE ? p.displayName : full;
 }
+
+/**
+ * Report reasons and their copy, moved from `apps/mobile/src/components/moderation/report-dialog.tsx`
+ * (`REASON_LABELS`). Typed as `Record<ReportReason, …>` so it can't fall out of sync with
+ * `REPORT_REASONS` in constants.ts.
+ */
+export const REPORT_REASON_LABELS: Record<ReportReason, { title: string; subtitle: string }> = {
+  spam: { title: 'Spam or scam', subtitle: 'Unwanted messages, fake offers or phishing' },
+  harassment: { title: 'Harassment or bullying', subtitle: 'Threats, abuse or unwanted contact' },
+  impersonation: { title: 'Pretending to be someone else', subtitle: 'A fake profile or a stolen identity' },
+  inappropriate: { title: 'Inappropriate content', subtitle: 'Offensive, hateful, violent or sexual content' },
+  other: { title: 'Something else', subtitle: 'Tell us what happened below' },
+};
+
+/**
+ * Max lengths for the public Connect form's fields (`apps/mobile/src/components/web/connect-form.tsx`),
+ * matching `connectFormSchema` in schemas.ts: `name` and `contact` are plain `.max()`, `note` is
+ * `publicText(1000)`. Kept as a literal, not imported from the schema, so this module stays zod-free;
+ * profile-page.test.ts checks the two stay equal.
+ */
+export const CONNECT_FORM_MAX = { name: 120, contact: 200, note: 1000 } as const;
+
+/**
+ * connect-form.tsx's error mapping for `POST /id/:slug/connect` (today's `errorMessage`). `status`
+ * and `code` come from `ApiError`, kept as primitives here so this module doesn't depend on
+ * apps/mobile's `ApiError` class. Returns null for anything not special-cased below, so the caller
+ * falls back to the server's own message (an `ApiError` always has one) or its own generic fallback
+ * for a non-`ApiError` failure.
+ */
+export function connectErrorMessage(status: number, code: string): string | null {
+  if (code === 'captcha_failed') return 'The spam check failed. Please complete it again and resend.';
+  if (code === 'rate_limited') return 'Too many attempts. Please wait a minute and try again.';
+  if (status === 404) return "This profile isn't available any more.";
+  return null;
+}
+
+/**
+ * The web SPA's sign-in session key. On web, `apps/mobile/src/lib/storage.ts`'s `secureGet` /
+ * `secureSet` / `secureDelete` read and write `window.localStorage` directly under whatever key
+ * they're given (native uses the Keychain/Keystore instead); `apps/mobile/src/lib/auth.tsx` calls
+ * them with this key to store the bearer token as a plain string (not JSON). The server-rendered
+ * page's inline script reads this same key from `localStorage` to decide whether to hand the visit
+ * over to the full app.
+ */
+export const SESSION_STORAGE_KEY = 'chatsoon.session';

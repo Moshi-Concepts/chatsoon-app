@@ -1,4 +1,5 @@
 import { connectFormSchema, profileContactChannels, type ConnectFormInput } from '@chatsoon/shared';
+import { CONNECT_FORM_MAX, connectErrorMessage } from '@chatsoon/shared/src/profile-page';
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -17,10 +18,7 @@ type FieldErrors = Partial<Record<'name' | 'contact' | 'note' | 'form', string>>
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.code === 'captcha_failed') return 'The spam check failed. Please complete it again and resend.';
-    if (err.code === 'rate_limited') return 'Too many attempts. Please wait a minute and try again.';
-    if (err.status === 404) return "This profile isn't available any more.";
-    return err.message;
+    return connectErrorMessage(err.status, err.code) ?? err.message;
   }
   return 'Something went wrong. Please try again.';
 }
@@ -131,7 +129,7 @@ export function ConnectForm({
           if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
         }}
         error={errors.name}
-        maxLength={120}
+        maxLength={CONNECT_FORM_MAX.name}
         autoCapitalize="words"
         autoComplete="name"
         textContentType="name"
@@ -151,7 +149,7 @@ export function ConnectForm({
           if (errors.contact) setErrors((e) => ({ ...e, contact: undefined }));
         }}
         error={errors.contact}
-        maxLength={200}
+        maxLength={CONNECT_FORM_MAX.contact}
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="email"
@@ -169,7 +167,7 @@ export function ConnectForm({
         value={note}
         onChangeText={setNote}
         error={errors.note}
-        maxLength={1000}
+        maxLength={CONNECT_FORM_MAX.note}
         multiline
         autoCapitalize="sentences"
         editable={!busy}

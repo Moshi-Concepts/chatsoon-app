@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { profiles, type ProfileRow } from '../src/db/schema';
 import app from '../src/index';
 import { getDb } from '../src/lib/db';
-import { currentOgVersion, loadOgAvatar, ogKey, ogPrefix } from '../src/lib/og';
+import { currentOgVersion, hashKey16, loadOgAvatar, ogKey, ogPrefix } from '../src/lib/og';
 import { call, signUpWithProfile } from './helpers';
 
 // GET /_pages/profile/:slug and GET /_pages/og/:slug (docs/og-plan.md §3.3, WP-4), plus the
@@ -107,7 +107,7 @@ describe('GET /_pages/profile/:slug', () => {
   });
 });
 
-describe('the x-pages-key gate (shared by both routes)', () => {
+describe('the x-pages-key gate (shared by all three routes)', () => {
   it('404s a wrong key, a missing key, and every call once the secret is unset', async () => {
     const owner = await signUpWithProfile('pages-key@example.com', 'Kay Gate');
 
@@ -117,12 +117,14 @@ describe('the x-pages-key gate (shared by both routes)', () => {
 
     expect((await call(`/_pages/profile/${owner.slug}`)).status).toBe(404);
     expect((await call(`/_pages/og/${owner.slug}`)).status).toBe(404);
+    expect((await call(`/_pages/photo/${owner.slug}`)).status).toBe(404);
 
     const saved = env.PAGES_SHARED_SECRET;
     env.PAGES_SHARED_SECRET = undefined;
     try {
       expect((await pagesCall(`/_pages/profile/${owner.slug}`)).status).toBe(404);
       expect((await pagesCall(`/_pages/og/${owner.slug}`)).status).toBe(404);
+      expect((await pagesCall(`/_pages/photo/${owner.slug}`)).status).toBe(404);
     } finally {
       env.PAGES_SHARED_SECRET = saved;
     }
@@ -147,8 +149,9 @@ describe('the shared profile-miss rate limit', () => {
 
       const guessed = (await (await pagesCall('/_pages/profile/nobody-9999', { ip })).json()) as ProfilePageResult;
       expect(guessed.status).toBe('rate_limited');
-      // The image route reads the same bucket.
+      // The image and photo routes read the same bucket.
       expect((await pagesCall('/_pages/og/nobody-9999', { ip })).status).toBe(429);
+      expect((await pagesCall('/_pages/photo/nobody-9999', { ip })).status).toBe(429);
       // So does the public route (routes/public.ts): "same bucket as the public route" (§3.3).
       expect((await call('/id/nobody-9999', { headers: { 'cf-connecting-ip': ip } })).status).toBe(429);
 
@@ -211,6 +214,71 @@ describe('GET /_pages/og/:slug', () => {
     const res = await pagesCall('/_pages/og/nobody-at-all-00000000');
     expect(res.status).toBe(404);
     expect(((await res.json()) as ApiErrorBody).error.code).toBe('not_found');
+  });
+});
+
+describe('GET /_pages/photo/:slug', () => {
+  async function putAvatar(userId: string, bytes: Uint8Array, contentType: string) {
+    const key = `u/${userId}/avatar/${crypto.randomUUID()}.jpg`;
+    await env.FILES.put(key, bytes, { httpMetadata: { contentType } });
+    return key;
+  }
+
+  it('404s an unknown slug', async () => {
+    const res = await pagesCall('/_pages/photo/nobody-at-all-00000000');
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as ApiErrorBody).error.code).toBe('not_found');
+  });
+
+  it('404s a profile with no avatar', async () => {
+    const owner = await signUpWithProfile('pages-photo-none@example.com', 'No Photo');
+    const res = await pagesCall(`/_pages/photo/${owner.slug}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("404s when the stored object's declared type isn't an image", async () => {
+    const owner = await signUpWithProfile('pages-photo-notimage@example.com', 'Not Image');
+    const key = await putAvatar(owner.userId, new Uint8Array([1, 2, 3]), 'text/plain');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Not Image', avatarKey: key } });
+
+    const res = await pagesCall(`/_pages/photo/${owner.slug}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('streams the avatar bytes with the right type, length and ETag, current v vs a stale one', async () => {
+    const owner = await signUpWithProfile('pages-photo@example.com', 'Photo Person');
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const key = await putAvatar(owner.userId, bytes, 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Photo Person', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const noV = await pagesCall(`/_pages/photo/${owner.slug}`);
+    expect(noV.status).toBe(200);
+    expect(noV.headers.get('content-type')).toBe('image/jpeg');
+    expect(noV.headers.get('content-length')).toBe(String(bytes.byteLength));
+    expect(noV.headers.get('etag')).toBe(`"${version}"`);
+    expect(noV.headers.get('cache-control')).toBe('public, max-age=60'); // no ?v= yet: treated as stale
+    expect(new Uint8Array(await noV.arrayBuffer())).toEqual(bytes);
+
+    const currentV = await pagesCall(`/_pages/photo/${owner.slug}?v=${version}`);
+    expect(currentV.headers.get('cache-control')).toBe('public, max-age=3600');
+
+    const staleV = await pagesCall(`/_pages/photo/${owner.slug}?v=${'0'.repeat(16)}`);
+    expect(staleV.headers.get('cache-control')).toBe('public, max-age=60');
+  });
+
+  it('returns 304 on a matching If-None-Match, with the same headers and no body', async () => {
+    const owner = await signUpWithProfile('pages-photo-etag@example.com', 'Etag Photo');
+    const key = await putAvatar(owner.userId, new Uint8Array([9, 9, 9]), 'image/png');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Etag Photo', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const notModified = await pagesCall(`/_pages/photo/${owner.slug}`, { ifNoneMatch: `"${version}"` });
+    expect(notModified.status).toBe(304);
+    expect(await notModified.text()).toBe('');
+    expect(notModified.headers.get('etag')).toBe(`"${version}"`);
+    expect(notModified.headers.get('content-type')).toBe('image/png');
+    expect(notModified.headers.get('cache-control')).toBe('public, max-age=60');
   });
 });
 
