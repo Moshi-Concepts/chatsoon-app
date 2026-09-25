@@ -23,6 +23,12 @@ export function formatScheduledDeletion(iso: string): string {
   });
 }
 
+/** "27 Sep 2026": the badge card's "since <date>", the claim card's "Claimed on <date>", and a pending
+ * referral's "qualifies on <date>" (docs/referrals.md "Referral hub"). */
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.round(diff / 60000);

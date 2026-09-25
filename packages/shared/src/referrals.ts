@@ -85,14 +85,19 @@ export interface ReferralListItem {
 export interface ReferralClaimInfo {
   status: 'issued' | 'redeemed';
   milestone: number;
-  /** Only ever present right after POST /me/referral/claims issues or re-issues a token; GET
-   * /me/referral never carries it back, since the raw token itself is never stored. */
+  /** The live claim link while the claim is issued and unexpired (the token is derived, so GET
+   * /me/referral can hand it back too). Absent once redeemed or expired. */
   url?: string;
   expiresAt?: string;
+  /** When the user first claimed (the claim row was created). */
+  claimedAt?: string;
 }
 
 /** GET /me/referral. */
 export interface GetReferralResponse {
+  /** REFERRAL_ENABLED (docs/referrals.md "Config"). The app hides every referral entry point while
+   * this is false; the /referrals screens show a "coming soon" state instead of the hub. */
+  enabled: boolean;
   code: string;
   link: string;
   founderThreshold: number;

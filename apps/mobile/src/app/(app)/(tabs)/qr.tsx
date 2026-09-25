@@ -11,7 +11,7 @@ import { Avatar, Button, Screen, Text } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { showAlert, showError } from '@/lib/dialogs';
-import { useMe } from '@/lib/queries';
+import { useMe, useReferral } from '@/lib/queries';
 
 /** Screen padding (16) plus the card's quiet zone on each side, roughly. */
 const QR_SIDE_SPACE = 88;
@@ -125,6 +125,7 @@ export default function MyQrScreen() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const me = useMe();
+  const referral = useReferral();
   const profile = me.data?.profile;
   const [copied, setCopied] = useState(false);
 
@@ -148,6 +149,10 @@ export default function MyQrScreen() {
   const url = profileUrl(profile.slug);
   const displayUrl = url.replace(/^https?:\/\//, '');
   const qrSize = Math.max(180, Math.min(QR_MAX, Math.min(width, MaxContentWidth) - QR_SIDE_SPACE));
+  // The QR payload only, not the displayed/shared/copied link (issue #11, docs/referrals.md "Entry
+  // points"): plain while referrals are off or the code hasn't loaded yet, so a printed/cached code
+  // never breaks.
+  const qrValue = referral.data?.enabled && referral.data.code ? `${url}?ref=${referral.data.code}` : url;
 
   const copyLink = async () => {
     if (await copyToClipboard(url)) setCopied(true);
@@ -180,7 +185,7 @@ export default function MyQrScreen() {
       </View>
 
       <ProfileQrCard
-        value={url}
+        value={qrValue}
         size={qrSize}
         accessibilityLabel={`QR code for ${profile.displayName}'s Chatsoon profile`}
       />
@@ -207,6 +212,14 @@ export default function MyQrScreen() {
           />
         </View>
         <Button title="Scan someone" icon="scan-outline" variant="ghost" onPress={() => router.push('/scan')} />
+        {referral.data?.enabled ? (
+          <Button
+            title="Invite friends and earn points"
+            variant="ghost"
+            size="sm"
+            onPress={() => router.push('/referrals')}
+          />
+        ) : null}
       </View>
     </Screen>
   );

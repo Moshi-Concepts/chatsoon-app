@@ -4,11 +4,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
-import { api, getAuthToken, setAuthToken, setUnauthorizedHandler } from './api';
+import { api, getAuthToken, setAuthToken, setDeviceId, setUnauthorizedHandler } from './api';
 import { qk } from './cache';
 import { deleteExportedFiles } from './export';
 import { clearOutbox } from './outbox';
-import { getJson, removeKey, secureDelete, secureGet, secureSet, setJson } from './storage';
+import { ensureDeviceId, getJson, removeKey, secureDelete, secureGet, secureSet, setJson } from './storage';
 
 // The web SPA's session key: SESSION_STORAGE_KEY (packages/shared/src/profile-page.ts) is the
 // localStorage key the server-rendered /id/:slug page reads to decide whether to hand the visit
@@ -68,6 +68,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const clearSession = useCallback(() => endSession(true), [endSession]);
+
+  // X-Chatsoon-Device (issue #11): generated once per install and sent on every request from here on.
+  // Not gated on sign-in status - the header rides along on signed-out calls too, though only
+  // POST /me/referral/attribute reads it server-side.
+  useEffect(() => {
+    void ensureDeviceId().then(setDeviceId);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,7 +1,7 @@
 import { isValidSlug, type ProfileInput } from '@chatsoon/shared';
 import { Redirect, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { Logo } from '@/components/brand';
 import {
@@ -14,13 +14,16 @@ import {
   type AvatarValue,
   type ProfileFormErrors,
 } from '@/components/profile';
-import { Avatar, Button, Card, Icon, Screen, Text } from '@/components/ui';
+import { Avatar, Button, Card, Icon, Screen, Text, TextField } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { confirm, showError } from '@/lib/dialogs';
 import { useOutbox } from '@/lib/outbox';
-import { useMe, useUpdateProfile } from '@/lib/queries';
+import { useAttributeReferral, useMe, useReferral, useUpdateProfile } from '@/lib/queries';
+import { referralAttributeErrorMessage } from '@/lib/referral-errors';
+import { clearPendingReferralCode, getPendingReferralCode } from '@/lib/storage';
 
 /** `?next=/id/<slug>`: set up from a profile's "Create my profile", go back there to connect. Profile paths only. */
 function profileReturnPath(value: unknown): string | null {
@@ -31,6 +34,7 @@ function profileReturnPath(value: unknown): string | null {
 
 // First run: signed in, but no profile yet. The profile is what people get when they scan your QR.
 export default function OnboardingScreen() {
+  const theme = useTheme();
   const { status, signOut } = useAuth();
   const me = useMe();
   const update = useUpdateProfile();
@@ -41,6 +45,58 @@ export default function OnboardingScreen() {
   const [errors, setErrors] = useState<ProfileFormErrors>({});
   const [avatar, setAvatar] = useState<AvatarValue>({ key: null, url: null });
   const [uploading, setUploading] = useState(false);
+
+  // "Did someone invite you?" (issue #11, docs/referrals.md "Onboarding"): a second step shown right
+  // after the profile saves, since GET /me/referral (which says whether referrals are on, and whether
+  // this account can still enter a code) needs the profile this same screen is about to create.
+  const [step, setStep] = useState<'profile' | 'invite'>('profile');
+  const referral = useReferral(step === 'invite');
+  const attribute = useAttributeReferral();
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteSource, setInviteSource] = useState<'typed' | 'link'>('typed');
+  const [attributing, setAttributing] = useState(false);
+
+  useEffect(() => {
+    if (step !== 'invite') return;
+    void getPendingReferralCode().then((pending) => {
+      if (pending) {
+        setInviteCode(pending.code);
+        setInviteSource('link');
+      }
+    });
+  }, [step]);
+
+  const finish = () => {
+    if (next) router.dismissTo(next);
+    else router.replace('/contacts');
+  };
+
+  // Once we know whether referrals are on and this account can still enter a code, either show the
+  // step or skip straight past it - never block onboarding on this feature being on at all.
+  useEffect(() => {
+    if (step !== 'invite' || referral.isPending) return;
+    if (referral.isError || !referral.data?.enabled || !referral.data.canEnterCode) finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- finish() is stable enough for this effect's purpose
+  }, [step, referral.isPending, referral.isError, referral.data]);
+
+  const submitInvite = async () => {
+    if (attributing) return;
+    const trimmed = inviteCode.trim();
+    if (!trimmed) {
+      finish();
+      return;
+    }
+    setAttributing(true);
+    try {
+      await attribute.mutateAsync({ code: trimmed, source: inviteSource });
+    } catch (err) {
+      showError(err, referralAttributeErrorMessage(err));
+      // Never block onboarding on this - fall through to finish() regardless.
+    }
+    await clearPendingReferralCode();
+    setAttributing(false);
+    finish();
+  };
 
   // Social sign-in prefill (issue #24): a name from the provider fills the name field when it's still
   // empty (never overwrites something typed in already), and an offered provider photo is fetched into
@@ -119,13 +175,66 @@ export default function OnboardingScreen() {
     const input: ProfileInput = discordUsername ? { ...parsed.input, links: { discord: discordUsername } } : parsed.input;
     try {
       await update.mutateAsync(input);
-      if (next) router.dismissTo(next);
-      else router.replace('/contacts');
+      setStep('invite');
     } catch (err) {
       update.reset();
       showError(err, "Couldn't create your profile");
     }
   };
+
+  if (step === 'invite') {
+    if (referral.isPending || !referral.data) {
+      return (
+        <Screen edges={['top', 'bottom']} contentStyle={styles.loadingInvite}>
+          <Stack.Screen options={{ title: 'Create your profile', headerShown: false }} />
+          <ActivityIndicator color={theme.primary} />
+        </Screen>
+      );
+    }
+    // useEffect above already redirects past this render once referral.data says to skip it, but that
+    // effect hasn't necessarily run yet on this same render - render nothing rather than flash the form.
+    if (!referral.data.enabled || !referral.data.canEnterCode) return null;
+
+    return (
+      <Screen
+        edges={['top', 'bottom']}
+        contentStyle={styles.content}
+        footer={
+          <View style={styles.footer}>
+            <Button title="Continue" icon="arrow-forward" onPress={() => void submitInvite()} loading={attributing} />
+            <Button title="Skip" variant="ghost" onPress={finish} disabled={attributing} />
+          </View>
+        }>
+        <Stack.Screen options={{ title: 'Did someone invite you?', headerShown: false }} />
+
+        <View style={styles.header}>
+          <Logo size={48} accessibilityLabel={null} />
+          <Text variant="title" align="center" accessibilityRole="header">
+            Did someone invite you?
+          </Text>
+          <Text variant="callout" color="textSecondary" align="center" style={styles.lead}>
+            Enter their code and you earn a point.
+          </Text>
+        </View>
+
+        <TextField
+          label="Invite code"
+          placeholder="ABCD2345"
+          value={inviteCode}
+          onChangeText={(v) => {
+            setInviteCode(v.toUpperCase());
+            setInviteSource('typed');
+          }}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={8}
+          returnKeyType="done"
+          editable={!attributing}
+          onSubmitEditing={() => void submitInvite()}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -224,6 +333,7 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: Spacing.five, paddingTop: Spacing.five, paddingBottom: Spacing.four },
+  loadingInvite: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
   header: { alignItems: 'center', gap: Spacing.three },
   lead: { maxWidth: 360 },
   privacy: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },

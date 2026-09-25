@@ -73,6 +73,9 @@ export default function AppLayout() {
       <Stack.Screen name="card-review/[id]" />
       <Stack.Screen name="profile-edit" />
       <Stack.Screen name="delete-account" />
+      <Stack.Screen name="referrals/index" options={{ title: 'Invite friends' }} />
+      <Stack.Screen name="referrals/invite" options={{ title: 'Invite contacts' }} />
+      <Stack.Screen name="connected-accounts" options={{ title: 'Connected accounts' }} />
     </Stack>
   );
 }

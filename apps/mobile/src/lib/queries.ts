@@ -1,11 +1,15 @@
 import type {
+  AttributeReferralInput,
   BlockInput,
+  ClaimReferralInput,
   Contact,
   ContactCreateInput,
   ContactUpdateInput,
+  InviteEmailsInput,
   Me,
   ProfileInput,
   ReportInput,
+  SocialValidationProvider,
 } from '@chatsoon/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Platform } from 'react-native';
@@ -211,6 +215,85 @@ export function useCreateEvent() {
   return useMutation({
     mutationFn: (name: string) => api.events.create(name),
     onSuccess: () => void qc.invalidateQueries({ queryKey: qk.events }),
+  });
+}
+
+// ---- Referrals (issue #11, docs/referrals.md) ----
+
+/**
+ * GET /me/referral: the hub's whole state. Short staleTime so returning from Invite/Connected
+ * accounts (or a claim) shows fresh counts without a manual pull-to-refresh.
+ *
+ * `enabled`: onboarding.tsx's invite step needs this to hold off until the profile it just created
+ * exists - `getOrCreateReferralCode` (apps/api/src/lib/referrals.ts) 400s without one, and there's no
+ * profile yet during the rest of onboarding.
+ */
+export function useReferral(enabled = true) {
+  const { status } = useAuth();
+  return useQuery({
+    queryKey: qk.referral,
+    queryFn: () => api.referrals.get(),
+    enabled: status === 'signedIn' && enabled,
+    staleTime: 15_000,
+  });
+}
+
+/** The onboarding field, the hub's "Enter a code" row, and /r/[code] (a signed-in visitor) all call
+ * this the same way. Refreshes `referral` (attribution/canEnterCode change) and `me` (nothing on `me`
+ * itself changes, but a stale badge/profile fetched elsewhere shouldn't linger). */
+export function useAttributeReferral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AttributeReferralInput) => api.referrals.attribute(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.referral });
+    },
+  });
+}
+
+export function useSendInvites() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: InviteEmailsInput) => api.referrals.sendInvites(input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.referral }),
+  });
+}
+
+export function useClaimReferral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ClaimReferralInput) => api.referrals.claim(input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.referral }),
+  });
+}
+
+/** The inviter's public card for /r/[code] (signed in or out - GET /referral/:code needs no auth). */
+export function usePublicReferral(code: string | undefined) {
+  return useQuery({
+    queryKey: ['referral-code', code ?? ''],
+    queryFn: () => api.referrals.byCode(code!),
+    enabled: !!code,
+    retry: (count, err) => (err as { status?: number }).status !== 404 && count < 2,
+  });
+}
+
+// ---- Connected accounts (issue #11) ----
+
+export function useConnectedAccounts() {
+  const { status } = useAuth();
+  return useQuery({
+    queryKey: qk.connectedAccounts,
+    queryFn: () => api.me.connectedAccounts(),
+    enabled: status === 'signedIn',
+  });
+}
+
+/** Connect / Reconnect: POST /auth/link-social, then the caller navigates to the returned `url`. Web
+ * only for now - see connected-accounts.tsx. */
+export function useLinkSocial() {
+  return useMutation({
+    mutationFn: ({ provider, callbackURL, errorCallbackURL }: { provider: SocialValidationProvider; callbackURL: string; errorCallbackURL: string }) =>
+      api.auth.linkSocial(provider, { callbackURL, errorCallbackURL }),
   });
 }
 

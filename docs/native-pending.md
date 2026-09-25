@@ -19,7 +19,8 @@ tag, not from `main`, because `main` already contains the features below.
 | Delayed account deletion with export prompt (#8) | 26 Sep 2026 | No: JS only, but native must switch off `DELETE /me` to `POST /me/deletion` | — |
 | Connect form tips opt-in and Tips emails setting (#7) | 26 Sep 2026 | No: JS only | — |
 | Social sign-in: Google, Apple, LinkedIn, Discord (#24) | 26 Sep 2026 | Yes: needs `expo-apple-authentication` (or an `expo-auth-session` browser flow) for each provider, not the web redirect flow | Apple review guideline 4.8 requires Sign in with Apple on iOS whenever another social login is offered, so the native build must ship Apple alongside any other provider, not after it |
-| Referral links (`/r/*`), landing page and badge pill (#11) | 26 Sep 2026 | Yes: add `{"/": "/r/*"}` to apple-app-site-association and the `/r/` pathPrefix intent filter in app.json in the same release as the `/r/[code]` screen | — |
+| Referral links (`/r/*`), landing page and badge pill (#11) | 26 Sep 2026 | Yes: `app.json`'s Android `/r/` pathPrefix intent filter is done; still needs `{"/": "/r/*"}` added to `apple-app-site-association` in the same release as the `/r/[code]` screen | — |
+| Referral hub, invite picker and Connected accounts screens (#11) | 26 Sep 2026 | Yes: `expo-sms` (the invite picker's Text button) is a native module, so it only works once a native build includes it; social account linking from Connected accounts (`POST /auth/link-social`) is web-only for now, same limitation as social sign-in above — see `connected-accounts.tsx` | — |
 
 ## Releasing a batch to the apps
 

@@ -1,4 +1,3 @@
-import { APIError } from 'better-auth/api';
 import type { DiscordProfile, TwitterProfile } from 'better-auth/social-providers';
 
 import { rememberSocialCheck } from './social-checks';
@@ -91,25 +90,22 @@ const TWITTER_USER_FIELDS = 'username,name,profile_image_url,verified,verified_t
  * `emailVerified: false` since there's nothing to verify. This is also why X is link-only: see
  * lib/auth.ts's `hooks.before` for where sign-in via twitter is refused outright.
  *
- * A 402 or other credit/billing error from X fails the link with a retryable error and writes
- * nothing: throwing here happens before Better Auth's callback handler does anything with the
- * `accounts` table (node_modules/better-auth/dist/api/routes/callback.mjs calls `getUserInfo` before
- * any account create/update), and the thrown `APIError` propagates out as a 502 response rather than
- * a generic "unable to get user info" redirect, so it's distinguishable from "no such X user" (any
- * other non-2xx response, treated as null - Better Auth's own error).
+ * A 402 (credit/billing) or any other non-2xx from X returns null, before Better Auth's callback
+ * touches the `accounts` table (node_modules/better-auth/dist/api/routes/callback.mjs calls
+ * `getUserInfo` first), so nothing is written. Better Auth then redirects to the link flow's
+ * errorCallbackURL with `?error=unable_to_get_user_info`, which Connected accounts turns into a
+ * "try again in a few minutes" message. Throwing instead would strand the user on a bare 502 page from
+ * api.chatsoon.app mid-OAuth.
  */
 export async function twitterGetUserInfo(token: OAuthToken) {
   if (!token.accessToken) return null;
   const res = await fetch(`https://api.x.com/2/users/me?user.fields=${TWITTER_USER_FIELDS}`, {
     headers: { authorization: `Bearer ${token.accessToken}` },
   });
-  if (res.status === 402) {
-    throw new APIError('BAD_GATEWAY', {
-      code: 'x_unavailable',
-      message: 'X is temporarily unavailable. Try connecting again in a few minutes.',
-    });
+  if (!res.ok) {
+    if (res.status === 402) console.error('X users/me returned 402: the X API credit balance needs topping up');
+    return null;
   }
-  if (!res.ok) return null;
   // X's response is `{ data: {...} }`; `data:` below is the whole response object (matching
   // TwitterProfile's shape), while `profile` here is the nested user object with the fields we read.
   const body = (await res.json()) as XProfile;

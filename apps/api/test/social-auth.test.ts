@@ -505,14 +505,15 @@ describe('X (twitter) provider (issue #11)', () => {
     expect(check).toMatchObject({ verified: 0, identity_verified: 1, followers_count: 50 });
   });
 
-  it('a 402 from X fails the link with a retryable error and writes nothing', async () => {
+  it('a 402 from X redirects back with a retryable error and writes nothing', async () => {
     const user = await signIn(`x-402-${crypto.randomUUID()}@example.com`);
     mockProviderFetch({
       'https://api.x.com/2/oauth2/token': () => tokenResponse(),
       'https://api.x.com/2/users/me': () => jsonResponse({ error: 'credit balance exhausted' }, 402),
     });
     const res = await linkProvider(socialEnv, user.token, 'twitter');
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toContain('error=unable_to_get_user_info');
     expect(await findSocialCheck(user.userId, 'twitter')).toBeNull();
     const res2 = await callEnv('/me/connected-accounts', socialEnv, { token: user.token });
     expect((await res2.json()) as ConnectedAccountsResponse).toEqual([]);
