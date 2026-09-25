@@ -7,7 +7,7 @@
     "dev:api": "pnpm --filter @chatsoon/api run dev",
     "dev:mobile": "pnpm --filter @chatsoon/mobile run start",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm --filter @chatsoon/shared run test && pnpm --filter @chatsoon/api run test",
+    "test": "pnpm -r run test",
     "build:web": "pnpm --filter @chatsoon/web run build",
     "deploy:api": "pnpm --filter @chatsoon/api run deploy",
     "deploy:og": "pnpm --filter @chatsoon/og exec wrangler deploy",

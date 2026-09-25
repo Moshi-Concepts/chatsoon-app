@@ -30,7 +30,9 @@ reminders and similar come later. Do not add them.
 - Camera permission text is exactly: "Used to scan QR codes and photograph business cards". Never request photo library permission.
 
 ## Commands
-- Typecheck: `pnpm -r typecheck`. Tests: `pnpm --filter @chatsoon/api test`, `pnpm --filter @chatsoon/shared test`, `pnpm --filter @chatsoon/web test`, `pnpm --filter @chatsoon/og test`.
+- CI (`.github/workflows/ci.yml`) runs typecheck, tests, the web build and a migration drift check on every PR. `main`
+  only takes squash-merged PRs whose `ci-ok` check passed on a branch up to date with `main`.
+- Typecheck: `pnpm -r typecheck`. Tests: `pnpm test` (all packages) or `pnpm --filter @chatsoon/api test`, `pnpm --filter @chatsoon/shared test`, `pnpm --filter @chatsoon/web test`, `pnpm --filter @chatsoon/og test`.
 - New migration: edit `apps/api/src/db/schema.ts`, then `pnpm --filter @chatsoon/api db:generate`.
 - Web build: `pnpm build:web` (writes `apps/web/dist`); deploy with `pnpm deploy:web` (see DEPLOY.md).
 - OG Worker: deploy with `pnpm deploy:og` (see DEPLOY.md).
