@@ -47,7 +47,7 @@ Present only when there are booking links.
   - `<label for="cf-name">`, then `<input id="cf-name" name="name" autocomplete="name" maxlength=CONNECT_FORM_MAX.name required>`
   - `<label for="cf-contact">`, then `<input id="cf-contact" name="contact" autocomplete="email" maxlength=CONNECT_FORM_MAX.contact required>`
   - `<label for="cf-note">`, then `<textarea id="cf-note" name="note" maxlength=CONNECT_FORM_MAX.note>`
-  - `<div id="turnstile" style="min-height:65px"></div>`
+  - `<div id="turnstile-slot" style="min-height:65px"></div>` (not `id="turnstile"`: an element id becomes a `window` global and would shadow the Turnstile API)
   - `<p id="connect-error" role="alert" hidden></p>`
   - `<button type="submit" class="button primary">Send</button>`
   - A short privacy line linking to `/privacy`.

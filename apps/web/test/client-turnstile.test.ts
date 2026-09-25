@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { once, turnstileOptions, turnstileSize } from '../src/client/turnstile';
+import { once, turnstileApi, turnstileOptions, turnstileSize } from '../src/client/turnstile';
 
 describe('once', () => {
   it('calls fn only once for overlapping calls, and every caller gets the same result', async () => {
@@ -64,5 +64,14 @@ describe('turnstileOptions', () => {
 
     options['error-callback']!();
     expect(onToken).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe('turnstileApi', () => {
+  it('rejects a clobbered global (an element with id="turnstile") and accepts the real API', () => {
+    expect(turnstileApi(undefined)).toBeNull();
+    expect(turnstileApi({ tagName: 'DIV' })).toBeNull();
+    const api = { render: () => 'w1', reset: () => {}, remove: () => {} };
+    expect(turnstileApi(api)).toBe(api);
   });
 });

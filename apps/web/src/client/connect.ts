@@ -154,7 +154,7 @@ function renderSuccess(container: HTMLElement, content: ConnectSuccessContent): 
 /** Wires the Connect form: lazy Turnstile, client-side validation, submit and its success/error states. */
 export function initConnect(config: ConnectConfig, root: ParentNode = document): void {
   const form = qs<HTMLFormElement>(root, '#connect-form');
-  const turnstileContainer = form && qs<HTMLElement>(form, '#turnstile');
+  const turnstileContainer = form && qs<HTMLElement>(form, '#turnstile-slot');
   const errorEl = form && qs<HTMLElement>(root, '#connect-error');
   const successEl = qs<HTMLElement>(root, '#connect-success');
   const submitBtn = form && qs<HTMLButtonElement>(form, 'button[type="submit"]');

@@ -9,18 +9,20 @@
 // From the repo root, both steps run together as `pnpm build:web`.
 
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
+import { build as esbuildBuild } from 'esbuild';
 import QRCode from 'qrcode';
 
-import { WEB_ORIGIN } from '@chatsoon/shared/src/constants';
+import { API_ORIGIN, WEB_ORIGIN } from '@chatsoon/shared/src/constants';
 
 import { renderHome, type LandingContent } from '../src/render/home';
 import { LEGAL_KEYS, renderLegal, type LegalDoc, type LegalKey } from '../src/render/legal';
 import { DEFAULT_OG_IMAGE } from '../src/render/og-asset';
+import type { SpaAssets } from '../src/render/handoff';
 import { injectShellOg } from '../src/render/shell';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,6 +33,15 @@ const HOME_GZIP_BUDGET = 14 * 1024;
 const OG_IMAGE_MAX_BYTES = 300 * 1024;
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
+// WP-C5: the profile island (apps/web/src/client/profile.ts), bundled to dist/_p/profile-<hash>.js.
+const ISLAND_ENTRY = path.join(root, 'src/client/profile.ts');
+const ISLAND_OUT_DIR = path.join(outDir, '_p');
+const ISLAND_GZIP_BUDGET = 10 * 1024;
+
+// WP-C5: apps/mobile/.env.production (or CHATSOON_ENV_FILE) supplies the Turnstile site key and the
+// API origin the profile page's data attributes carry (docs/profile-page-dom.md).
+const DEFAULT_PROFILE_ENV_FILE = '../mobile/.env.production';
+
 // Refuse to finish a web build that still carries local dev values: an API on localhost or a LAN
 // address (from .env), one of Cloudflare's always-pass Turnstile test site keys, or the placeholder
 // site key committed in .env.production. Metro caches inlined EXPO_PUBLIC_* values per file, which is
@@ -40,23 +51,42 @@ const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 const DEV_VALUE =
   /\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)[:/"'`]|\b[123]x0{20}[A-F]{2}\b|REPLACE_WITH_TURNSTILE_SITE_KEY/;
 
+// WP-C5: the island (dist/_p/**) and the generated assets module (functions/_generated/**) can carry
+// the very same dev/placeholder values as the Expo bundle — the site key and API origin are read from
+// the same env file (see writeGeneratedAssets) — so they get the same scan. functions/_generated holds
+// committed-looking .ts source rather than compiled .js, hence the per-target extension match.
+interface ProductionScanTarget {
+  dir: string;
+  matches(fileName: string): boolean;
+}
+
+const PRODUCTION_SCAN_TARGETS: ProductionScanTarget[] = [
+  { dir: path.join(outDir, '_expo/static/js'), matches: (n) => n.endsWith('.js') },
+  { dir: ISLAND_OUT_DIR, matches: (n) => n.endsWith('.js') },
+  { dir: path.join(root, 'functions/_generated'), matches: (n) => n.endsWith('.ts') },
+];
+
+// Runs last (after the island and functions/_generated exist) so every target above actually has
+// something to scan; see the call site at the bottom of the file.
 async function assertProductionBundle(): Promise<void> {
   if (process.env.CHATSOON_ALLOW_DEV_BUILD === '1') return;
-  const jsDir = path.join(outDir, '_expo/static/js');
-  if (!existsSync(jsDir)) {
-    console.warn(`build: no web bundle in ${path.relative(root, jsDir)}, skipping the production env check`);
-    return;
-  }
-  const entries = await readdir(jsDir, { recursive: true });
-  for (const name of entries.filter((n) => n.endsWith('.js'))) {
-    const src = await readFile(path.join(jsDir, name), 'utf8');
-    const bad = src.match(DEV_VALUE);
-    if (bad) {
-      throw new Error(
-        `${name} contains the dev or placeholder value "${bad[0]}". Set EXPO_PUBLIC_API_URL and ` +
-          'EXPO_PUBLIC_TURNSTILE_SITE_KEY to the production values in apps/mobile/.env.production (and keep dev ' +
-          'values out of apps/mobile/.env and .env.local), then run "pnpm build:web" again (it clears the Metro cache).',
-      );
+  for (const target of PRODUCTION_SCAN_TARGETS) {
+    if (!existsSync(target.dir)) {
+      console.warn(`build: no ${path.relative(root, target.dir)}, skipping the production env check for it`);
+      continue;
+    }
+    const entries = await readdir(target.dir, { recursive: true });
+    for (const name of entries.filter((n) => target.matches(n))) {
+      const filePath = path.join(target.dir, name);
+      const src = await readFile(filePath, 'utf8');
+      const bad = src.match(DEV_VALUE);
+      if (bad) {
+        throw new Error(
+          `${path.relative(root, filePath)} contains the dev or placeholder value "${bad[0]}". Set EXPO_PUBLIC_API_URL ` +
+            'and EXPO_PUBLIC_TURNSTILE_SITE_KEY to the production values in apps/mobile/.env.production (and keep dev ' +
+            'values out of apps/mobile/.env and .env.local), then run "pnpm build:web" again (it clears the Metro cache).',
+        );
+      }
     }
   }
 }
@@ -177,11 +207,92 @@ async function writeRoutesJson(): Promise<void> {
   );
 }
 
-await assertProductionBundle();
+// WP-C5: esbuild's own JS API, straight to dist/_p/profile-<contenthash>.js (docs/public-pages-plan.md
+// §2.5, §4 WP-C5). Returns the island's public URL for profile.ts's ProfileAssets. `entryNames` with a
+// `[hash]` placeholder is esbuild's content hash, i.e. exactly the "contenthash" the plan asks for.
+async function bundleIsland(): Promise<string> {
+  await rm(ISLAND_OUT_DIR, { recursive: true, force: true }); // no stale hashed files from an earlier run
+  const result = await esbuildBuild({
+    absWorkingDir: root,
+    entryPoints: [ISLAND_ENTRY],
+    bundle: true,
+    format: 'esm',
+    minify: true,
+    target: 'es2020',
+    outdir: ISLAND_OUT_DIR,
+    entryNames: 'profile-[hash]',
+    write: true,
+    metafile: true,
+  });
+  const outputs = Object.keys(result.metafile.outputs);
+  if (outputs.length !== 1) {
+    throw new Error(`build: expected exactly one profile island output, got ${outputs.length}`);
+  }
+  const outputPath = path.resolve(root, outputs[0]!);
+  const gzipped = gzipSync(await readFile(outputPath)).byteLength;
+  if (gzipped > ISLAND_GZIP_BUDGET) {
+    throw new Error(`build: the profile island is ${gzipped} B gzipped, over the ${ISLAND_GZIP_BUDGET} B budget`);
+  }
+  const fileName = path.basename(outputPath);
+  console.log(`build: wrote dist/_p/${fileName} (${gzipped} B gzipped)`);
+  return `/_p/${fileName}`;
+}
+
+// WP-C5: dist/index.html, once inlineSpaStylesheets and injectSpaShellOg have both already run on it,
+// is exactly what handoff.ts's spaBodyScript() needs to splice into a signed-in visitor's profile page
+// (docs/public-pages-plan.md §2.3): its inline <style> blocks (the Expo reset plus the
+// `<style data-href=…>` blocks Stage B inlined) and its one entry <script src=…>.
+async function parseSpaShellAssets(): Promise<SpaAssets> {
+  const html = await readFile(path.join(outDir, 'index.html'), 'utf8');
+
+  const styles = [...html.matchAll(/<style\b[^>]*>[\s\S]*?<\/style>/g)].map((m) => m[0]).join('');
+  if (!styles) throw new Error('build: dist/index.html has no <style> blocks for the SPA handoff to copy');
+
+  const scriptMatches = [...html.matchAll(/<script\s+src="([^"]+)"[^>]*><\/script>/g)];
+  if (scriptMatches.length !== 1) {
+    throw new Error(`build: expected exactly one <script src=…> in dist/index.html, found ${scriptMatches.length}`);
+  }
+  return { styles, entryScriptSrc: scriptMatches[0]![1]! };
+}
+
+// Reads KEY=value out of a simple, unquoted .env file (apps/mobile/.env.production's own format).
+async function readEnvValue(envFile: string, key: string): Promise<string | undefined> {
+  if (!existsSync(envFile)) return undefined;
+  const contents = await readFile(envFile, 'utf8');
+  return contents.match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1]?.trim();
+}
+
+// WP-C5: functions/_generated/assets.ts (gitignored — see apps/web/.gitignore's Stage C note), the one
+// file functions/id/[[path]].ts imports for the ProfileAssets it hands to handle(). `CHATSOON_ENV_FILE`
+// overrides the default production env file, resolved the same way both are given on the command line:
+// relative to apps/web (`root`).
+async function writeGeneratedAssets(islandUrl: string, spa: SpaAssets): Promise<void> {
+  const envFile = path.resolve(root, process.env.CHATSOON_ENV_FILE ?? DEFAULT_PROFILE_ENV_FILE);
+  const siteKey = await readEnvValue(envFile, 'EXPO_PUBLIC_TURNSTILE_SITE_KEY');
+  const apiOrigin = (await readEnvValue(envFile, 'EXPO_PUBLIC_API_URL')) ?? API_ORIGIN;
+  if (!siteKey) {
+    throw new Error(`build: no EXPO_PUBLIC_TURNSTILE_SITE_KEY in ${path.relative(root, envFile)}`);
+  }
+
+  const generatedDir = path.join(root, 'functions/_generated');
+  await mkdir(generatedDir, { recursive: true });
+  const contents = `// Written by scripts/build.ts (WP-C5) from ${path.relative(root, envFile)}.
+// Gitignored: never hand-edited or committed (see apps/web/.gitignore).
+import type { ProfileAssets } from '../../src/render/profile';
+
+export const PROFILE_ASSETS: ProfileAssets = ${JSON.stringify({ islandUrl, siteKey, apiOrigin, spa }, null, 2)};
+`;
+  await writeFileLogged(path.join(generatedDir, 'assets.ts'), contents);
+}
+
 await buildHome();
 await buildLegalPages();
 await writeRedirects();
 await inlineSpaStylesheets();
 await injectSpaShellOg();
 await assertOgImage();
+const islandUrl = await bundleIsland();
+const spaAssets = await parseSpaShellAssets();
+await writeGeneratedAssets(islandUrl, spaAssets);
+await assertProductionBundle(); // last: dist/_p and functions/_generated must exist for it to scan them
 await writeRoutesJson();

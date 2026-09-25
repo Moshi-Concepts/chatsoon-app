@@ -129,7 +129,7 @@ describe('renderProfile', () => {
 
   it('gives the Turnstile slot a reserved min-height of 65px', () => {
     const html = renderProfile(BASE, ASSETS);
-    expect(html).toContain('<div id="turnstile" style="min-height:65px"></div>');
+    expect(html).toContain('<div id="turnstile-slot" style="min-height:65px"></div>');
   });
 
   it('gzips to 14 KB or less with 5 links and 5 booking links', () => {

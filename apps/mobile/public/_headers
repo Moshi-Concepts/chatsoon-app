@@ -17,11 +17,6 @@
   Content-Type: application/json
   Cache-Control: public, max-age=3600
 
-# Public profiles are for the people you share them with, not search results. The page sets a
-# robots meta tag too, but only crawlers that run JavaScript see that.
-/id/*
-  X-Robots-Tag: noindex
-
 # Signed-in-only app routes. robots.txt already disallows crawling these, but this header is a
 # stronger signal for a route that gets crawled anyway (a stray link, a redirect), since the SPA
 # shell it serves has no real content for a crawler that doesn't run JavaScript.
@@ -66,6 +61,11 @@
 
 # Hashed bundles from `expo export` never change.
 /_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The profile island (WP-C5): also a hashed bundle (dist/_p/profile-<hash>.js), never reused for
+# different bytes.
+/_p/*
   Cache-Control: public, max-age=31536000, immutable
 
 # Share-preview images carry a content hash in the filename (O5, docs/og-plan.md) and a new one is

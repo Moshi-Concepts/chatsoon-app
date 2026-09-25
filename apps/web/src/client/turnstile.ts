@@ -37,19 +37,30 @@ export function once<T>(fn: () => Promise<T>): () => Promise<T> {
   };
 }
 
+/**
+ * The real Turnstile API, or null. Checks for `render` rather than trusting `window.turnstile`: any
+ * element with id="turnstile" is also exposed as `window.turnstile` (named element access), which would
+ * otherwise look like an already-loaded API and stop the script from ever being injected.
+ */
+export function turnstileApi(value: unknown): TurnstileApi | null {
+  return value && typeof (value as Partial<TurnstileApi>).render === 'function' ? (value as TurnstileApi) : null;
+}
+
 /** Loads the Turnstile script at most once per page (module-level memo via `once`). */
 export const loadTurnstile: () => Promise<TurnstileApi> = once(
   () =>
     new Promise<TurnstileApi>((resolve, reject) => {
-      if (window.turnstile) {
-        resolve(window.turnstile);
+      const loaded = turnstileApi(window.turnstile);
+      if (loaded) {
+        resolve(loaded);
         return;
       }
       const script = document.createElement('script');
       script.src = TURNSTILE_SRC;
       script.async = true;
       script.onload = () => {
-        if (window.turnstile) resolve(window.turnstile);
+        const api = turnstileApi(window.turnstile);
+        if (api) resolve(api);
         else reject(new Error('Turnstile did not initialise'));
       };
       script.onerror = () => {

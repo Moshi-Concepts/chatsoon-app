@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm --filter @chatsoon/mobile exec expo export --platform web --clear --output-dir ../web/dist && tsx scripts/build.ts",
     "deploy": "pnpm run build && wrangler pages deploy dist --project-name chatsoon-web --branch main",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
+    "typecheck": "tsx scripts/ensure-generated.ts && tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
     "test": "vitest run",
     "gen-icons": "tsx scripts/gen-icons.ts"
   },

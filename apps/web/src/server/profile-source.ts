@@ -1,8 +1,10 @@
-// Calls the two secret-gated routes docs/og-plan.md §3.3 describes, over the API service binding
-// (O14): GET /_pages/profile/:slug for the tags handler and GET /_pages/og/:slug for the image
-// handler. Both bucket their own kind of "no answer" into a single, simple result rather than
-// throwing, since a broken or slow binding call must never break the app shell or the image response
-// it feeds — og-inject.ts and og-image.ts each fall back to their own "as if nothing was found" path.
+// Calls the three secret-gated routes over the API service binding (O14, docs/og-plan.md §3.3):
+// GET /_pages/profile/:slug for the tags handler, GET /_pages/og/:slug for the image handler, and
+// GET /_pages/photo/:slug (docs/public-pages-plan.md's "Stage C as built on top of #5" note and
+// decision D8) for the avatar. Each buckets its own kind of "no answer" into a single, simple result
+// rather than throwing, since a broken or slow binding call must never break the app shell or the
+// image response it feeds — og-inject.ts, og-image.ts and photo.ts each fall back to their own
+// "as if nothing was found" path.
 
 import { API_ORIGIN } from '@chatsoon/shared/src/constants';
 import type { ProfilePageResult } from '@chatsoon/shared/src/types';
@@ -36,6 +38,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 /** Exported so the tests can drive them with fake timers instead of waiting on the wall clock. */
 export const PROFILE_LOOKUP_TIMEOUT_MS = 1500;
 export const OG_IMAGE_TIMEOUT_MS = 10_000;
+/** Same budget as the OG image: both stream a body straight out of R2 over the binding. */
+export const PROFILE_PHOTO_TIMEOUT_MS = 10_000;
 
 /**
  * GET /_pages/profile/:slug (§3.3). Always resolves: a network error, a non-2xx response, a body that
@@ -79,6 +83,31 @@ export async function fetchOgImage(
   if (v) url.searchParams.set('v', v);
   try {
     return await withTimeout(api.fetch(url, { headers }), OG_IMAGE_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /_pages/photo/:slug (D8). Returns the upstream `Response` untouched, same reasoning as
+ * `fetchOgImage`: photo.ts (not this function) decides what each status means for the caller; `null`
+ * only for a network error or the 10s timeout, which photo.ts treats as a 404 (there's no default
+ * avatar to fall back to).
+ */
+export async function fetchProfilePhoto(
+  api: PagesFetcher,
+  env: PagesEnv,
+  slug: string,
+  v: string | null,
+  ip: string | null,
+  ifNoneMatch: string | null,
+): Promise<Response | null> {
+  const headers = pagesHeaders(env, ip);
+  if (ifNoneMatch) headers.set('if-none-match', ifNoneMatch);
+  const url = new URL(`${API_ORIGIN}/_pages/photo/${encodeURIComponent(slug)}`);
+  if (v) url.searchParams.set('v', v);
+  try {
+    return await withTimeout(api.fetch(url, { headers }), PROFILE_PHOTO_TIMEOUT_MS);
   } catch {
     return null;
   }

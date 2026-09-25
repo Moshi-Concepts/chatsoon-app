@@ -204,7 +204,7 @@ function connectSection(p: PageProfile): string {
 <label for="cf-note">Note (optional)</label>
 <textarea id="cf-note" name="note" maxlength="${CONNECT_FORM_MAX.note}"></textarea>
 </div>
-<div id="turnstile" style="min-height:65px"></div>
+<div id="turnstile-slot" style="min-height:65px"></div>
 <p id="connect-error" role="alert" hidden></p>
 <button type="submit" class="button button-primary button-block">Send</button>
 <p class="connect-privacy">By sending, you agree to share these details with ${first}. See our <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy<span class="sr-only"> (opens in a new tab)</span></a>.</p>
