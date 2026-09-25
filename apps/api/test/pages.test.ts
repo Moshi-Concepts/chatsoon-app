@@ -373,8 +373,12 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
    * w=512 no-upscale check (issue #23) never trips unless a test asks it to via `infoSize`. */
   function fakeImages(webpBytes: Uint8Array, opts: { throws?: boolean; infoSize?: number } = {}) {
     let calls = 0;
+    let lastTransform: { width?: number; height?: number } | null = null;
     const transformer = {
-      transform: () => transformer,
+      transform: (t: { width?: number; height?: number }) => {
+        lastTransform = t;
+        return transformer;
+      },
       output: async () => {
         calls++;
         if (opts.throws) throw new Error('fake IMAGES transform failure');
@@ -386,7 +390,7 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
       input: () => transformer,
       info: async () => ({ format: 'image/jpeg', fileSize: size, width: size, height: size }),
     } as unknown as ImagesBinding;
-    return { binding, callCount: () => calls };
+    return { binding, callCount: () => calls, lastTransform: () => lastTransform };
   }
 
   it('transforms and stores the variant on the first request, then reads it from R2 without re-transforming', async () => {
@@ -587,7 +591,7 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
     }
   });
 
-  it('skips the 512 variant (serves the original) when the original is already 512px or smaller', async () => {
+  it('never upscales at 512: a smaller original is converted to WebP at its own size', async () => {
     const owner = await signUpWithProfile('pages-variant-noupscale@example.com', 'Uma Noupscale');
     const bytes = new Uint8Array(50);
     const key = await putAvatar(owner.userId, bytes, 'image/jpeg');
@@ -600,11 +604,11 @@ describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)
     try {
       const res = await pagesCallAwaited(`/_pages/photo/${owner.slug}?w=512`);
       expect(res.status).toBe(200);
-      expect(res.headers.get('content-type')).toBe('image/jpeg'); // the original, not a WebP variant
-      expect(res.headers.get('etag')).toBe(`"${version}"`); // plain ETag: 'original', not 'resized'
-      expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
-      expect(fake.callCount()).toBe(0); // never transformed
-      expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 512))).toBeNull(); // never stored
+      expect(res.headers.get('content-type')).toBe('image/webp'); // still a (smaller) WebP, not the JPEG
+      expect(res.headers.get('etag')).toBe(`"${version}-512"`);
+      expect(fake.callCount()).toBe(1);
+      expect(fake.lastTransform()).toMatchObject({ width: 400, height: 400 }); // the original's size, not 512
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version, 512))).not.toBeNull();
     } finally {
       env.IMAGES = saved;
     }

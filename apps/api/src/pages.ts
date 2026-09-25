@@ -169,8 +169,8 @@ export type ProfilePhotoResult =
 const MAX_AVATAR_ORIGINAL_BYTES = 5 * 1024 * 1024;
 
 /** The one size that could ever be larger than a typical original: mobile caps its own avatar
- * uploads at 512px (AvatarPicker's AVATAR_MAX_SIZE), so asking Images to "cover" 512x512 from a
- * same-size-or-smaller original would just upscale it for no visual gain (issue #23, design point 2). */
+ * uploads at 512px (AvatarPicker's AVATAR_MAX_SIZE). At this width the square is capped at the
+ * original's shorter side, so it's still re-encoded as a smaller WebP but never enlarged (#23). */
 const NO_UPSCALE_WIDTH: AvatarWidth = 512;
 
 type AvatarVariantOutcome =
@@ -207,15 +207,16 @@ async function loadAvatarVariant(
   // still available to fall back on if the transform, the size comparison, or the store fails partway.
   const originalBytes = new Uint8Array(await object.arrayBuffer());
   try {
+    // At 512 a smaller original is still converted to WebP (much smaller than the stored JPEG), just
+    // never enlarged: the square side is capped at the original's shorter side.
+    let side: number = w;
     if (w === NO_UPSCALE_WIDTH) {
       const info = await env.IMAGES.info(new Response(originalBytes).body!);
-      if ('width' in info && info.width <= NO_UPSCALE_WIDTH && info.height <= NO_UPSCALE_WIDTH) {
-        return { kind: 'buffered-original', bytes: originalBytes };
-      }
+      if ('width' in info) side = Math.min(w, info.width, info.height);
     }
 
     const rendered = await env.IMAGES.input(new Response(originalBytes).body!)
-      .transform({ width: w, height: w, fit: 'cover' })
+      .transform({ width: side, height: side, fit: 'cover' })
       .output({ format: 'image/webp', quality: 80 });
     const variantBytes = new Uint8Array(await new Response(rendered.image()).arrayBuffer());
     // Unlikely, but cheap to check (design point 2e): never ship a "savings" feature that regresses.
