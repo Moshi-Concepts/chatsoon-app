@@ -19,6 +19,10 @@
   // The card renderer (apps/og). Missing (or OG_CARDS_ENABLED "false" below) falls back to the
   // default share image with no code change (docs/og-plan.md O8, O20).
   "services": [{ "binding": "OG", "service": "chatsoon-og", "entrypoint": "OgRenderer" }],
+  // Resizes avatars to a 416x416 WebP variant at read time (Stage F item 2, decision D8). Optional,
+  // like the OG service above: missing on an account without Images, the route falls back to the
+  // original avatar with no code change.
+  "images": { "binding": "IMAGES" },
   "ratelimits": [
     { "name": "CONNECT_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
     // Global per-IP cap across every slug (D24): findable profiles plus auto-accept make harvesting

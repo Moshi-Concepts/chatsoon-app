@@ -5,6 +5,9 @@ export interface Env {
   FILES: R2Bucket;
   /** The chatsoon-og Worker (apps/og), bound by service entrypoint. Absent gives the Free-plan fallback. */
   OG?: OgRendererRpc;
+  /** Cloudflare Images, used to make the 416x416 WebP avatar variant (Stage F, D8). Absent (a
+   * lower-tier account, or a test env) falls back to serving the original avatar unresized. */
+  IMAGES?: ImagesBinding;
   CONNECT_LIMITER: RateLimit;
   /** Global per-IP cap across every slug (D24), checked before CONNECT_LIMITER. */
   CONNECT_ANY_LIMITER: RateLimit;

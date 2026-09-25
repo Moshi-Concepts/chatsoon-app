@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { profiles, type ProfileRow } from '../src/db/schema';
 import app from '../src/index';
+import { avatarVariantKey } from '../src/lib/avatar';
 import { getDb } from '../src/lib/db';
 import { currentOgVersion, hashKey16, loadOgAvatar, ogKey, ogPrefix } from '../src/lib/og';
 import { call, signIn, signUpWithProfile } from './helpers';
@@ -336,6 +337,189 @@ describe('GET /_pages/photo/:slug', () => {
     });
     expect(notModifiedOther.status).toBe(304);
     expect(notModifiedOther.headers.get('x-indexable')).toBe('0');
+  });
+});
+
+describe('GET /_pages/photo/:slug: the 416x416 WebP variant (Stage F item 2, D8)', () => {
+  async function putAvatar(userId: string, bytes: Uint8Array, contentType: string) {
+    const key = `u/${userId}/avatar/${crypto.randomUUID()}.jpg`;
+    await env.FILES.put(key, bytes, { httpMetadata: { contentType } });
+    return key;
+  }
+
+  /** Calls the app directly with an ExecutionContext this test can wait on, so the photo route's own
+   * `ctx.waitUntil(...)` (storing the variant, sweeping old ones) has finished before assertions run —
+   * mirrors `putProfileAwaited` above. */
+  async function pagesCallAwaited(path: string, opts: { ifNoneMatch?: string } = {}) {
+    const headers = new Headers();
+    headers.set('x-pages-key', PAGES_KEY);
+    if (opts.ifNoneMatch) headers.set('if-none-match', opts.ifNoneMatch);
+    const ctx = createExecutionContext();
+    const req = new Request(`http://localhost:8787${path}`, { headers });
+    const res = await app.fetch(req, env, ctx);
+    await waitOnExecutionContext(ctx);
+    return res;
+  }
+
+  /** A fake `IMAGES` binding: just enough of the real `ImagesBinding` shape for `loadAvatarVariant`
+   * (pages.ts) to drive, with a call counter so a test can assert a transform did or didn't run. */
+  function fakeImages(webpBytes: Uint8Array, opts: { throws?: boolean } = {}) {
+    let calls = 0;
+    const transformer = {
+      transform: () => transformer,
+      output: async () => {
+        calls++;
+        if (opts.throws) throw new Error('fake IMAGES transform failure');
+        return { image: () => new Response(webpBytes).body! };
+      },
+    };
+    const binding = { input: () => transformer } as unknown as ImagesBinding;
+    return { binding, callCount: () => calls };
+  }
+
+  it('transforms and stores the variant on the first request, then reads it from R2 without re-transforming', async () => {
+    const owner = await signUpWithProfile('pages-variant@example.com', 'Vera Variant');
+    const originalBytes = new Uint8Array(50);
+    const key = await putAvatar(owner.userId, originalBytes, 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Vera Variant', avatarKey: key } });
+    const version = await hashKey16(key);
+    const webpBytes = new Uint8Array([1, 2, 3, 4, 5]); // smaller than originalBytes
+
+    const saved = env.IMAGES;
+    const fake = fakeImages(webpBytes);
+    env.IMAGES = fake.binding;
+    try {
+      const first = await pagesCallAwaited(`/_pages/photo/${owner.slug}`);
+      expect(first.status).toBe(200);
+      expect(first.headers.get('content-type')).toBe('image/webp');
+      expect(first.headers.get('content-length')).toBe(String(webpBytes.byteLength));
+      expect(first.headers.get('etag')).toBe(`"${version}-416"`);
+      expect(new Uint8Array(await first.arrayBuffer())).toEqual(webpBytes);
+      expect(fake.callCount()).toBe(1);
+
+      const variantInR2 = await env.FILES.get(avatarVariantKey(owner.userId, version));
+      expect(variantInR2).not.toBeNull();
+      expect(new Uint8Array(await variantInR2!.arrayBuffer())).toEqual(webpBytes);
+
+      const second = await pagesCallAwaited(`/_pages/photo/${owner.slug}`);
+      expect(second.status).toBe(200);
+      expect(second.headers.get('content-type')).toBe('image/webp');
+      expect(second.headers.get('etag')).toBe(`"${version}-416"`);
+      expect(new Uint8Array(await second.arrayBuffer())).toEqual(webpBytes);
+      expect(fake.callCount()).toBe(1); // still 1: the second request read the stored variant, no re-transform
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('serves a 304 for the variant ETag, and never for the original ETag once a variant exists', async () => {
+    const owner = await signUpWithProfile('pages-variant-304@example.com', 'Val Notmodified');
+    const key = await putAvatar(owner.userId, new Uint8Array(50), 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Val Notmodified', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const saved = env.IMAGES;
+    env.IMAGES = fakeImages(new Uint8Array([1, 2, 3])).binding;
+    try {
+      await pagesCallAwaited(`/_pages/photo/${owner.slug}`); // creates the variant
+
+      const notModified = await pagesCallAwaited(`/_pages/photo/${owner.slug}`, { ifNoneMatch: `"${version}-416"` });
+      expect(notModified.status).toBe(304);
+      expect(await notModified.text()).toBe('');
+      expect(notModified.headers.get('etag')).toBe(`"${version}-416"`);
+
+      // A client still holding the old (pre-variant) plain ETag must not get a 304: it needs the WebP.
+      const staleEtag = await pagesCallAwaited(`/_pages/photo/${owner.slug}`, { ifNoneMatch: `"${version}"` });
+      expect(staleEtag.status).toBe(200);
+      expect(staleEtag.headers.get('etag')).toBe(`"${version}-416"`);
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('serves the original with the plain ETag when there is no IMAGES binding', async () => {
+    const owner = await signUpWithProfile('pages-variant-nobinding@example.com', 'Ivan Nobinding');
+    const bytes = new Uint8Array([7, 7, 7]);
+    const key = await putAvatar(owner.userId, bytes, 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Ivan Nobinding', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const saved = env.IMAGES;
+    env.IMAGES = undefined;
+    try {
+      const res = await pagesCallAwaited(`/_pages/photo/${owner.slug}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/jpeg');
+      expect(res.headers.get('etag')).toBe(`"${version}"`);
+      expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).toBeNull();
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('falls back to the original, with the plain ETag, when the transform throws', async () => {
+    const owner = await signUpWithProfile('pages-variant-throws@example.com', 'Terry Throws');
+    const bytes = new Uint8Array([8, 8, 8]);
+    const key = await putAvatar(owner.userId, bytes, 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Terry Throws', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const saved = env.IMAGES;
+    env.IMAGES = fakeImages(new Uint8Array([1]), { throws: true }).binding;
+    try {
+      const res = await pagesCallAwaited(`/_pages/photo/${owner.slug}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/jpeg');
+      expect(res.headers.get('etag')).toBe(`"${version}"`);
+      expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).toBeNull(); // never stored
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('sweeps the old variant when the avatar changes', async () => {
+    const owner = await signUpWithProfile('pages-variant-sweep@example.com', 'Sam Sweep');
+    const keyA = await putAvatar(owner.userId, new Uint8Array(50), 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Sam Sweep', avatarKey: keyA } });
+    const versionA = await hashKey16(keyA);
+
+    const saved = env.IMAGES;
+    env.IMAGES = fakeImages(new Uint8Array([1, 2, 3])).binding;
+    try {
+      await pagesCallAwaited(`/_pages/photo/${owner.slug}`); // creates variant A
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA))).not.toBeNull();
+
+      const keyB = await putAvatar(owner.userId, new Uint8Array(60), 'image/png');
+      await putProfileAwaited(owner.token, { displayName: 'Sam Sweep', avatarKey: keyB });
+
+      // Removed straight away by the PUT itself (§4: a removal never gets another photo request that
+      // would otherwise sweep it), not just eventually by the next photo fetch.
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, versionA))).toBeNull();
+    } finally {
+      env.IMAGES = saved;
+    }
+  });
+
+  it('removes the variant on account deletion', async () => {
+    const owner = await signUpWithProfile('pages-variant-delete@example.com', 'Della Deleted');
+    const key = await putAvatar(owner.userId, new Uint8Array(50), 'image/jpeg');
+    await call('/me/profile', { method: 'PUT', token: owner.token, json: { displayName: 'Della Deleted', avatarKey: key } });
+    const version = await hashKey16(key);
+
+    const saved = env.IMAGES;
+    env.IMAGES = fakeImages(new Uint8Array([1, 2, 3])).binding;
+    try {
+      await pagesCallAwaited(`/_pages/photo/${owner.slug}`);
+      expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).not.toBeNull();
+    } finally {
+      env.IMAGES = saved;
+    }
+
+    const del = await call('/me', { method: 'DELETE', token: owner.token });
+    expect(del.status).toBe(204);
+    expect(await env.FILES.get(avatarVariantKey(owner.userId, version))).toBeNull();
   });
 });
 

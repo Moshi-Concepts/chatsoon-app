@@ -11,11 +11,12 @@ import { Hono } from 'hono';
 
 import { profiles, users, type ProfileRow } from '../db/schema';
 import type { AppEnv } from '../env';
+import { avatarVariantKey } from '../lib/avatar';
 import { getDb, type DB } from '../lib/db';
 import { ApiError, badRequest, parseJson, unauthorized } from '../lib/errors';
 import { shortSuffix } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
-import { refreshOgCard } from '../lib/og';
+import { hashKey16, refreshOgCard } from '../lib/og';
 import { findProfileByUserId, isAvatarKey } from '../lib/profiles';
 import { parseContact, parseLinks, toMyProfile } from '../lib/serialize';
 import { seedDefaultTags } from '../lib/tags';
@@ -134,6 +135,15 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
   if (previousAvatar && previousAvatar !== row.avatarKey && isAvatarKey(userId, previousAvatar)) {
     c.executionCtx.waitUntil(
       c.env.FILES.delete(previousAvatar).catch((err) => console.error('Deleting old avatar failed', err)),
+    );
+    // The 416x416 WebP variant (Stage F, D8) of the old avatar, if one was ever built. On a change,
+    // the new avatar's next photo request would eventually sweep this anyway (pages.ts), but a
+    // removal (avatarKey now null) never makes another photo request, so it never would — the privacy
+    // policy says removed data goes straight away, not "eventually" (design point 4).
+    c.executionCtx.waitUntil(
+      hashKey16(previousAvatar)
+        .then((version) => c.env.FILES.delete(avatarVariantKey(userId, version)))
+        .catch((err) => console.error('Deleting old avatar variant failed', err)),
     );
   }
   // Pre-renders the share card for the new version (if it isn't already stored) and clears out every

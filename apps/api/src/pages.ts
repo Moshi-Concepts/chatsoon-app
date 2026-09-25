@@ -4,6 +4,7 @@ import { and, asc, eq, notInArray, sql } from 'drizzle-orm';
 
 import { profiles, users, type ProfileRow } from './db/schema';
 import type { Env } from './env';
+import { avatarVariantKey, sweepAvatarVariants } from './lib/avatar';
 import { getDb } from './lib/db';
 import { ApiError, limit } from './lib/errors';
 import { cardsEnabled, currentOgVersion, hashKey16, loadOgAvatar, ogKey, sweepOgKeys } from './lib/og';
@@ -139,24 +140,99 @@ export type ProfilePhotoResult =
   | { status: 'rate_limited' }
   | {
       status: 'ok';
-      body: ReadableStream;
+      body: ReadableStream | Uint8Array;
       contentType: string;
       contentLength: number;
       version: string;
+      /**
+       * '416' when the 416x416 WebP variant (Stage F item 2, D8) was served; 'original' when the
+       * avatar was streamed unresized (no `IMAGES` binding, the source wasn't eligible, or building
+       * the variant failed). The caller's ETag must differ between the two: a browser holding the
+       * original JPEG under the plain `"<version>"` ETag must not get a 304 for the WebP, or vice
+       * versa.
+       */
+      variant: 'original' | '416';
       maxAge: number;
       /** Same predicate as `PageProfile.indexable` (§3.2/§3.3): the caller sets `X-Indexable` from it. */
       indexable: boolean;
     };
 
+/** Only originals up to this size are ever resized; a bigger one is served as-is (design point 2d). */
+const MAX_AVATAR_ORIGINAL_BYTES = 5 * 1024 * 1024;
+
+type AvatarVariantOutcome =
+  | { kind: 'variant'; body: ReadableStream | Uint8Array; contentLength: number }
+  // The original's bytes were already read out of its R2 stream while attempting a variant (to feed
+  // `IMAGES.input()`, or to compare sizes), so `object.body` is spent: the caller must serve these
+  // buffered bytes instead of re-reading `object`.
+  | { kind: 'buffered-original'; bytes: Uint8Array }
+  // No attempt was made at all; `object.body` is untouched and the caller streams it as before.
+  | { kind: 'no-attempt' };
+
 /**
- * GET /_pages/photo/:slug's body (D8): the profile's own avatar, streamed straight from R2 exactly
- * as stored — no resizing, no re-encoding. No avatar, a missing R2 object, or a stored object whose
- * declared type isn't an image, all read as `not_found`, same as an unknown slug: a photo URL never
- * hints at which case applies. `version` is the same 16-hex hash `toPageProfile` puts in
- * `avatarVersion`, so the caller's own `?v=` either matches it or doesn't.
+ * Builds (or reuses) the 416x416 WebP avatar variant for one avatar, or decides there isn't going to
+ * be one. Never throws: `env.IMAGES` being absent is normal (a lower-tier account); an actual
+ * transform or store failure is logged once and treated the same as "no variant" so the request can
+ * still be served from the original (design point 2c).
+ */
+async function loadAvatarVariant(
+  env: Env,
+  ctx: WaitUntilCtx,
+  userId: string,
+  version: string,
+  object: R2ObjectBody,
+  contentType: string,
+): Promise<AvatarVariantOutcome> {
+  const variantKey = avatarVariantKey(userId, version);
+
+  const existing = await env.FILES.get(variantKey);
+  if (existing) return { kind: 'variant', body: existing.body, contentLength: existing.size };
+
+  if (!env.IMAGES || object.size > MAX_AVATAR_ORIGINAL_BYTES || !contentType.startsWith('image/')) {
+    return { kind: 'no-attempt' };
+  }
+
+  // Buffered up front (rather than handed to IMAGES as `object.body` directly) so these bytes are
+  // still available to fall back on if the transform, the size comparison, or the store fails partway.
+  const originalBytes = new Uint8Array(await object.arrayBuffer());
+  try {
+    const rendered = await env.IMAGES.input(new Response(originalBytes).body!)
+      .transform({ width: 416, height: 416, fit: 'cover' })
+      .output({ format: 'image/webp', quality: 80 });
+    const variantBytes = new Uint8Array(await new Response(rendered.image()).arrayBuffer());
+    // Unlikely, but cheap to check (design point 2e): never ship a "savings" feature that regresses.
+    if (variantBytes.byteLength > originalBytes.byteLength) {
+      return { kind: 'buffered-original', bytes: originalBytes };
+    }
+
+    // Doesn't block the response: the caller already has `variantBytes` to serve immediately. A
+    // failed put (or sweep) here just means the next request redoes the transform.
+    ctx.waitUntil(
+      env.FILES
+        .put(variantKey, variantBytes, { httpMetadata: { contentType: 'image/webp' } })
+        .then(() => sweepAvatarVariants(env, userId, variantKey))
+        .catch((err) => console.error('Storing avatar variant failed', err)),
+    );
+    return { kind: 'variant', body: variantBytes, contentLength: variantBytes.byteLength };
+  } catch (err) {
+    console.error('Avatar variant transform failed', err);
+    return { kind: 'buffered-original', bytes: originalBytes };
+  }
+}
+
+/**
+ * GET /_pages/photo/:slug's body (D8): the profile's own avatar. No avatar, a missing R2 object, or
+ * a stored object whose declared type isn't an image, all read as `not_found`, same as an unknown
+ * slug: a photo URL never hints at which case applies. `version` is the same 16-hex hash
+ * `toPageProfile` puts in `avatarVersion`, so the caller's own `?v=` either matches it or doesn't
+ * (unaffected by which variant is actually served — design point 3).
+ *
+ * Serves the 416x416 WebP variant (Stage F item 2) when one can be made or already exists, falling
+ * back to the original avatar exactly as before Stage F otherwise.
  */
 export async function profilePhoto(
   env: Env,
+  ctx: WaitUntilCtx,
   slug: string,
   ip: string | null,
   v: string | null,
@@ -176,5 +252,22 @@ export async function profilePhoto(
 
   const version = await hashKey16(avatarKey);
   const maxAge = v !== null && V_PATTERN.test(v) && v === version ? 3600 : 60;
-  return { status: 'ok', body: object.body, contentType, contentLength: object.size, version, maxAge, indexable };
+
+  const outcome = await loadAvatarVariant(env, ctx, found.row.userId, version, object, contentType);
+  if (outcome.kind === 'variant') {
+    return {
+      status: 'ok',
+      body: outcome.body,
+      contentType: 'image/webp',
+      contentLength: outcome.contentLength,
+      version,
+      variant: '416',
+      maxAge,
+      indexable,
+    };
+  }
+
+  const body = outcome.kind === 'buffered-original' ? outcome.bytes : object.body;
+  const contentLength = outcome.kind === 'buffered-original' ? outcome.bytes.byteLength : object.size;
+  return { status: 'ok', body, contentType, contentLength, version, variant: 'original', maxAge, indexable };
 }

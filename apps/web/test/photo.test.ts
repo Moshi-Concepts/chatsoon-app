@@ -65,6 +65,30 @@ describe('servePhoto', () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PHOTO_BYTES);
   });
 
+  it('passes through Content-Type: image/webp and a "<version>-416" ETag (the resized avatar variant, Stage F, D8)', async () => {
+    const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3]);
+    const { ctx } = makeCtx({
+      apiFetch: async () =>
+        new Response(WEBP_BYTES, {
+          status: 200,
+          headers: {
+            'content-type': 'image/webp',
+            'content-length': String(WEBP_BYTES.byteLength),
+            etag: '"deadbeefdeadbeef-416"',
+            'cache-control': 'public, max-age=3600',
+          },
+        }),
+    });
+    const res = await servePhoto(ctx, 'peter-bui-5ec50167');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/webp');
+    expect(res.headers.get('content-length')).toBe(String(WEBP_BYTES.byteLength));
+    expect(res.headers.get('etag')).toBe('"deadbeefdeadbeef-416"');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=3600');
+    expectSecurityHeaders(res.headers);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(WEBP_BYTES);
+  });
+
   it('keeps X-Robots-Tag: noindex when the upstream response carries X-Indexable: 0', async () => {
     const { ctx } = makeCtx({
       apiFetch: async () =>

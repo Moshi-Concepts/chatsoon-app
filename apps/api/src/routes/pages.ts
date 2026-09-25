@@ -67,7 +67,7 @@ pagesRoutes.get('/_pages/photo/:slug', async (c) => {
   if (!authorized(c)) return c.json(errorBody('not_found', 'Not found'), 404);
   const ip = c.req.header('x-client-ip') ?? null;
   const v = c.req.query('v') ?? null;
-  const result = await profilePhoto(c.env, c.req.param('slug'), ip, v);
+  const result = await profilePhoto(c.env, c.executionCtx, c.req.param('slug'), ip, v);
 
   switch (result.status) {
     case 'not_found':
@@ -75,10 +75,13 @@ pagesRoutes.get('/_pages/photo/:slug', async (c) => {
     case 'rate_limited':
       return c.json(errorBody('rate_limited', 'Too many requests, try again in a minute'), 429);
     case 'ok': {
+      // The variant gets its own ETag suffix (design point 3): a browser holding the original JPEG
+      // under the plain `"<version>"` ETag must not get served a 304 once a WebP variant exists.
+      const etag = result.variant === '416' ? `"${result.version}-416"` : `"${result.version}"`;
       const headers = {
         'Content-Type': result.contentType,
         'Content-Length': String(result.contentLength),
-        ETag: `"${result.version}"`,
+        ETag: etag,
         'Cache-Control': `public, max-age=${result.maxAge}`,
         // The web Function turns this into X-Robots-Tag on the actual /id/:slug/photo response.
         'X-Indexable': result.indexable ? '1' : '0',
