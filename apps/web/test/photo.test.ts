@@ -65,6 +65,40 @@ describe('servePhoto', () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PHOTO_BYTES);
   });
 
+  it('keeps X-Robots-Tag: noindex when the upstream response carries X-Indexable: 0', async () => {
+    const { ctx } = makeCtx({
+      apiFetch: async () =>
+        new Response(PHOTO_BYTES, {
+          status: 200,
+          headers: { 'content-type': 'image/jpeg', 'x-indexable': '0' },
+        }),
+    });
+    const res = await servePhoto(ctx, 'peter-bui-5ec50167');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(res.headers.has('x-indexable')).toBe(false);
+  });
+
+  it('keeps X-Robots-Tag: noindex when the upstream response has no X-Indexable header at all (Stage D: fail safe)', async () => {
+    const { ctx } = makeCtx({
+      apiFetch: async () => new Response(PHOTO_BYTES, { status: 200, headers: { 'content-type': 'image/jpeg' } }),
+    });
+    const res = await servePhoto(ctx, 'peter-bui-5ec50167');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+  });
+
+  it('drops X-Robots-Tag entirely when the upstream response carries X-Indexable: 1, and strips X-Indexable itself', async () => {
+    const { ctx } = makeCtx({
+      apiFetch: async () =>
+        new Response(PHOTO_BYTES, {
+          status: 200,
+          headers: { 'content-type': 'image/jpeg', 'x-indexable': '1' },
+        }),
+    });
+    const res = await servePhoto(ctx, 'peter-bui-5ec50167');
+    expect(res.headers.get('x-robots-tag')).toBeNull();
+    expect(res.headers.has('x-indexable')).toBe(false);
+  });
+
   it('forwards If-None-Match and returns a bodyless 304 with Cache-Control passed through', async () => {
     const { ctx, api } = makeCtx({
       headers: { 'if-none-match': '"deadbeefdeadbeef"' },

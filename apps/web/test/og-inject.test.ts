@@ -149,6 +149,15 @@ describe('injectProfileTags', () => {
     });
   });
 
+  it('stays noindex even for an indexable profile (Stage D: an error-state fallback is never indexed)', async () => {
+    const indexableProfile: PageProfile = { ...PROFILE, indexable: true };
+    const { ctx } = makeCtx({ apiFetch: async () => jsonResponse({ status: 'ok', profile: indexableProfile }) });
+    const res = await injectProfileTags(ctx, PROFILE.slug);
+    const html = await res.text();
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).not.toContain('max-image-preview:large');
+  });
+
   it("leaks nothing an injected `contact` field on the fetched profile might carry", async () => {
     const withExtra = { ...PROFILE, contact: { phone: '+61491570156', whatsapp: '+61491570157' } } as PageProfile &
       Record<string, unknown>;

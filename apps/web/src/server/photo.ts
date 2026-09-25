@@ -1,7 +1,8 @@
 // GET, HEAD /id/:slug/photo?v=: proxies GET /_pages/photo/:slug over the API binding (docs/public-
-// pages-plan.md's "Stage C as built on top of #5" note and decision D8). Mirrors og-image.ts's shape
-// (pass-through headers, If-None-Match forwarded, no body on HEAD or on a 304), but there's no generic
-// fallback image for an avatar: a lookup failure, a network error or a timeout are all a plain 404.
+// pages-plan.md's "Stage C as built on top of #5" note, decision D8, and Stage D task 3). Mirrors
+// og-image.ts's shape (pass-through headers, If-None-Match forwarded, no body on HEAD or on a 304), but
+// there's no generic fallback image for an avatar: a lookup failure, a network error or a timeout are
+// all a plain 404.
 
 import { photoSecurityHeaders } from './headers';
 import { fetchProfilePhoto } from './profile-source';
@@ -11,8 +12,17 @@ const CLIENT_IP_HEADER = 'cf-connecting-ip';
 const NOT_FOUND_CACHE_CONTROL = 'public, max-age=60';
 // Passed through unchanged from the upstream response, when present, on 200 and 304 alike (D8: the
 // API sets the same Cache-Control either way, so a 304 just drops the body once the caller's own copy
-// proves current).
+// proves current). `x-indexable` is deliberately not in this list: it's an internal signal read by
+// `isIndexable` below and must never reach the browser (§3.3 lists the response headers exactly, and
+// this isn't one of them).
 const PASS_THROUGH_HEADERS = ['content-type', 'content-length', 'etag', 'cache-control'];
+
+/** `X-Indexable: 1` from the API's photo response (Stage D contract) means the profile is indexable, so
+ * the photo should carry no noindex either. Anything else — `0`, absent, malformed — means noindex: a
+ * missing header must fail safe rather than accidentally index a photo. */
+function isIndexable(upstream: Response): boolean {
+  return upstream.headers.get('x-indexable') === '1';
+}
 
 function passThroughHeaders(upstream: Response): Headers {
   const headers = new Headers();
@@ -20,7 +30,7 @@ function passThroughHeaders(upstream: Response): Headers {
     const value = upstream.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
-  return photoSecurityHeaders(headers);
+  return photoSecurityHeaders(headers, isIndexable(upstream));
 }
 
 function notFoundResponse(): Response {

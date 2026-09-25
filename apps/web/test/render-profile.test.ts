@@ -151,10 +151,48 @@ describe('renderProfile', () => {
     expect(html).toContain(escapeHtml(evil.headline ?? ''));
   });
 
-  it('is always noindex, with no JSON-LD (Stage C)', () => {
-    const html = renderProfile(BASE, ASSETS);
+  it('is noindex with no JSON-LD when the profile is not indexable', () => {
+    const html = renderProfile({ ...BASE, indexable: false }, ASSETS);
     expect(html).toContain('<meta name="robots" content="noindex">');
     expect(html).not.toContain('application/ld+json');
+  });
+
+  describe('an indexable profile (Stage D)', () => {
+    const INDEXABLE: PageProfile = { ...BASE, indexable: true };
+
+    it('carries no "noindex" anywhere, and max-image-preview:large instead', () => {
+      const html = renderProfile(INDEXABLE, ASSETS);
+      expect(html.toLowerCase()).not.toContain('noindex');
+      expect(html).toContain('<meta name="robots" content="max-image-preview:large">');
+    });
+
+    it('embeds a parseable ProfilePage JSON-LD script', () => {
+      const html = renderProfile(INDEXABLE, ASSETS);
+      const match = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+      expect(match).toBeTruthy();
+      const data = JSON.parse(match![1]!.replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&'));
+      expect(data['@type']).toBe('ProfilePage');
+      expect(data['@id']).toBe(`https://chatsoon.app/id/${INDEXABLE.slug}`);
+      expect(data.mainEntity['@type']).toBe('Person');
+      expect(data.mainEntity.name).toBe(INDEXABLE.displayName);
+      expect(data.isPartOf['@id']).toBe('https://chatsoon.app/#website');
+    });
+
+    it('never emits telephone, contactPoint, tel:, wa.me, signal.me or a vcard link in the JSON-LD, even with contactChannels set', () => {
+      const withContact: PageProfile = {
+        ...INDEXABLE,
+        contactChannels: ['phone', 'whatsapp', 'signal'],
+        contactVisibility: 'public',
+      };
+      const html = renderProfile(withContact, ASSETS);
+      const match = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)![1]!;
+      expect(match).not.toContain('telephone');
+      expect(match).not.toContain('contactPoint');
+      expect(match).not.toContain('tel:');
+      expect(match).not.toContain('wa.me');
+      expect(match).not.toContain('signal.me');
+      expect(match).not.toContain('vcard');
+    });
   });
 
   it('loads no external script except the island module, and no stylesheet link', () => {

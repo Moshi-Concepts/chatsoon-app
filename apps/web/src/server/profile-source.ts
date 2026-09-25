@@ -1,13 +1,13 @@
-// Calls the three secret-gated routes over the API service binding (O14, docs/og-plan.md §3.3):
-// GET /_pages/profile/:slug for the tags handler, GET /_pages/og/:slug for the image handler, and
+// Calls the four secret-gated routes over the API service binding (O14, docs/og-plan.md §3.3):
+// GET /_pages/profile/:slug for the tags handler, GET /_pages/og/:slug for the image handler,
 // GET /_pages/photo/:slug (docs/public-pages-plan.md's "Stage C as built on top of #5" note and
-// decision D8) for the avatar. Each buckets its own kind of "no answer" into a single, simple result
-// rather than throwing, since a broken or slow binding call must never break the app shell or the
-// image response it feeds — og-inject.ts, og-image.ts and photo.ts each fall back to their own
-// "as if nothing was found" path.
+// decision D8) for the avatar, and GET /_pages/sitemap (Stage D, WP-D2) for the profile sitemap. Each
+// buckets its own kind of "no answer" into a single, simple result rather than throwing, since a broken
+// or slow binding call must never break the app shell or the image response it feeds — og-inject.ts,
+// og-image.ts, photo.ts and sitemap.ts each fall back to their own "as if nothing was found" path.
 
 import { API_ORIGIN } from '@chatsoon/shared/src/constants';
-import type { ProfilePageResult } from '@chatsoon/shared/src/types';
+import type { ProfilePageResult, SitemapProfilesResult } from '@chatsoon/shared/src/types';
 
 import type { PagesEnv, PagesFetcher } from './types';
 
@@ -40,6 +40,9 @@ export const PROFILE_LOOKUP_TIMEOUT_MS = 1500;
 export const OG_IMAGE_TIMEOUT_MS = 10_000;
 /** Same budget as the OG image: both stream a body straight out of R2 over the binding. */
 export const PROFILE_PHOTO_TIMEOUT_MS = 10_000;
+/** Generous budget for a crawler-only, no-visitor-waiting request that may list up to 50,000 rows
+ * (§3.2's `indexableProfiles` cap). */
+export const SITEMAP_TIMEOUT_MS = 10_000;
 
 /**
  * GET /_pages/profile/:slug (§3.3). Always resolves: a network error, a non-2xx response, a body that
@@ -108,6 +111,25 @@ export async function fetchProfilePhoto(
   if (v) url.searchParams.set('v', v);
   try {
     return await withTimeout(api.fetch(url, { headers }), PROFILE_PHOTO_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /_pages/sitemap (§3.2, Stage D, WP-D2). No client IP: this is never a per-visitor request, so
+ * `pagesHeaders` is called with `null`. Always resolves: a network error, a non-2xx response, a body
+ * that isn't the expected JSON, or the timeout all come back as `null`, which sitemap.ts treats as an
+ * API failure (a 503, never an empty sitemap — an empty one would tell Google every profile is gone).
+ */
+export async function fetchSitemapProfiles(api: PagesFetcher, env: PagesEnv): Promise<SitemapProfilesResult | null> {
+  try {
+    const res = await withTimeout(
+      api.fetch(`${API_ORIGIN}/_pages/sitemap`, { headers: pagesHeaders(env, null) }),
+      SITEMAP_TIMEOUT_MS,
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as SitemapProfilesResult;
   } catch {
     return null;
   }

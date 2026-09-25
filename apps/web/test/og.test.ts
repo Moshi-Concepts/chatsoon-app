@@ -133,9 +133,20 @@ describe('profileOgBlock', () => {
     expect(block).not.toContain('/og.jpg');
   });
 
-  it('carries the noindex robots tag', () => {
+  it('carries the noindex robots tag by default', () => {
     const block = profileOgBlock(PROFILE, 'https://chatsoon.app');
     expect(block).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('carries noindex explicitly when indexable is false', () => {
+    const block = profileOgBlock(PROFILE, 'https://chatsoon.app', false);
+    expect(block).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('emits max-image-preview:large instead of noindex when indexable is true (Stage D)', () => {
+    const block = profileOgBlock(PROFILE, 'https://chatsoon.app', true);
+    expect(block).toContain('<meta name="robots" content="max-image-preview:large">');
+    expect(block).not.toContain('noindex');
   });
 
   it('leaks nothing from fields a whitelist violation upstream might have added', () => {

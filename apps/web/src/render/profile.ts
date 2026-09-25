@@ -17,9 +17,10 @@ import { CONNECT_FORM_MAX, firstName, roleLine } from '@chatsoon/shared/src/prof
 import type { BookingLink, LinkKey, PageProfile, ProfileContactKey } from '@chatsoon/shared/src/types';
 
 import { css } from './css';
-import { escapeHtml } from './escape';
+import { escapeHtml, escapeJsonLd } from './escape';
 import { spaBodyScript, spaHeadScript, type SpaAssets } from './handoff';
 import { icon, sprite, type IconName } from './icons';
+import { profileJsonLd } from './json-ld';
 import { profileOgBlock } from './og';
 
 /** What C5's build and Function supply at render time. */
@@ -247,11 +248,16 @@ function iconNames(p: PageProfile): IconName[] {
 
 /** Renders the complete `/id/:slug` document (docs/profile-page-dom.md, docs/public-pages-plan.md §3.3). */
 export function renderProfile(p: PageProfile, assets: ProfileAssets): string {
-  // profileOgBlock supplies the exact head tags (title, description, canonical, robots noindex, og:*,
-  // twitter:*) the live SPA-shell splice used, so they never drift from what #5 already shipped. Its
+  // profileOgBlock supplies the exact head tags (title, description, canonical, robots, og:*, twitter:*)
+  // the live SPA-shell splice used, so they never drift from what #5 already shipped. Its
   // `<!--og-->`/`<!--/og-->` markers were only needed for that splice; this page has no shell to splice
-  // into, so they're stripped.
-  const head = profileOgBlock(p, WEB_ORIGIN).replace(/<!--\/?og-->/g, '');
+  // into, so they're stripped. `p.indexable` (Stage D) switches the robots meta between noindex and
+  // max-image-preview:large; it never affects anything else in this block.
+  const head = profileOgBlock(p, WEB_ORIGIN, p.indexable).replace(/<!--\/?og-->/g, '');
+  // §3.4/D23: JSON-LD only on an indexable profile, and never rendered at all otherwise.
+  const jsonLd = p.indexable
+    ? `<script type="application/ld+json">${escapeJsonLd(profileJsonLd(p, WEB_ORIGIN))}</script>`
+    : '';
 
   const main = [
     sprite(iconNames(p)),
@@ -271,6 +277,7 @@ export function renderProfile(p: PageProfile, assets: ProfileAssets): string {
 ${head}
 <meta name="theme-color" content="${Colors.light.primary}">
 <link rel="icon" href="/favicon.ico">
+${jsonLd}
 <style>${css()}</style>
 </head>
 <body>

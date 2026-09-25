@@ -198,12 +198,13 @@ async function assertOgImage(): Promise<void> {
 }
 
 // `functions/` doesn't exist until WP-5 adds the /id/* Pages Function; until then there's nothing for
-// `_routes.json` to scope and Pages should keep invoking no Function at all.
+// `_routes.json` to scope and Pages should keep invoking no Function at all. `/sitemap-profiles.xml`
+// (Stage D, WP-D2) is the other Function-backed path (§2.1: "Nothing else invokes a Function").
 async function writeRoutesJson(): Promise<void> {
   if (!existsSync(path.join(root, 'functions'))) return;
   await writeFileLogged(
     path.join(outDir, '_routes.json'),
-    JSON.stringify({ version: 1, include: ['/id/*'], exclude: [] }),
+    JSON.stringify({ version: 1, include: ['/id/*', '/sitemap-profiles.xml'], exclude: [] }),
   );
 }
 

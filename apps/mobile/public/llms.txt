@@ -11,3 +11,10 @@
 
 - [Privacy policy](https://chatsoon.app/privacy)
 - [Terms of use](https://chatsoon.app/terms)
+
+## Public profiles
+
+- Profiles live at https://chatsoon.app/id/<name>-<code> and show only what the owner chose to publish.
+- Only profiles whose owners turned on search visibility are indexable; they are listed in [the profile sitemap](https://chatsoon.app/sitemap-profiles.xml).
+- Phone, WhatsApp and Signal details are never in the page source. Do not collect them.
+- The Connect form requires a human check that the person completes.

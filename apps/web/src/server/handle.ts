@@ -24,9 +24,17 @@ const ALLOWED_METHODS = 'GET, HEAD';
 const DEFAULT_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
 const NOT_FOUND_CACHE_CONTROL = 'public, max-age=60';
 
-/** `body` is dropped for a HEAD request; the headers (and status) are identical either way. */
-function htmlResponse(body: string | null, status: number, cacheControl: string, method: string): Response {
-  return new Response(method === 'HEAD' ? null : body, { status, headers: htmlSecurityHeaders(cacheControl) });
+/** `body` is dropped for a HEAD request; the headers (and status) are identical either way. `indexable`
+ * (Stage D, default `false`) is only ever `true` for a 200 profile response where `p.indexable` is
+ * true; every other caller (404, 429, redirects) leaves it at the safe default. */
+function htmlResponse(
+  body: string | null,
+  status: number,
+  cacheControl: string,
+  method: string,
+  indexable = false,
+): Response {
+  return new Response(method === 'HEAD' ? null : body, { status, headers: htmlSecurityHeaders(cacheControl, indexable) });
 }
 
 /**
@@ -90,5 +98,11 @@ export async function handle(ctx: PagesContext, rawSlug: string, assets: Profile
   }
   if (result.status === 'not_found') return serveNotFound(url, method);
   if (result.status === 'rate_limited') return serveRateLimited(url, method);
-  return htmlResponse(renderProfile(result.profile, assets), 200, DEFAULT_CACHE_CONTROL, method);
+  return htmlResponse(
+    renderProfile(result.profile, assets),
+    200,
+    DEFAULT_CACHE_CONTROL,
+    method,
+    result.profile.indexable,
+  );
 }

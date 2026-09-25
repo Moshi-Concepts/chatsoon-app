@@ -54,6 +54,9 @@ export async function injectProfileTags(ctx: PagesContext, slug: string): Promis
   const html = await assetRes.text();
   if (!MARKER_BLOCK.test(html)) return assetRes; // nothing to splice into; serve the shell untouched
 
-  const injected = html.replace(MARKER_BLOCK, profileOgBlock(result.profile, WEB_ORIGIN));
+  // Always noindex here regardless of `result.profile.indexable` (docs/public-pages-plan.md §4 WP-D2):
+  // this splice only runs when handle.ts's own lookup already failed, so it's an error-state fallback,
+  // never a page Stage D should index.
+  const injected = html.replace(MARKER_BLOCK, profileOgBlock(result.profile, WEB_ORIGIN, false));
   return new Response(injected, { status: 200, headers: withoutStaleBodyHeaders(assetRes.headers) });
 }

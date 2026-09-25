@@ -71,10 +71,15 @@ export function ogTags(meta: OgTagsMeta): string {
  * is passed in rather than imported so this stays a pure, easily testable function — production always
  * calls it with WEB_ORIGIN.
  *
+ * `indexable` (default `false`, Stage D) controls the robots meta only: `false` emits the original
+ * `noindex`; `true` emits `max-image-preview:large` instead (§3.3). og-inject.ts's SPA-shell fallback —
+ * an error state — always passes `false` regardless of `p.indexable`, so a lookup failure never
+ * accidentally indexes the shell.
+ *
  * Only `slug`, `ogVersion` and the 4 OgCard-shaped fields are ever read off `p`, copied by name, so an
  * object that picked up extra fields upstream (contact, links, ids, ...) can't leak through here either.
  */
-export function profileOgBlock(p: PageProfile, origin: string): string {
+export function profileOgBlock(p: PageProfile, origin: string, indexable = false): string {
   const description = describeProfile(p);
   const canonical = `${origin}/id/${p.slug}`;
   const line = roleLine(p.role, p.company);
@@ -83,13 +88,14 @@ export function profileOgBlock(p: PageProfile, origin: string): string {
   const image: OgImage = p.ogVersion
     ? { ...DEFAULT_OG_IMAGE, path: `/id/${p.slug}/og.jpg?v=${p.ogVersion}`, alt }
     : { ...DEFAULT_OG_IMAGE, alt };
+  const robots = indexable ? 'max-image-preview:large' : 'noindex';
 
   return (
     `<!--og-->` +
     `<title>${escapeHtml(profileTitle(p))}</title>` +
     `<meta name="description" content="${escapeHtml(description)}">` +
     `<link rel="canonical" href="${escapeHtml(canonical)}">` +
-    `<meta name="robots" content="noindex">` +
+    `<meta name="robots" content="${robots}">` +
     ogTags({ type: 'profile', title: profileOgTitle(p), description, url: canonical, image, card: 'summary_large_image' }) +
     `<!--/og-->`
   );

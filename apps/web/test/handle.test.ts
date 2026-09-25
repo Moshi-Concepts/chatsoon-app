@@ -92,6 +92,30 @@ describe('handle', () => {
     expect(html).toContain(PROFILE.displayName);
   });
 
+  it('renders an indexable profile with no X-Robots-Tag header and max-image-preview:large in the meta tag (Stage D)', async () => {
+    const indexableProfile: PageProfile = { ...PROFILE, indexable: true };
+    const { ctx } = makeCtx({ apiFetch: async () => jsonResponse({ status: 'ok', profile: indexableProfile }) });
+    const res = await handle(ctx, PROFILE.slug, ASSETS);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-robots-tag')).toBeNull();
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(res.headers.get('x-frame-options')).toBe('DENY');
+    const html = await res.text();
+    expect(html.toLowerCase()).not.toContain('noindex');
+    expect(html).toContain('<meta name="robots" content="max-image-preview:large">');
+    expect(html).toContain('application/ld+json');
+  });
+
+  it('keeps X-Robots-Tag: noindex for a non-indexable profile, with no JSON-LD', async () => {
+    const { ctx } = makeCtx({}); // PROFILE.indexable is false
+    const res = await handle(ctx, PROFILE.slug, ASSETS);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    const html = await res.text();
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).not.toContain('application/ld+json');
+  });
+
   it('leaks nothing an injected `contact` field on the fetched profile might carry', async () => {
     const withExtra = { ...PROFILE, contact: { phone: '+61491570156', whatsapp: '+61491570157' } } as PageProfile &
       Record<string, unknown>;
