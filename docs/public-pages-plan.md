@@ -499,6 +499,25 @@ WPs run in order: B1, then B2, then B3.
 
 **OG note (from issue #5):** C1 (`apps/api/src/pages.ts`), C2 (`packages/shared/src/profile-page.ts`) and C5 (`apps/web/functions/` and `apps/web/src/server/`) now exist and follow their own plans. The API transport for profile metadata uses the §3.1 fallback (HTTP routes with a shared secret) until a spike proves that Pages can bind a named entrypoint; the tag builder, DTO and image route remain as specified.
 
+**Stage C as built on top of #5 (25 Sep 2026).** These notes override the WPs below where they differ.
+
+- **Transport:** keep the secret-gated HTTP routes over the `API` service binding (`apps/web/src/server/profile-source.ts`, `apps/api/src/routes/pages.ts`). There is no RPC spike and no `PagesEntrypoint`. `PageProfile` in `packages/shared/src/types.ts` already has every field §3.1 lists.
+- **C1 remainder:**
+  - `profilePhoto` in `apps/api/src/pages.ts` behind a new `GET /_pages/photo/:slug`, with the same key and IP handling as `/_pages/og`.
+  - It streams the original avatar bytes, with the `contentType` from R2.
+  - D8 caching: `public, max-age=3600` when `v` equals `avatarVersion`, otherwise `max-age=60`. The resized WebP variant stays in Stage F.
+- **C2 remainder:** add `REPORT_REASON_LABELS`, `CONNECT_FORM_MAX`, `connectErrorMessage` and `SESSION_STORAGE_KEY` to `profile-page.ts`, and point the mobile call sites at them.
+  - `SESSION_STORAGE_KEY` must be the real key the web SPA stores its session under. Read `apps/mobile/src/lib/auth.tsx` and `storage.ts`, don't assume `chatsoon.session`.
+- **C5:**
+  - `handle.ts` replaces `og-inject.ts`, and `og-image.ts` stays. `/id/:slug` returns the server-rendered page built by `renderProfile`.
+  - The head comes from the existing `render/og.ts` (`profileOgBlock` / `ogTags`), so the tags stay identical to what #5 shipped.
+  - **Failure fallbacks:**
+    - a lookup error or timeout (not `not_found` or `rate_limited`) serves the SPA shell with the #5 profile tags, as `og-inject.ts` does today, instead of a 503;
+    - `not_found` returns the 404 page;
+    - `rate_limited` returns 429.
+  - `/id/:slug/photo?v=` goes to `/_pages/photo`.
+- **Handoff (§2.3):** since Stage B, `dist/index.html` inlines Expo's CSS as `<style data-href=…>`. The handoff copies those style blocks, the expo-reset style and the entry script; there are no stylesheet links.
+
 WP order: C1 and C2 first; then C3, C4 and C5 in parallel; C6 at any point.
 
 **Deploy order:** API, then a web preview spike, then web main.
