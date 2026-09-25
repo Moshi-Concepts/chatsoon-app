@@ -60,6 +60,8 @@ export interface PublicProfile {
 export interface MyProfile extends PublicProfile {
   userId: string;
   avatarKey: string | null;
+  /** "Show my profile in search engines" (off by default). Owner-only: never on PublicProfile or PageProfile. */
+  searchVisible: boolean;
 }
 
 /**
@@ -83,7 +85,7 @@ export interface PageProfile {
   avatarVersion: string | null;
   /** ISO timestamp. */
   updatedAt: string;
-  /** False until the search-visibility setting ships (Stage D). */
+  /** True only when the owner turned on search visibility and the profile passes `isIndexable` (Stage D). */
   indexable: boolean;
   /** Version of the personalised share card (16 hex), or null when cards are off, so the default image is used. */
   ogVersion: string | null;
@@ -91,6 +93,11 @@ export interface PageProfile {
 
 /** GET /_pages/profile/:slug response body (apps/api/src/routes/pages.ts), and later the Stage C RPC result. */
 export type ProfilePageResult = { status: 'ok'; profile: PageProfile } | { status: 'not_found' } | { status: 'rate_limited' };
+
+/** GET /_pages/sitemap response body: every indexable profile, ordered by slug (at most 50,000). */
+export interface SitemapProfilesResult {
+  profiles: { slug: string; updatedAt: string }[];
+}
 
 export interface Me {
   user: { id: string; email: string; createdAt: string };

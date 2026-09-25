@@ -112,6 +112,8 @@ export const profileInputSchema = z.object({
   /** undefined keeps the current values; each key is merged independently, like links. */
   contact: contactInputSchema.optional(),
   contactVisibility: z.enum(['connections', 'public']).optional(),
+  /** "Show my profile in search engines". undefined keeps the current value (1.0 clients never send it). */
+  searchVisible: z.boolean().optional(),
 });
 export type ProfileInput = z.input<typeof profileInputSchema>;
 

@@ -665,6 +665,20 @@ describe('POST /id/:slug/connect', () => {
     expect((await connect(person.slug, form(), { ip: '198.51.100.24' })).status).toBe(201);
   });
 
+  it('rate limits one IP across many different slugs (CONNECT_ANY_LIMITER, D24), checked before the per-slug limiter', async () => {
+    const ip = '198.51.100.201';
+    const statuses: number[] = [];
+    // Every slug is unique and unknown, so CONNECT_LIMITER (5/60s per slug) never trips; only the
+    // 30/60s global CONNECT_ANY_LIMITER can explain a 429 here.
+    for (let i = 0; i < 31; i++) {
+      statuses.push((await connect(`connect-any-nobody-${i}`, form(), { ip })).status);
+    }
+    expect(statuses.slice(0, 30).every((s) => s === 404)).toBe(true);
+    expect(statuses.at(-1)).toBe(429);
+    // Other visitors, and this same IP against a real slug, are otherwise unaffected until they hit it too.
+    expect((await connect('connect-any-nobody-999', form(), { ip: '198.51.100.202' })).status).toBe(404);
+  });
+
   it('returns the contact and a signed vcardUrl for a connections owner with a phone', async () => {
     const person = await signUpWithProfile('connect-contact-conn@example.com', 'Connie Contact');
     await putProfile(person.token, { displayName: 'Connie Contact', contact: { phone: '+61 491 570 156' } });

@@ -572,4 +572,70 @@ describe('PUT /me/profile', () => {
       expect(body.contactVisibility).toBe('connections');
     });
   });
+
+  describe('search visibility (Stage D)', () => {
+    async function searchVisibleAtRow(userId: string) {
+      const row = await env.DB.prepare('select search_visible_at from profiles where user_id = ?')
+        .bind(userId)
+        .first<{ search_visible_at: number | null }>();
+      return row?.search_visible_at ?? null;
+    }
+
+    it('defaults to off, and is off by default for existing and new profiles', async () => {
+      const { token } = await signUpWithProfile('search-default@example.com', 'Sasha Default');
+      const me = await getMe(token);
+      expect(me.profile?.searchVisible).toBe(false);
+    });
+
+    it('is kept by a PUT that leaves it out, even for a 1.0 client that never sends it', async () => {
+      const { token } = await signUpWithProfile('search-keep@example.com', 'Kai Keep');
+      const on = await saveProfile(token, { displayName: 'Kai Keep', searchVisible: true });
+      expect(on.searchVisible).toBe(true);
+
+      // A save with no searchVisible at all (the exact 1.0 body) must never reset it.
+      const kept = await saveProfile(token, { displayName: 'Kai Keep', headline: 'Still on' });
+      expect(kept.searchVisible).toBe(true);
+    });
+
+    it('sets search_visible_at only when the value actually changes', async () => {
+      const { token, userId } = await signUpWithProfile('search-consent@example.com', 'Cass Consent');
+      expect(await searchVisibleAtRow(userId)).toBeNull();
+
+      const turnedOn = await saveProfile(token, { displayName: 'Cass Consent', searchVisible: true });
+      expect(turnedOn.searchVisible).toBe(true);
+      const stampedOn = await searchVisibleAtRow(userId);
+      expect(stampedOn).not.toBeNull();
+
+      // Same value again: the consent trail must not move.
+      await saveProfile(token, { displayName: 'Cass Consent', searchVisible: true });
+      expect(await searchVisibleAtRow(userId)).toBe(stampedOn);
+
+      // A save that leaves it out entirely (keeps the current value) must not move it either.
+      await saveProfile(token, { displayName: 'Cass Consent', headline: 'Unrelated edit' });
+      expect(await searchVisibleAtRow(userId)).toBe(stampedOn);
+
+      // Turning it off changes the value, so the trail moves again.
+      await new Promise((r) => setTimeout(r, 5));
+      const turnedOff = await saveProfile(token, { displayName: 'Cass Consent', searchVisible: false });
+      expect(turnedOff.searchVisible).toBe(false);
+      const stampedOff = await searchVisibleAtRow(userId);
+      expect(stampedOff).not.toBeNull();
+      expect(stampedOff).not.toBe(stampedOn);
+    });
+
+    it('shows searchVisible on GET /me', async () => {
+      const { token } = await signUpWithProfile('search-me@example.com', 'Mia Me');
+      await saveProfile(token, { displayName: 'Mia Me', searchVisible: true });
+      const me = await getMe(token);
+      expect(me.profile?.searchVisible).toBe(true);
+    });
+
+    it('never appears on the public GET /id/:slug response', async () => {
+      const { token, slug } = await signUpWithProfile('search-public@example.com', 'Pia Public');
+      await saveProfile(token, { displayName: 'Pia Public', searchVisible: true });
+      const body = (await (await call(`/id/${slug}`)).json()) as Record<string, unknown>;
+      expect(body).not.toHaveProperty('searchVisible');
+    });
+  });
+
 });

@@ -6,6 +6,8 @@ export interface Env {
   /** The chatsoon-og Worker (apps/og), bound by service entrypoint. Absent gives the Free-plan fallback. */
   OG?: OgRendererRpc;
   CONNECT_LIMITER: RateLimit;
+  /** Global per-IP cap across every slug (D24), checked before CONNECT_LIMITER. */
+  CONNECT_ANY_LIMITER: RateLimit;
   /** Per email. */
   OTP_LIMITER: RateLimit;
   /** Checking codes, per IP, looser: a conference venue can share one IP. */

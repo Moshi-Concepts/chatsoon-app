@@ -79,28 +79,38 @@ export const verifications = sqliteTable(
 // Chatsoon tables. Every private row carries user_id and every query is scoped by it.
 // ---------------------------------------------------------------------------
 
-export const profiles = sqliteTable('profiles', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  displayName: text('display_name').notNull(),
-  /** Stable once created. Printed QR codes point at it. */
-  slug: text('slug').notNull().unique(),
-  avatarKey: text('avatar_key'),
-  headline: text('headline'),
-  company: text('company'),
-  role: text('role'),
-  /** JSON ProfileLinks */
-  links: text('links').notNull().default('{}'),
-  /** JSON array of { label, url }, in display order. See lib/serialize.ts parseBookingLinks. */
-  bookingLinks: text('booking_links').notNull().default('[]'),
-  /** JSON ProfileContact (phone, WhatsApp, Signal), stored as typed. See lib/serialize.ts parseContact. */
-  contact: text('contact').notNull().default('{}'),
-  /** ContactVisibility. Anything other than 'public' is treated as 'connections' on read (fail closed). */
-  contactVisibility: text('contact_visibility').notNull().default('connections'),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const profiles = sqliteTable(
+  'profiles',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    displayName: text('display_name').notNull(),
+    /** Stable once created. Printed QR codes point at it. */
+    slug: text('slug').notNull().unique(),
+    avatarKey: text('avatar_key'),
+    headline: text('headline'),
+    company: text('company'),
+    role: text('role'),
+    /** JSON ProfileLinks */
+    links: text('links').notNull().default('{}'),
+    /** JSON array of { label, url }, in display order. See lib/serialize.ts parseBookingLinks. */
+    bookingLinks: text('booking_links').notNull().default('[]'),
+    /** JSON ProfileContact (phone, WhatsApp, Signal), stored as typed. See lib/serialize.ts parseContact. */
+    contact: text('contact').notNull().default('{}'),
+    /** ContactVisibility. Anything other than 'public' is treated as 'connections' on read (fail closed). */
+    contactVisibility: text('contact_visibility').notNull().default('connections'),
+    /** "Show my profile in search engines" (Stage D). Off for existing and new profiles until the owner opts in. */
+    searchVisible: integer('search_visible', { mode: 'boolean' }).notNull().default(false),
+    /** Consent trail: set to now() only when searchVisible actually changes. Null until it's ever been set. */
+    searchVisibleAt: integer('search_visible_at', { mode: 'timestamp_ms' }),
+    /** Ops kill switch, set only via `wrangler d1 execute`. Never exposed through the API. */
+    searchBlocked: integer('search_blocked', { mode: 'boolean' }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('profiles_search_idx').on(t.searchVisible, t.slug)],
+);
 
 export const events = sqliteTable('events', {
   id: text('id').primaryKey(),

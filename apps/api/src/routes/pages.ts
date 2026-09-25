@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../env';
 import { errorBody } from '../lib/errors';
 import { timingSafeEqual } from '../lib/signing';
-import { profileOgImage, profilePage, profilePhoto } from '../pages';
+import { indexableProfiles, profileOgImage, profilePage, profilePhoto } from '../pages';
 
 // GET /_pages/profile/:slug, GET /_pages/og/:slug and GET /_pages/photo/:slug: the Pages Function
 // transport for public page tags, share-card images and avatars (docs/og-plan.md §3.3, decision O14;
@@ -80,10 +80,24 @@ pagesRoutes.get('/_pages/photo/:slug', async (c) => {
         'Content-Length': String(result.contentLength),
         ETag: `"${result.version}"`,
         'Cache-Control': `public, max-age=${result.maxAge}`,
+        // The web Function turns this into X-Robots-Tag on the actual /id/:slug/photo response.
+        'X-Indexable': result.indexable ? '1' : '0',
       };
       // Same headers either way (D8): a 304 just drops the body once the caller's own copy proves current.
       if (c.req.header('if-none-match') === headers.ETag) return c.body(null, 304, headers);
       return new Response(result.body, { headers });
     }
   }
+});
+
+/**
+ * GET /_pages/sitemap: every indexable profile, for the web Function's sitemap-profiles.xml
+ * (docs/public-pages-plan.md §3.2/§2.1). Secret-gated and never cached, same as the other /_pages/*
+ * routes; the web Function applies its own `max-age=3600` to the XML it builds from this.
+ */
+pagesRoutes.get('/_pages/sitemap', async (c) => {
+  if (!authorized(c)) return c.json(errorBody('not_found', 'Not found'), 404);
+  const result = await indexableProfiles(c.env);
+  c.header('Cache-Control', 'no-store');
+  return c.json(result);
 });

@@ -12,7 +12,7 @@ import {
 } from '@chatsoon/shared';
 import { and, eq, or, sql } from 'drizzle-orm';
 
-import { blocks, profiles, type ContactRow, type ProfileRow } from '../db/schema';
+import { blocks, profiles, users, type ContactRow, type ProfileRow } from '../db/schema';
 import type { DB } from './db';
 import { parseContact, parseLinks } from './serialize';
 import { ownsKey, userPrefix } from './signing';
@@ -32,6 +32,25 @@ export async function findProfileBySlug(db: DB, slug: string): Promise<ProfileRo
 export async function findProfileByUserId(db: DB, userId: string): Promise<ProfileRow | null> {
   const [row] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
   return row ?? null;
+}
+
+/**
+ * Same lookup as `findProfileBySlug`, plus the owner's email in the same query (one D1 round trip,
+ * not two) — `isIndexable` needs it, and page/photo lookups are on the hot path.
+ */
+export async function findProfileBySlugWithEmail(
+  db: DB,
+  slug: string,
+): Promise<{ row: ProfileRow; email: string } | null> {
+  const normalized = slug.trim().toLowerCase();
+  if (!isValidSlug(normalized)) return null;
+  const [found] = await db
+    .select({ row: profiles, email: users.email })
+    .from(profiles)
+    .innerJoin(users, eq(users.id, profiles.userId))
+    .where(eq(profiles.slug, normalized))
+    .limit(1);
+  return found ?? null;
 }
 
 // ---------------------------------------------------------------------------

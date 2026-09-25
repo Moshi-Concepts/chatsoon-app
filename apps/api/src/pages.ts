@@ -1,13 +1,14 @@
 import { toOgCard } from '@chatsoon/shared/src/og';
-import type { ProfilePageResult } from '@chatsoon/shared';
+import type { ProfilePageResult, SitemapProfilesResult } from '@chatsoon/shared';
+import { and, asc, eq, notInArray, sql } from 'drizzle-orm';
 
-import type { ProfileRow } from './db/schema';
+import { profiles, users, type ProfileRow } from './db/schema';
 import type { Env } from './env';
 import { getDb } from './lib/db';
 import { ApiError, limit } from './lib/errors';
 import { cardsEnabled, currentOgVersion, hashKey16, loadOgAvatar, ogKey, sweepOgKeys } from './lib/og';
-import { findProfileBySlug } from './lib/profiles';
-import { toPageProfile } from './lib/serialize';
+import { findProfileBySlugWithEmail } from './lib/profiles';
+import { isIndexable, toPageProfile } from './lib/serialize';
 
 // Core logic behind the three secret-gated routes in routes/pages.ts: GET /_pages/profile/:slug,
 // GET /_pages/og/:slug (docs/og-plan.md §3.3) and GET /_pages/photo/:slug (docs/public-pages-plan.md's
@@ -17,12 +18,15 @@ import { toPageProfile } from './lib/serialize';
 /** The bucket routes/public.ts already uses for GET /id/:slug misses: one limit, shared by both paths. */
 const missKey = (ip: string | null) => (ip ? `profile-miss:${ip}` : null);
 
-type ProfileLookup = { status: 'ok'; row: ProfileRow } | { status: 'not_found' } | { status: 'rate_limited' };
+type ProfileLookup =
+  | { status: 'ok'; row: ProfileRow; email: string }
+  | { status: 'not_found' }
+  | { status: 'rate_limited' };
 
 /** A slug miss counts against PROFILE_MISS_LIMITER; a hit never does (a real slug never rate limits). */
 async function lookupProfile(env: Env, slug: string, ip: string | null): Promise<ProfileLookup> {
-  const row = await findProfileBySlug(getDb(env), slug);
-  if (row) return { status: 'ok', row };
+  const found = await findProfileBySlugWithEmail(getDb(env), slug);
+  if (found) return { status: 'ok', row: found.row, email: found.email };
   try {
     await limit(env.PROFILE_MISS_LIMITER, missKey(ip));
   } catch (err) {
@@ -36,7 +40,33 @@ async function lookupProfile(env: Env, slug: string, ip: string | null): Promise
 export async function profilePage(env: Env, slug: string, ip: string | null): Promise<ProfilePageResult> {
   const found = await lookupProfile(env, slug, ip);
   if (found.status !== 'ok') return found;
-  return { status: 'ok', profile: await toPageProfile(env, found.row) };
+  return { status: 'ok', profile: await toPageProfile(env, found.row, found.email) };
+}
+
+/**
+ * The same `isIndexable` predicate as SQL, joined against `users` for the owner's email, so the
+ * sitemap and `toPageProfile`'s `indexable` can never disagree. Ordered by slug, capped at 50,000
+ * rows (§3.2): a sitemap file has no pagination.
+ */
+export async function indexableProfiles(env: Env): Promise<SitemapProfilesResult> {
+  const rows = await getDb(env)
+    .select({ slug: profiles.slug, updatedAt: profiles.updatedAt, email: users.email })
+    .from(profiles)
+    .innerJoin(users, eq(users.id, profiles.userId))
+    .where(
+      and(
+        eq(profiles.searchVisible, true),
+        eq(profiles.searchBlocked, false),
+        notInArray(profiles.slug, ['alex-rivera-demo', 'maya-lindqvist-demo']),
+        sql`${users.email} not like 'demo+%@chatsoon.app'`,
+        sql`lower(${users.email}) <> 'review@chatsoon.app'`,
+        sql`(coalesce(${profiles.headline}, '') <> '' or coalesce(${profiles.role}, '') <> '' or coalesce(${profiles.company}, '') <> '' or coalesce(${profiles.avatarKey}, '') <> '')`,
+      ),
+    )
+    .orderBy(asc(profiles.slug))
+    .limit(50_000);
+
+  return { profiles: rows.map((r) => ({ slug: r.slug, updatedAt: r.updatedAt.toISOString() })) };
 }
 
 export type OgImageResult =
@@ -107,7 +137,16 @@ export async function profileOgImage(
 export type ProfilePhotoResult =
   | { status: 'not_found' }
   | { status: 'rate_limited' }
-  | { status: 'ok'; body: ReadableStream; contentType: string; contentLength: number; version: string; maxAge: number };
+  | {
+      status: 'ok';
+      body: ReadableStream;
+      contentType: string;
+      contentLength: number;
+      version: string;
+      maxAge: number;
+      /** Same predicate as `PageProfile.indexable` (§3.2/§3.3): the caller sets `X-Indexable` from it. */
+      indexable: boolean;
+    };
 
 /**
  * GET /_pages/photo/:slug's body (D8): the profile's own avatar, streamed straight from R2 exactly
@@ -131,10 +170,11 @@ export async function profilePhoto(
   const object = await env.FILES.get(avatarKey);
   if (!object) return { status: 'not_found' };
 
+  const indexable = isIndexable(found.row, found.email);
   const contentType = object.httpMetadata?.contentType;
   if (!contentType?.startsWith('image/')) return { status: 'not_found' };
 
   const version = await hashKey16(avatarKey);
   const maxAge = v !== null && V_PATTERN.test(v) && v === version ? 3600 : 60;
-  return { status: 'ok', body: object.body, contentType, contentLength: object.size, version, maxAge };
+  return { status: 'ok', body: object.body, contentType, contentLength: object.size, version, maxAge, indexable };
 }

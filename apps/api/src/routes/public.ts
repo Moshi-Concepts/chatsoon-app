@@ -145,6 +145,9 @@ export const CONNECT_EMAILS_PER_DAY = 10;
 /** Web Connect form for people without the app. Lands in the owner's contacts as 'web_connect'. */
 publicRoutes.post('/id/:slug/connect', optionalAuth, async (c) => {
   const slug = c.req.param('slug').trim().toLowerCase();
+  // Global per-IP cap first (D24): catches a burst spread across many slugs that the per-slug
+  // limiter below would never see.
+  await limit(c.env.CONNECT_ANY_LIMITER, ipKey(c, 'connect-any'));
   await limit(c.env.CONNECT_LIMITER, ipKey(c, `connect:${slug}`));
   const input = await parseJson(c, connectFormSchema);
   const name = cleanName(input.name);

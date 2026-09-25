@@ -43,7 +43,8 @@ type ProfileValues = Pick<
   | 'bookingLinks'
   | 'contact'
   | 'contactVisibility'
->;
+  | 'searchVisible'
+> & { searchVisibleAt?: Date | null };
 
 export const profileRoutes = new Hono<AppEnv>();
 
@@ -91,6 +92,7 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
   }
 
   const keep = <T>(value: T | undefined, current: T): T => (value === undefined ? current : value);
+  const searchVisible = keep(input.searchVisible, existing?.searchVisible ?? false);
   const values: ProfileValues = {
     displayName: input.displayName,
     headline: keep(input.headline, existing?.headline ?? null),
@@ -102,6 +104,9 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
     bookingLinks: input.bookingLinks === undefined ? (existing?.bookingLinks ?? '[]') : JSON.stringify(input.bookingLinks),
     contact: JSON.stringify(mergeByKey(existing ? parseContact(existing.contact) : {}, input.contact)),
     contactVisibility: keep(input.contactVisibility, existing?.contactVisibility ?? 'connections'),
+    searchVisible,
+    // The consent trail (§3.2): only stamped when the value actually changes, never on every save.
+    ...(searchVisible !== (existing?.searchVisible ?? false) ? { searchVisibleAt: new Date() } : {}),
   };
 
   let row: ProfileRow;

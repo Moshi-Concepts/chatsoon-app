@@ -131,7 +131,36 @@ export async function toPublicProfile(
 /** The owner's own view: raw stored values (including legacy invalid ones), so they can fix them. */
 export async function toMyProfile(env: Env, row: ProfileRow): Promise<MyProfile> {
   const profile = await toPublicProfile(env, row);
-  return { ...profile, userId: row.userId, avatarKey: row.avatarKey, contact: parseContact(row.contact) };
+  return {
+    ...profile,
+    userId: row.userId,
+    avatarKey: row.avatarKey,
+    contact: parseContact(row.contact),
+    searchVisible: row.searchVisible,
+  };
+}
+
+/** Demo profiles seeded for App Store and Google Play review (migration 0002); never indexable. */
+const DEMO_SLUGS = new Set(['alex-rivera-demo', 'maya-lindqvist-demo']);
+/** The reviewer account itself (lib/reviewer.ts): never indexable, whatever it saves. */
+const REVIEWER_EMAIL = 'review@chatsoon.app';
+/** Any demo+*@chatsoon.app account (case-insensitive), including the seeded demo users above. */
+const DEMO_EMAIL_PATTERN = /^demo\+[^@]*@chatsoon\.app$/i;
+
+/**
+ * Stage D §3.2: true only when the owner opted in, an ops kill switch hasn't blocked it, it isn't a
+ * demo or reviewer account, and the profile has something worth showing. `ownerEmail` must come from
+ * the same row's owner (pages.ts / lib/profiles.ts join it in one query).
+ */
+export function isIndexable(
+  row: Pick<ProfileRow, 'slug' | 'searchVisible' | 'searchBlocked' | 'headline' | 'role' | 'company' | 'avatarKey'>,
+  ownerEmail: string,
+): boolean {
+  if (!row.searchVisible || row.searchBlocked) return false;
+  if (DEMO_SLUGS.has(row.slug)) return false;
+  const email = ownerEmail.toLowerCase();
+  if (email === REVIEWER_EMAIL || DEMO_EMAIL_PATTERN.test(email)) return false;
+  return !!(row.headline || row.role || row.company || row.avatarKey);
 }
 
 /**
@@ -140,7 +169,7 @@ export async function toMyProfile(env: Env, row: ProfileRow): Promise<MyProfile>
  * `ogVersion` is null whenever a personalised card can't be produced (the kill switch, or no OG
  * binding), so the caller falls back to the default image with no extra check of its own.
  */
-export async function toPageProfile(env: Env, row: ProfileRow): Promise<PageProfile> {
+export async function toPageProfile(env: Env, row: ProfileRow, ownerEmail: string): Promise<PageProfile> {
   const pub = await toPublicProfile(env, row);
   return {
     slug: pub.slug,
@@ -154,8 +183,7 @@ export async function toPageProfile(env: Env, row: ProfileRow): Promise<PageProf
     contactVisibility: pub.contactVisibility ?? 'connections',
     avatarVersion: row.avatarKey ? await hashKey16(row.avatarKey) : null,
     updatedAt: row.updatedAt.toISOString(),
-    // False until the search-visibility setting ships (Stage D).
-    indexable: false,
+    indexable: isIndexable(row, ownerEmail),
     ogVersion: cardsEnabled(env) ? await currentOgVersion(row) : null,
   };
 }

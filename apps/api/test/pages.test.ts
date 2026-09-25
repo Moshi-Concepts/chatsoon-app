@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ProfilePageResult } from '@chatsoon/shared';
+import { REVIEWER_EMAIL, type ApiErrorBody, type ProfilePageResult, type SitemapProfilesResult } from '@chatsoon/shared';
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
@@ -8,7 +8,7 @@ import { profiles, type ProfileRow } from '../src/db/schema';
 import app from '../src/index';
 import { getDb } from '../src/lib/db';
 import { currentOgVersion, hashKey16, loadOgAvatar, ogKey, ogPrefix } from '../src/lib/og';
-import { call, signUpWithProfile } from './helpers';
+import { call, signIn, signUpWithProfile } from './helpers';
 
 // GET /_pages/profile/:slug and GET /_pages/og/:slug (docs/og-plan.md §3.3, WP-4), plus the
 // avatar guard (§2.2) and the PUT /me/profile pre-render/sweep (O9) that feeds them.
@@ -32,6 +32,28 @@ async function profileRow(userId: string): Promise<ProfileRow> {
 async function countOgFiles(userId: string): Promise<number> {
   const page = await env.FILES.list({ prefix: ogPrefix(userId) });
   return page.objects.length;
+}
+
+/** search_blocked is an ops kill switch: never settable through the API, only `wrangler d1 execute`. */
+async function setSearchBlocked(userId: string, blocked: boolean) {
+  await env.DB.prepare('update profiles set search_blocked = ? where user_id = ?').bind(blocked ? 1 : 0, userId).run();
+}
+
+/** A fresh profile that opted in to search visibility and has enough to show (a headline). */
+async function optedInProfile(email: string, name: string) {
+  const person = await signUpWithProfile(email, name);
+  const res = await call('/me/profile', {
+    method: 'PUT',
+    token: person.token,
+    json: { displayName: name, headline: 'Something worth reading', searchVisible: true },
+  });
+  expect(res.status).toBe(200);
+  return person;
+}
+
+async function profileIndexable(slug: string): Promise<boolean | undefined> {
+  const body = (await (await pagesCall(`/_pages/profile/${slug}`)).json()) as ProfilePageResult;
+  return body.status === 'ok' ? body.profile.indexable : undefined;
 }
 
 /** Calls the app directly with an ExecutionContext this test can wait on, so PUT /me/profile's
@@ -279,6 +301,144 @@ describe('GET /_pages/photo/:slug', () => {
     expect(notModified.headers.get('etag')).toBe(`"${version}"`);
     expect(notModified.headers.get('content-type')).toBe('image/png');
     expect(notModified.headers.get('cache-control')).toBe('public, max-age=60');
+  });
+
+  it('carries X-Indexable, 1 or 0, on both the 200 and the 304 path', async () => {
+    const indexable = await optedInProfile('pages-photo-indexable@example.com', 'Ida Indexable');
+    const noKey = await putAvatar(indexable.userId, new Uint8Array([1, 2, 3]), 'image/jpeg');
+    await call('/me/profile', {
+      method: 'PUT',
+      token: indexable.token,
+      json: { displayName: 'Ida Indexable', avatarKey: noKey },
+    });
+    const indexableVersion = await hashKey16(noKey);
+
+    const notIndexable = await signUpWithProfile('pages-photo-notindexable@example.com', 'Ned NotIndexable');
+    const key = await putAvatar(notIndexable.userId, new Uint8Array([4, 5, 6]), 'image/jpeg');
+    await call('/me/profile', {
+      method: 'PUT',
+      token: notIndexable.token,
+      json: { displayName: 'Ned NotIndexable', avatarKey: key },
+    });
+    const notIndexableVersion = await hashKey16(key);
+
+    expect((await pagesCall(`/_pages/photo/${indexable.slug}`)).headers.get('x-indexable')).toBe('1');
+    expect((await pagesCall(`/_pages/photo/${notIndexable.slug}`)).headers.get('x-indexable')).toBe('0');
+
+    const notModifiedIndexable = await pagesCall(`/_pages/photo/${indexable.slug}`, {
+      ifNoneMatch: `"${indexableVersion}"`,
+    });
+    expect(notModifiedIndexable.status).toBe(304);
+    expect(notModifiedIndexable.headers.get('x-indexable')).toBe('1');
+
+    const notModifiedOther = await pagesCall(`/_pages/photo/${notIndexable.slug}`, {
+      ifNoneMatch: `"${notIndexableVersion}"`,
+    });
+    expect(notModifiedOther.status).toBe(304);
+    expect(notModifiedOther.headers.get('x-indexable')).toBe('0');
+  });
+});
+
+describe('isIndexable (Stage D §3.2)', () => {
+  it('is true for a proper opted-in profile', async () => {
+    const person = await optedInProfile('indexable-good@example.com', 'Gia Good');
+    expect(await profileIndexable(person.slug)).toBe(true);
+  });
+
+  it('is false when the owner never opted in', async () => {
+    const person = await signUpWithProfile('indexable-off@example.com', 'Ozzy Off');
+    await call('/me/profile', {
+      method: 'PUT',
+      token: person.token,
+      json: { displayName: 'Ozzy Off', headline: 'Has plenty to show' },
+    });
+    expect(await profileIndexable(person.slug)).toBe(false);
+  });
+
+  it('is false for a thin profile (only a name)', async () => {
+    const person = await signUpWithProfile('indexable-thin@example.com', 'Tia Thin');
+    await call('/me/profile', {
+      method: 'PUT',
+      token: person.token,
+      json: { displayName: 'Tia Thin', searchVisible: true },
+    });
+    expect(await profileIndexable(person.slug)).toBe(false);
+  });
+
+  it('is false once search_blocked is set, even for an otherwise complete opted-in profile', async () => {
+    const person = await optedInProfile('indexable-blocked@example.com', 'Bea Blocked');
+    expect(await profileIndexable(person.slug)).toBe(true);
+    await setSearchBlocked(person.userId, true);
+    expect(await profileIndexable(person.slug)).toBe(false);
+  });
+
+  it('is false for the seeded demo slugs, even switched on', async () => {
+    await env.DB.prepare(
+      "update profiles set search_visible = 1, headline = 'Demo headline' where slug in ('alex-rivera-demo', 'maya-lindqvist-demo')",
+    ).run();
+    expect(await profileIndexable('alex-rivera-demo')).toBe(false);
+    expect(await profileIndexable('maya-lindqvist-demo')).toBe(false);
+  });
+
+  it('is false for the reviewer account, even opted in and complete', async () => {
+    const reviewer = await signIn(REVIEWER_EMAIL, env.REVIEWER_CODE);
+    const res = await call('/me/profile', {
+      method: 'PUT',
+      token: reviewer.token,
+      json: { displayName: 'Reviewer Rae', headline: 'Reviewing things', searchVisible: true },
+    });
+    const slug = ((await res.json()) as { slug: string }).slug;
+    expect(await profileIndexable(slug)).toBe(false);
+  });
+
+  it("is false for any demo+*@chatsoon.app account, even opted in and complete", async () => {
+    const person = await optedInProfile('demo+extra@chatsoon.app', 'Demo Extra');
+    expect(await profileIndexable(person.slug)).toBe(false);
+  });
+});
+
+describe('GET /_pages/sitemap', () => {
+  it('needs the key, like the other /_pages/* routes', async () => {
+    expect((await call('/_pages/sitemap')).status).toBe(404);
+    expect((await pagesCall('/_pages/sitemap', { key: 'wrong' })).status).toBe(404);
+  });
+
+  it('lists only indexable profiles, ordered by slug, with an ISO updatedAt, and is never cached', async () => {
+    const alpha = await optedInProfile('sitemap-alpha@example.com', 'Alpha Sitemap');
+    const zeta = await optedInProfile('sitemap-zeta@example.com', 'Zeta Sitemap');
+    const off = await signUpWithProfile('sitemap-off@example.com', 'Off Sitemap');
+    await call('/me/profile', {
+      method: 'PUT',
+      token: off.token,
+      json: { displayName: 'Off Sitemap', headline: 'Not opted in' },
+    });
+    const thin = await signUpWithProfile('sitemap-thin@example.com', 'Thin Sitemap');
+    await call('/me/profile', {
+      method: 'PUT',
+      token: thin.token,
+      json: { displayName: 'Thin Sitemap', searchVisible: true },
+    });
+    const blocked = await optedInProfile('sitemap-blocked@example.com', 'Blocked Sitemap');
+    await setSearchBlocked(blocked.userId, true);
+    const demoEmail = await optedInProfile('demo+sitemap@chatsoon.app', 'Demo Sitemap');
+    await env.DB.prepare("update profiles set search_visible = 1, headline = 'Demo' where slug = 'alex-rivera-demo'").run();
+
+    const res = await pagesCall('/_pages/sitemap');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = (await res.json()) as SitemapProfilesResult;
+    const slugs = body.profiles.map((p) => p.slug);
+
+    expect(slugs).toEqual([...slugs].sort());
+    expect(slugs).toContain(alpha.slug);
+    expect(slugs).toContain(zeta.slug);
+    expect(slugs).not.toContain(off.slug);
+    expect(slugs).not.toContain(thin.slug);
+    expect(slugs).not.toContain(blocked.slug);
+    expect(slugs).not.toContain(demoEmail.slug);
+    expect(slugs).not.toContain('alex-rivera-demo');
+    expect(slugs).not.toContain('maya-lindqvist-demo');
+    for (const p of body.profiles) expect(new Date(p.updatedAt).toISOString()).toBe(p.updatedAt);
   });
 });
 
