@@ -16,6 +16,15 @@ import { roleLine } from '@/lib/format';
 import { useOutbox } from '@/lib/outbox';
 import { useMe } from '@/lib/queries';
 
+// Web only: apps/web/src/render/consent.ts (issue #17) sets this global on every page it renders,
+// including the exported SPA shell, so the Me tab's "Cookie settings" row (below) can reopen the same
+// banner without duplicating its logic here. Never present on native.
+declare global {
+  interface Window {
+    chatsoonConsent?: { open: () => void };
+  }
+}
+
 const YEAR = new Date().getFullYear();
 
 /**
@@ -165,6 +174,14 @@ export default function MeScreen() {
           divider
         />
         <ListRow icon="document-text-outline" title="Terms of use" onPress={() => router.push('/terms')} divider />
+        {Platform.OS === 'web' ? (
+          <ListRow
+            icon="settings-outline"
+            title="Cookie settings"
+            onPress={() => window.chatsoonConsent?.open()}
+            divider
+          />
+        ) : null}
         <ListRow icon="help-circle-outline" title="Support" onPress={() => router.push('/support')} />
       </Section>
 

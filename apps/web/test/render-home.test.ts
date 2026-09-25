@@ -85,4 +85,17 @@ describe('renderHome', () => {
   it('never mentions localhost', () => {
     expect(html.toLowerCase()).not.toContain('localhost');
   });
+
+  describe('cookie consent (issue #17)', () => {
+    it('has the consent script and a Cookie settings control', () => {
+      expect(html).toContain('data-consent-open');
+      expect(html).toContain('Cookie settings');
+      expect(html).toContain('chatsoonConsent');
+    });
+
+    it('never loads googletagmanager.com eagerly — only inside the opt-in consent script', () => {
+      expect(html).not.toMatch(/<script[^>]*\bsrc=["'][^"']*googletagmanager\.com/);
+      expect(html).toContain('googletagmanager.com');
+    });
+  });
 });

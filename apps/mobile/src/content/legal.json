@@ -41,7 +41,13 @@
       {
         "heading": "No ads, no tracking, no selling",
         "paragraphs": [
-          "We don't use your information for advertising, we don't build advertising profiles, and we don't track you across other companies' apps or websites. We don't sell or rent your personal information to anyone."
+          "We don't use your information for advertising, we don't build advertising profiles, and we don't track you across other companies' apps or websites. We don't sell or rent your personal information to anyone. If you accept analytics cookies on our website, Google Analytics measures how chatsoon.app is used (see Analytics cookies below); we have Google's advertising features switched off, and it isn't used for advertising."
+        ]
+      },
+      {
+        "heading": "Analytics cookies",
+        "paragraphs": [
+          "Analytics cookies: with your permission, chatsoon.app uses Google Analytics to understand how the website and web app are used, for example which pages are visited and how people found us. Google Analytics sets cookies and collects information such as pages viewed, the device and browser, approximate location based on IP address, and how you arrived. It is only turned on if you choose Accept in the cookie banner; if you choose Decline or make no choice, it isn't loaded at all. You can change your choice any time with Cookie settings at the bottom of any page or in the Me tab. Google processes this data under its own privacy policy (https://policies.google.com/privacy). The Chatsoon iPhone and Android apps don't use Google Analytics."
         ]
       },
       {

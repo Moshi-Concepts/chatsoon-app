@@ -216,6 +216,28 @@ describe('renderProfile', () => {
     expect(renderProfile(BASE, ASSETS).toLowerCase()).not.toContain('localhost');
   });
 
+  describe('cookie consent (issue #17)', () => {
+    it('has the consent script and a Cookie settings control', () => {
+      const html = renderProfile(BASE, ASSETS);
+      expect(html).toContain('data-consent-open');
+      expect(html).toContain('Cookie settings');
+      expect(html).toContain('chatsoonConsent');
+    });
+
+    it('never loads googletagmanager.com eagerly — only inside the opt-in consent script', () => {
+      const html = renderProfile(BASE, ASSETS);
+      expect(html).not.toMatch(/<script[^>]*\bsrc=["'][^"']*googletagmanager\.com/);
+      expect(html).toContain('googletagmanager.com');
+    });
+
+    it('places the consent script after the spa handoff and island scripts, so it runs after #root exists', () => {
+      const html = renderProfile(BASE, ASSETS);
+      const islandIndex = html.indexOf(`src="${ASSETS.islandUrl}"`);
+      const consentIndex = html.lastIndexOf('<script>');
+      expect(consentIndex).toBeGreaterThan(islandIndex);
+    });
+  });
+
   it('never renders phone, WhatsApp or Signal values, even if the DTO carries an injected `contact`', () => {
     const withContact = {
       ...BASE,

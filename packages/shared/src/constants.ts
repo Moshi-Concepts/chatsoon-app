@@ -11,6 +11,10 @@ export const SUPPORT_EMAIL = 'hello@chatsoon.app';
 export const PROFILE_PATH_PREFIX = '/id/';
 export const profileUrl = (slug: string) => `${WEB_ORIGIN}${PROFILE_PATH_PREFIX}${slug}`;
 
+/** GA4 property for chatsoon.app (issue #17). Loaded on apps/web only, and only after the visitor
+ * accepts the cookie consent banner (apps/web/src/render/consent.ts) — never on native. */
+export const GA_MEASUREMENT_ID = 'G-9JPQ94MJLZ';
+
 export const REVIEWER_EMAIL = 'review@chatsoon.app';
 /** Second test profile the App Store / Play reviewer can scan or open in a browser. */
 export const DEMO_PROFILE_SLUG = 'alex-rivera-demo';

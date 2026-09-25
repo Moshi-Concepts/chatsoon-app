@@ -4,6 +4,7 @@
 import { APP_NAME, COPYRIGHT, SUPPORT_EMAIL, TAGLINE } from '@chatsoon/shared/src/constants';
 import { Colors } from '@chatsoon/shared/src/design';
 
+import { consentCss, consentScript, cookieSettingsLinkHtml } from './consent';
 import { css } from './css';
 import { escapeHtml, escapeJsonLd } from './escape';
 import { ogTags, type OgTagsMeta } from './og';
@@ -64,7 +65,7 @@ ${ogTags(opts.og)}
 <meta name="theme-color" content="${Colors.light.primary}">
 <link rel="icon" href="/favicon.ico">
 ${jsonLd}
-<style>${css()}</style>
+<style>${css()}${consentCss()}</style>
 </head>
 <body>
 <header class="site"><div class="wrap">
@@ -74,8 +75,9 @@ ${opts.headerAction ?? DEFAULT_HEADER_ACTION}
 <main id="page">${opts.main}</main>
 <footer><div class="wrap">
 <div><a class="brand" href="/">${LOGO_SMALL}<span>${APP_NAME}</span></a><p class="tagline">${TAGLINE}</p></div>
-<div><nav aria-label="Legal">${FOOTER_LINKS.map((l) => `<a href="${l.href}">${l.label}</a>`).join('')}<!--email_off--><a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a><!--/email_off--></nav><p class="copy">© 2026 ${COPYRIGHT}</p></div>
+<div><nav aria-label="Legal">${FOOTER_LINKS.map((l) => `<a href="${l.href}">${l.label}</a>`).join('')}<!--email_off--><a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a><!--/email_off--> ${cookieSettingsLinkHtml()}</nav><p class="copy">© 2026 ${COPYRIGHT}</p></div>
 </div></footer>
+<script>${consentScript()}</script>
 </body>
 </html>
 `;

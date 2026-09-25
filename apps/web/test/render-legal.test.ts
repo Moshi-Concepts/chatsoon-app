@@ -51,6 +51,20 @@ describe.each(KEYS)('renderLegal(%s)', (key) => {
   it('never mentions localhost', () => {
     expect(html.toLowerCase()).not.toContain('localhost');
   });
+
+  it('has the consent script and a Cookie settings control, with no eager Google request', () => {
+    expect(html).toContain('data-consent-open');
+    expect(html).toContain('Cookie settings');
+    expect(html).toContain('chatsoonConsent');
+    expect(html).not.toMatch(/<script[^>]*\bsrc=["'][^"']*googletagmanager\.com/);
+    expect(html).toContain('googletagmanager.com');
+  });
+});
+
+it('the privacy page has the #analytics-cookies anchor from an "Analytics cookies" section', () => {
+  const html = renderLegal('privacy', legal.privacy);
+  expect(html).toContain('id="analytics-cookies"');
+  expect(html).toContain('<h2>Analytics cookies</h2>');
 });
 
 it('only adds a table of contents past 6 sections', () => {

@@ -16,6 +16,7 @@ import { CONTACT_LABELS } from '@chatsoon/shared/src/profile-contact';
 import { CONNECT_FORM_MAX, firstName, roleLine } from '@chatsoon/shared/src/profile-page';
 import type { BookingLink, LinkKey, PageProfile, ProfileContactKey } from '@chatsoon/shared/src/types';
 
+import { consentCss, consentScript, cookieSettingsLinkHtml } from './consent';
 import { css } from './css';
 import { escapeHtml, escapeJsonLd } from './escape';
 import { spaBodyScript, spaHeadScript, type SpaAssets } from './handoff';
@@ -57,7 +58,7 @@ function headerBlock(slug: string): string {
 function footerBlock(): string {
   return `<footer><div class="wrap">
 <div><a class="brand" href="/">${LOGO_SMALL}<span>${APP_NAME}</span></a><p class="tagline">${TAGLINE}</p></div>
-<div><nav aria-label="Legal">${FOOTER_LINKS.map((l) => `<a href="${l.href}">${l.label}</a>`).join('')}<!--email_off--><a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a><!--/email_off--></nav><p class="copy">© 2026 ${COPYRIGHT}</p></div>
+<div><nav aria-label="Legal">${FOOTER_LINKS.map((l) => `<a href="${l.href}">${l.label}</a>`).join('')}<!--email_off--><a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a><!--/email_off--> ${cookieSettingsLinkHtml()}</nav><p class="copy">© 2026 ${COPYRIGHT}</p></div>
 </div></footer>`;
 }
 
@@ -311,7 +312,7 @@ ${head}
 <meta name="theme-color" content="${Colors.light.primary}">
 <link rel="icon" href="/favicon.ico">
 ${jsonLd}
-<style>${css()}</style>
+<style>${css()}${consentCss()}</style>
 </head>
 <body>
 ${headerBlock(p.slug)}
@@ -322,6 +323,7 @@ ${headerBlock(p.slug)}
 ${footerBlock()}
 <script>${spaBodyScript(assets.spa)}</script>
 <script type="module" src="${escapeHtml(assets.islandUrl)}"></script>
+<script>${consentScript()}</script>
 </body>
 </html>
 `;

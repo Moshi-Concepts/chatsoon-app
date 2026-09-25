@@ -19,6 +19,7 @@ import QRCode from 'qrcode';
 
 import { API_ORIGIN } from '@chatsoon/shared/src/constants';
 
+import { injectConsentIntoIndexHtml } from '../src/render/consent';
 import { renderHome, type LandingContent } from '../src/render/home';
 import { LEGAL_KEYS, renderLegal, type LegalDoc, type LegalKey } from '../src/render/legal';
 import { DEFAULT_OG_IMAGE } from '../src/render/og-asset';
@@ -256,6 +257,20 @@ async function parseSpaShellAssets(): Promise<SpaAssets> {
   return { styles, entryScriptSrc: scriptMatches[0]![1]! };
 }
 
+// Issue #17: splices the cookie-consent banner's CSS and script into the exported SPA shell so an
+// anonymous visitor lands straight on index.html (e.g. /sign-in) also gets the banner, opt-in GA4 and
+// "Cookie settings" the same way the static and profile pages do. Runs *after* parseSpaShellAssets has
+// already captured index.html's <style> blocks for the profile page's signed-in handoff (handoff.ts's
+// spaBodyScript) — profile.ts injects its own copy of this same CSS, so appending here first would only
+// duplicate it there. The consent script itself never touches #root, so it's always a body-level
+// sibling of it regardless of where its <script> tag lands.
+async function injectConsentIntoShell(): Promise<void> {
+  const file = path.join(outDir, 'index.html');
+  if (!existsSync(file)) return;
+  const html = await readFile(file, 'utf8');
+  await writeFileLogged(file, injectConsentIntoIndexHtml(html));
+}
+
 // Reads KEY=value out of a simple, unquoted .env file (apps/mobile/.env.production's own format).
 async function readEnvValue(envFile: string, key: string): Promise<string | undefined> {
   if (!existsSync(envFile)) return undefined;
@@ -294,6 +309,7 @@ await injectSpaShellOg();
 await assertOgImage();
 const islandUrl = await bundleIsland();
 const spaAssets = await parseSpaShellAssets();
+await injectConsentIntoShell();
 await writeGeneratedAssets(islandUrl, spaAssets);
 await assertProductionBundle(); // last: dist/_p and functions/_generated must exist for it to scan them
 await writeRoutesJson();
