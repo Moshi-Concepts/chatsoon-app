@@ -73,4 +73,7 @@ Present only when there are booking links.
      `dist/index.html`);
   2. appends `<div id="root">`;
   3. loads the SPA entry script.
+- In spa mode, CSS hides `#page`, the site header and the footer. The app's reset sets `body{overflow:hidden}`, so
+  anything left in `<body>` pushes the app off-screen. `#spa-loading` fills the screen until the body script removes
+  it on the app's first render into `#root` (a MutationObserver).
 - The asset strings come from `functions/_generated/assets.ts`, which the build writes (C5).

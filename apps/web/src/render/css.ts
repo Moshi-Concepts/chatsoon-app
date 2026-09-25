@@ -251,8 +251,11 @@ function profileCss(): string {
 #report:hover{background:var(--surface-alt)}
 
 #spa-loading{display:none}
-.spa #page{display:none}
-.spa #spa-loading{display:flex;min-height:60vh;align-items:center;justify-content:center}
+/* Signed-in handoff: the app mounts #root at the end of <body> and its reset sets body{overflow:hidden},
+   so everything else in <body> has to go or the app lands below the fold. The spinner fills the screen
+   until the handoff script removes it on the app's first render. */
+.spa #page,.spa header.site,.spa body>footer{display:none}
+.spa #spa-loading{display:flex;height:100%;align-items:center;justify-content:center}
 .spinner{width:32px;height:32px;border-radius:${Radius.pill}px;border:3px solid var(--border);border-top-color:var(--primary);animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 

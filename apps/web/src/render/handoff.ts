@@ -48,6 +48,9 @@ export function spaBodyScript(spa: SpaAssets): string {
     `if(document.documentElement.classList.contains('spa')){` +
     `document.head.insertAdjacentHTML('beforeend',${jsString(spa.styles)});` +
     `document.body.insertAdjacentHTML('beforeend','<div id="root"></div>');` +
+    // The spinner holds the screen until the app's first render into #root, then goes.
+    `var r=document.getElementById('root'),l=document.getElementById('spa-loading');` +
+    `if(l)new MutationObserver(function(m,o){if(r.firstChild){l.remove();o.disconnect()}}).observe(r,{childList:true});` +
     `var s=document.createElement('script');s.type='module';s.src=${jsString(spa.entryScriptSrc)};` +
     `document.body.appendChild(s);` +
     `}`

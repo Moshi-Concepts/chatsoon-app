@@ -205,7 +205,8 @@ describe('renderProfile', () => {
 
   it('adds the spa-mode CSS and the head/body handoff scripts', () => {
     const html = renderProfile(BASE, ASSETS);
-    expect(html).toContain('.spa #page{display:none}');
+    expect(html).toContain('.spa #page,.spa header.site,.spa body>footer{display:none}');
+    expect(html).toContain("l.remove()");
     expect(html).toContain("classList.add('spa')");
     expect(html).toContain('chatsoon.session');
     expect(html).toContain(ASSETS.spa.entryScriptSrc);
