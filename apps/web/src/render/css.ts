@@ -58,7 +58,7 @@ body{margin:0;background:var(--background);color:var(--text);font:16px/1.6 ${FON
 a{color:var(--primary-text);text-decoration:none}
 a:hover{text-decoration:underline}
 /* A link inside running text must not rely on colour alone (WCAG 1.4.1, Lighthouse link-in-text-block). */
-p a{text-decoration:underline;text-underline-offset:2px}
+p a,.legal li a{text-decoration:underline;text-underline-offset:2px}
 h1,h2,h3,p,ul{margin:0}
 ul{padding-left:1.2em}
 ${typeClasses()}
