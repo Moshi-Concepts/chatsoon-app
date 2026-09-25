@@ -316,6 +316,21 @@
         ]
       },
       {
+        "heading": "How do I delete some of my data without deleting my account?",
+        "paragraphs": [
+          "Chatsoon is published by Moshi Concepts Inc. You can delete individual pieces of your data at any time, in the app or by signing in at https://chatsoon.app:"
+        ],
+        "bullets": [
+          "A contact: open it and tap Delete contact. This deletes the contact with its notes, tags and card photo.",
+          "A note: open the contact, clear the note and save.",
+          "Tags: open the Me tab, tap Manage tags and delete the tags you don't need.",
+          "Your profile photo: open the Me tab, tap Edit profile, then Remove photo.",
+          "Your headline, company, role, links, booking links, and phone, WhatsApp and Signal details: open the Me tab, tap Edit profile, clear what you want to delete and tap Save.",
+          "By email: email hello@chatsoon.app from the address you sign in with and tell us what to delete. We will delete it within 30 days.",
+          "Deleted data is removed from Chatsoon straight away. It rolls off our database provider's backups within 30 days, and technical logs are kept no more than 30 days. Contacts other people saved about you, for example from your public profile or a connection, stay in their accounts. To delete everything, delete your account (below)."
+        ]
+      },
+      {
         "heading": "How do I delete my account?",
         "paragraphs": [
           "Chatsoon is published by Moshi Concepts Inc. You can delete your Chatsoon account in any of these ways, even if you no longer have the app installed:"
