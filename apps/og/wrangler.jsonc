@@ -1,0 +1,13 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "chatsoon-og",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "limits": { "cpu_ms": 2000 },
+  // .woff and .jpg ship as raw bytes (Data), not parsed as code or text — card fonts and the plate.
+  "rules": [{ "type": "Data", "globs": ["**/*.woff", "**/*.jpg"], "fallthrough": true }]
+}

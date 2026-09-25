@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
+    "test": "vitest run",
+    "preview": "tsx scripts/preview.ts",
+    "gen-plate": "tsx scripts/gen-plate.ts"
+  },
   "dependencies": {
     "@chatsoon/shared": "workspace:*",
     "@resvg/resvg-wasm": "2.6.2",

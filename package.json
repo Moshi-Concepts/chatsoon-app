@@ -10,6 +10,7 @@
     "test": "pnpm --filter @chatsoon/shared run test && pnpm --filter @chatsoon/api run test",
     "build:web": "pnpm --filter @chatsoon/web run build",
     "deploy:api": "pnpm --filter @chatsoon/api run deploy",
+    "deploy:og": "pnpm --filter @chatsoon/og exec wrangler deploy",
     "deploy:web": "pnpm --filter @chatsoon/web run deploy",
     "lh": "node scripts/lighthouse.mjs"
   },
