@@ -22,6 +22,10 @@ reminders and similar come later. Do not add them.
 - Mobile env: local dev values (localhost API, Turnstile test key) go only in `apps/mobile/.env.development`, which
   `expo start` reads. Production web values live in `apps/mobile/.env.production`. Never create `apps/mobile/.env` or
   `.env.local`: `expo export` reads both, and dev values would ship to chatsoon.app.
+- On the web, anonymous visitors to `/id/:slug` get `apps/web/src/render/profile.ts` (server-rendered) plus the island in
+  `apps/web/src/client`, not the React screens; signed-in visitors get the app. Any visible change to `ProfileCard`,
+  `ConnectForm`, `ContactPills`, `BookingLinksCard` or `ReportDialog` needs the matching change there (markup
+  contract: `docs/profile-page-dom.md`). Never render phone, WhatsApp or Signal values into server HTML or tags.
 - Web deploys must be Production deployments: `wrangler pages deploy ... --branch main` (`pnpm deploy:web` does this).
 - Camera permission text is exactly: "Used to scan QR codes and photograph business cards". Never request photo library permission.
 
