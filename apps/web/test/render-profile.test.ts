@@ -359,4 +359,38 @@ describe('renderProfile', () => {
       expect(html).toContain('<a class="promo-more" href="/">See how it works</a>');
     });
   });
+
+  describe('badge pill (issue #11)', () => {
+    it('renders no pill markup when there are no badges (the css() rules are always present, but no element uses them)', () => {
+      const html = renderProfile({ ...BASE, badges: [] }, ASSETS);
+      expect(html).not.toMatch(/<span class="badge-pill/);
+      expect(html).not.toContain('id="icon-ribbon-outline"');
+    });
+
+    it('renders the founder pill with the seq in the visible label and the spelled-out aria-label', () => {
+      const html = renderProfile({ ...BASE, badges: [{ badge: 'founder', seq: 37 }] }, ASSETS);
+      expect(html).toContain('<span class="badge-pill badge-pill-founder" aria-label="Founding member number 37">');
+      expect(html).toContain('<span>Founding member #37</span>');
+      expect(html).toContain('id="icon-ribbon-outline"');
+    });
+
+    it('renders the early adopter pill with no seq, and no "#" in its label', () => {
+      const html = renderProfile({ ...BASE, badges: [{ badge: 'early_adopter' }] }, ASSETS);
+      expect(html).toContain('<span class="badge-pill badge-pill-early" aria-label="Early adopter">');
+      expect(html).toContain('<span>Early adopter</span>');
+    });
+
+    it('renders the founder pill with a plain label when seq is absent', () => {
+      const html = renderProfile({ ...BASE, badges: [{ badge: 'founder' }] }, ASSETS);
+      expect(html).toContain('<span class="badge-pill badge-pill-founder" aria-label="Founding member">');
+      expect(html).toContain('<span>Founding member</span>');
+    });
+
+    it('places the pill inside the profile-name-row alongside the <h1>', () => {
+      const html = renderProfile({ ...BASE, badges: [{ badge: 'founder', seq: 1 }] }, ASSETS);
+      const row = html.match(/<div class="profile-name-row">[\s\S]*?<\/div>/)?.[0] ?? '';
+      expect(row).toContain('<h1>');
+      expect(row).toContain('badge-pill-founder');
+    });
+  });
 });

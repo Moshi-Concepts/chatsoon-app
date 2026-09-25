@@ -877,7 +877,13 @@ describe('GET /_pages/referral/:code', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
     const body = (await res.json()) as ReferralPageResult;
-    expect(body).toEqual({ status: 'ok', referral: { displayName: 'pages-referral-owner Person', slug: owner.slug, avatarUrl: null, headline: null } });
+    // ogVersion is a hash of the profile fields (cards are enabled in the test env, see
+    // vitest.config.ts), never null here — asserted separately since its exact value isn't fixed.
+    expect(body).toMatchObject({
+      status: 'ok',
+      referral: { displayName: 'pages-referral-owner Person', slug: owner.slug, avatarVersion: null, headline: null },
+    });
+    if (body.status === 'ok') expect(body.referral.ogVersion).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it('mirrors the not-found case for an unknown code', async () => {

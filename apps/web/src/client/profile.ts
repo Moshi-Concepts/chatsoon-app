@@ -10,6 +10,7 @@
 import { initBooking } from './booking';
 import { initConnect } from './connect';
 import { initCopy } from './copy';
+import { captureReferralFromSearch } from './referral';
 import { initReport } from './report';
 import { initReveal } from './reveal';
 
@@ -29,6 +30,11 @@ export function readConfig(dataset: DOMStringMap): PageConfig | null {
 }
 
 function main(): void {
+  // Issue #11, docs/referrals.md "Web files": `/id/<slug>?ref=<CODE>` stores the code the same way
+  // `/r/<CODE>` does, whether or not the visitor turns out to be signed in below — a signed-in visitor
+  // (an existing account) has nothing to attribute, but storing the code for them anyway is harmless.
+  captureReferralFromSearch(location.search);
+
   if (document.documentElement.classList.contains('spa')) return;
 
   const page = document.getElementById('page');

@@ -75,6 +75,11 @@ describe('css() dark-mode text contrast (regression for the --primary/--primary-
     ['.closing .button', 'primaryText', 'surface'],
     ['.hero-title .accent', 'primaryText', 'background'],
     ['.promo-cta', 'primary', 'onPrimary'],
+    // Badge pill (issue #11, docs/referrals.md "Referral hub"): founder uses the brand primary colour
+    // (the closest token to the spec's "brand magenta" — the design system has no magenta) on its own
+    // soft background; early adopter is the quieter neutral pairing already used elsewhere.
+    ['.badge-pill-founder', 'primaryText', 'primarySoft'],
+    ['.badge-pill-early', 'textSecondary', 'surfaceAlt'],
   ];
 
   describe.each(['light', 'dark'] as const)('in %s mode', (scheme) => {

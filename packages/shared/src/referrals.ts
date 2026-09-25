@@ -131,8 +131,20 @@ export interface ClaimReferralResponse {
 export interface PublicReferralProfile {
   displayName: string;
   slug: string;
-  avatarUrl?: string | null;
+  /**
+   * First 16 hex of SHA-256(avatarKey), or null without a photo — mirrors `PageProfile.avatarVersion`
+   * (docs/referrals.md "Web files", PR 3): the caller builds `/id/<slug>/photo?v=` itself, the same way
+   * the profile page does, rather than being handed a signed, time-limited R2 URL for a page anyone can
+   * request by guessing a code.
+   */
+  avatarVersion?: string | null;
   headline?: string | null;
+  /**
+   * Version of the inviter's personalised share card (16 hex), or null to fall back to the default
+   * image (PR 3, docs/referrals.md "Web files": "OG: reuse the profile's card ... for the /r/ page's
+   * og:image"). Mirrors `PageProfile.ogVersion`; the caller builds `/id/<slug>/og.jpg?v=` itself.
+   */
+  ogVersion?: string | null;
 }
 
 export type ReferralPageResult = { status: 'ok'; referral: PublicReferralProfile } | { status: 'not_found' };

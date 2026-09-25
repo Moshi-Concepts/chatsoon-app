@@ -15,6 +15,11 @@ sides must follow this file. Change it first if the contract changes.
   - `data-visibility`: `connections` or `public` (contact visibility).
 - One `<script type="module" src="/_p/profile-<hash>.js">` near the end of `<body>`. Nothing else external loads at
   page load: no fonts, no Turnstile, no third-party requests.
+- **Referral attribution (issue #11):** the island calls `captureReferralFromSearch(location.search)`
+  (`src/client/referral.ts`) before anything else in `main()`, regardless of `spa` mode. A valid `?ref=`
+  writes the `cs_ref` cookie (`document.cookie`, same attributes as the `/r/<code>` landing page's own
+  Set-Cookie) and `localStorage.cs_ref`; a missing or invalid one is a silent no-op. This changes no
+  markup and no Function-level caching — the page renders identically either way.
 
 ## Profile card
 
@@ -22,6 +27,16 @@ sides must follow this file. Change it first if the contract changes.
   - With a photo: `<img id="avatar" src="/id/<slug>/photo?v=<avatarVersion>" srcset="/id/<slug>/photo?v=<avatarVersion>&w=208 208w, /id/<slug>/photo?v=<avatarVersion>&w=368 368w, /id/<slug>/photo?v=<avatarVersion>&w=416 416w, /id/<slug>/photo?v=<avatarVersion>&w=512 512w" sizes="208px" width="208" height="208" alt="<name>" fetchpriority="high" decoding="async">` (issue #23: `src` is the plain, no-`w` URL — the API's own 416 default, kept as the fallback for anything that ignores `srcset`; the `&` in each URL is escaped to `&amp;`). Never lazy-loaded. JSON-LD's `image` and the OG image keep the plain `src` URL, with no `w` at all.
   - Without one: `<div class="avatar initials" aria-hidden="true">AB</div>`.
 - **Text:** `<h1>` with the name, then the headline and the role line as text.
+- **Badge pill (issue #11, docs/referrals.md "Referral hub"):** when `p.badges` carries one (at most one
+  in practice), a pill sits next to the name inside a `<div class="profile-name-row">` wrapping the
+  `<h1>`: `<span class="badge-pill badge-pill-founder" aria-label="Founding member number 37">` (or
+  `badge-pill-early`, `aria-label="Early adopter"`) containing the `ribbon-outline` icon and a `<span>`
+  with the visible label — `Founding member #37` (founder, when `seq` is present) or `Early adopter`.
+  `aria-label` on the pill replaces its whole accessible name (icon included), so "#37" is never spoken
+  literally. Labels come from `BADGE_LABELS` (`packages/shared/src/referrals.ts`). Founder is styled
+  `--primary-soft`/`--primary-text` (the closest token to the spec's brand magenta that clears 4.5:1 in
+  both colour schemes — the design system has no magenta); early adopter is `--surface-alt`/
+  `--text-secondary`. Matches the app's `ProfileCard` (`apps/mobile/src/components/web/profile-card.tsx`).
 - **Links:** `<ul class="links">`. Each item is `<a href target="_blank" rel="me noopener noreferrer">`, containing an
   inline SVG icon, the visible label, and `<span class="sr-only">(opens in a new tab)</span>`.
   - **Discord (issue #21):** a numeric user id renders like every other link above. A username or legacy
