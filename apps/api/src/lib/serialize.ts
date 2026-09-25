@@ -12,6 +12,7 @@ import {
   type ContactVisibility,
   type ExtractionStatus,
   type MyProfile,
+  type PageProfile,
   type ProfileContact,
   type ProfileLinks,
   type PublicProfile,
@@ -20,6 +21,7 @@ import {
 
 import type { ContactRow, EventRow, ProfileRow, TagRow } from '../db/schema';
 import type { Env } from '../env';
+import { cardsEnabled, currentOgVersion, hashKey16 } from './og';
 import { signedFileUrl } from './signing';
 
 const iso = (d: Date) => d.toISOString();
@@ -130,6 +132,32 @@ export async function toPublicProfile(
 export async function toMyProfile(env: Env, row: ProfileRow): Promise<MyProfile> {
   const profile = await toPublicProfile(env, row);
   return { ...profile, userId: row.userId, avatarKey: row.avatarKey, contact: parseContact(row.contact) };
+}
+
+/**
+ * The whitelisted DTO behind GET /_pages/profile/:slug (docs/og-plan.md §3.1, §3.3): built from
+ * `toPublicProfile` with no options, so it never carries `contact` values, `avatarUrl` or `vcardUrl`.
+ * `ogVersion` is null whenever a personalised card can't be produced (the kill switch, or no OG
+ * binding), so the caller falls back to the default image with no extra check of its own.
+ */
+export async function toPageProfile(env: Env, row: ProfileRow): Promise<PageProfile> {
+  const pub = await toPublicProfile(env, row);
+  return {
+    slug: pub.slug,
+    displayName: pub.displayName,
+    headline: pub.headline,
+    company: pub.company,
+    role: pub.role,
+    links: pub.links,
+    bookingLinks: pub.bookingLinks,
+    contactChannels: pub.contactChannels ?? [],
+    contactVisibility: pub.contactVisibility ?? 'connections',
+    avatarVersion: row.avatarKey ? await hashKey16(row.avatarKey) : null,
+    updatedAt: row.updatedAt.toISOString(),
+    // False until the search-visibility setting ships (Stage D).
+    indexable: false,
+    ogVersion: cardsEnabled(env) ? await currentOgVersion(row) : null,
+  };
 }
 
 export async function toContact(

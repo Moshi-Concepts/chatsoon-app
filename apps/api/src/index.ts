@@ -12,6 +12,7 @@ import { eventsRoutes } from './routes/events';
 import { extractRoutes } from './routes/extract';
 import { filesRoutes } from './routes/files';
 import { moderationRoutes } from './routes/moderation';
+import { pagesRoutes } from './routes/pages';
 import { profileRoutes } from './routes/profile';
 import { publicRoutes } from './routes/public';
 import { tagsRoutes } from './routes/tags';
@@ -28,6 +29,7 @@ import { tagsRoutes } from './routes/tags';
 //   POST /files  GET /files/*  DELETE /files/card                     routes/files.ts
 //   POST /extract/card                                                routes/extract.ts
 //   POST /reports  POST /blocks  DELETE /blocks/:userId               routes/moderation.ts
+//   GET /_pages/profile/:slug  GET /_pages/og/:slug (secret-gated)     routes/pages.ts
 
 const app = new Hono<AppEnv>();
 
@@ -73,5 +75,6 @@ app.route('/', eventsRoutes);
 app.route('/', filesRoutes);
 app.route('/', extractRoutes);
 app.route('/', moderationRoutes);
+app.route('/', pagesRoutes);
 
 export default app;

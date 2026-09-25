@@ -249,9 +249,14 @@ describe('DELETE /me', () => {
     const b = await signIn('wipe-b@example.com');
     const c = await signIn('wipe-c@example.com');
 
-    // Profile, avatar and card uploads.
+    // Profile, avatar, card and rendered share-card (og) uploads.
     const avatarKey = await putFile(a.userId, 'avatar');
     const cardKeys = [await putFile(a.userId, 'card'), await putFile(a.userId, 'card')];
+    // Not produced through PUT /me/profile here (that's covered in pages.test.ts): a plain R2 object
+    // is enough to prove deleteUserFiles' whole-prefix sweep (account.ts) also catches u/<id>/og/*
+    // (docs/og-plan.md §4 WP-4, "Checked for this plan": the sweep already covers it, unchanged).
+    const ogFileKey = `u/${a.userId}/og/deadbeefcafefeed.jpg`;
+    await env.FILES.put(ogFileKey, 'rendered-og-card-bytes');
     const aSlug = await addProfile(a.userId, 'Wipe A', avatarKey);
     const bAvatar = await putFile(b.userId, 'avatar');
     await addProfile(b.userId, 'Wipe B', bAvatar);
@@ -312,17 +317,18 @@ describe('DELETE /me', () => {
 
     const before = await rowsFor(a.userId, emailA);
     for (const [table, n] of Object.entries(before)) expect(n, table).toBeGreaterThan(0);
-    expect(await countFiles(`u/${a.userId}/`)).toBe(3);
+    expect(await countFiles(`u/${a.userId}/`)).toBe(4);
 
     const res = await call('/me', { method: 'DELETE', token: a.token });
     expect(res.status).toBe(204);
     expect(await res.text()).toBe('');
 
-    // Nothing left for A in any table or in R2.
+    // Nothing left for A in any table or in R2, including the rendered og card.
     expect(await rowsFor(a.userId, emailA)).toEqual(ZERO_ROWS);
     await expectNoRowsReferencing(a.userId);
     expect(await count('SELECT count(*) n FROM verifications WHERE identifier = ?', `sign-in-otp-${emailA}`)).toBe(0);
     expect(await countFiles(`u/${a.userId}/`)).toBe(0);
+    expect(await env.FILES.head(ogFileKey)).toBeNull();
 
     // Every old token is dead.
     for (const token of [a.token, secondSession.token]) {
@@ -410,7 +416,8 @@ describe('DELETE /me', () => {
     await postJson('/reports', b.token, { targetSlug: a.slug, reason: 'other' });
     await postJson('/blocks', a.token, { targetSlug: c.slug });
     await postJson('/blocks', c.token, { targetSlug: a.slug });
-    expect(await countFiles(`u/${a.userId}/`)).toBe(2);
+    // Avatar, card photo, and the share card PUT /me/profile pre-rendered for the avatar change.
+    expect(await countFiles(`u/${a.userId}/`)).toBe(3);
 
     const res = await call('/me', { method: 'DELETE', token: a.token });
     expect(res.status).toBe(204);

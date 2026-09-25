@@ -16,9 +16,7 @@ const card: OgCard = {
 
 /** Re-implements the O10 formula independently, so tests don't just echo the source under test. */
 async function referenceOgVersion(templateVersion: string, c: OgCard, avatarKey: string | null): Promise<string> {
-  const input = [templateVersion, c.displayName, c.role ?? '', c.company ?? '', c.headline ?? '', avatarKey ?? ''].join(
-    '\u0000',
-  );
+  const input = JSON.stringify([templateVersion, c.displayName, c.role, c.company, c.headline, avatarKey]);
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -82,5 +80,15 @@ describe('computeOgVersion', () => {
     expect(withOtherKey).not.toBe(withKey);
     expect(withNoKey).not.toBe(withKey);
     expect(withNoKey).not.toBe(withOtherKey);
+  });
+
+  it('does not collide when a field boundary shifts across an embedded NUL', async () => {
+    // Regression: none of the schemas that validate these fields (packages/shared/src/schemas.ts)
+    // reject a literal NUL, so a plain '\u0000'-joined string isn't collision-safe. Moving
+    // `card.role` (plus a NUL) onto the end of `displayName`, while shrinking `role` down to what
+    // was after that NUL, reproduces the exact same '\u0000'-joined string under the old formula.
+    const original: OgCard = { ...card, role: `${card.role}\u0000b` };
+    const shifted: OgCard = { ...card, displayName: `${card.displayName}\u0000${card.role}`, role: 'b' };
+    expect(await computeOgVersion(original, 'avatar-key')).not.toBe(await computeOgVersion(shifted, 'avatar-key'));
   });
 });

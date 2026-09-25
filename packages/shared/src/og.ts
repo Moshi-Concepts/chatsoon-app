@@ -49,18 +49,24 @@ export function toOgCard(p: OgCard): OgCard {
 
 /**
  * 16 hex characters, stable for the same inputs, and different whenever `OG_TEMPLATE_VERSION`, any
- * of the 4 card fields, or `avatarKey` changes (O10). SHA-256 over those 6 values, `\u0000`-joined
- * (null becomes `''`); none of these fields can contain a NUL, so the join can't collide.
+ * of the 4 card fields, or `avatarKey` changes (O10). SHA-256 over those 6 values, JSON-array-encoded
+ * (not `\u0000`-joined: the schemas that validate these fields only `.trim()` and check for
+ * profanity, so a field can legally contain a literal NUL, and a delimiter that can also appear
+ * inside a value isn't collision-safe — e.g. displayName: "Ann\u0000Lee", role: "b" would hash the
+ * same as displayName: "Ann", role: "Lee\u0000b" under a plain join, since shifting content across
+ * the delimiter leaves the flattened string unchanged). `JSON.stringify` escapes quotes/backslashes/
+ * control characters and keeps `null` distinct from `''`, so distinct field tuples always serialize
+ * to distinct strings.
  */
 export async function computeOgVersion(card: OgCard, avatarKey: string | null): Promise<string> {
-  const input = [
+  const input = JSON.stringify([
     OG_TEMPLATE_VERSION,
     card.displayName,
-    card.role ?? '',
-    card.company ?? '',
-    card.headline ?? '',
-    avatarKey ?? '',
-  ].join('\u0000');
+    card.role,
+    card.company,
+    card.headline,
+    avatarKey,
+  ]);
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, '0'))

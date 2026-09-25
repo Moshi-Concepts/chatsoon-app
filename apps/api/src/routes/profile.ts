@@ -15,6 +15,7 @@ import { getDb, type DB } from '../lib/db';
 import { ApiError, badRequest, parseJson, unauthorized } from '../lib/errors';
 import { shortSuffix } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
+import { refreshOgCard } from '../lib/og';
 import { findProfileByUserId, isAvatarKey } from '../lib/profiles';
 import { parseContact, parseLinks, toMyProfile } from '../lib/serialize';
 import { seedDefaultTags } from '../lib/tags';
@@ -130,6 +131,9 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
       c.env.FILES.delete(previousAvatar).catch((err) => console.error('Deleting old avatar failed', err)),
     );
   }
+  // Pre-renders the share card for the new version (if it isn't already stored) and clears out every
+  // other version, so a share right after saving never waits on a render (O9). Never fails the save.
+  c.executionCtx.waitUntil(refreshOgCard(c.env, row));
 
   return c.json(await toMyProfile(c.env, row));
 });
