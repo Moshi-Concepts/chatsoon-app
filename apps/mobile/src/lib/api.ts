@@ -10,6 +10,7 @@ import type {
   ContactCreateInput,
   ContactsResponse,
   ContactUpdateInput,
+  EmailPrefsResponse,
   EventsResponse,
   ExtractCardResponse,
   Me,
@@ -218,6 +219,9 @@ export const api = {
   me: {
     get: () => request<Me>('GET', '/me'),
     updateProfile: (input: ProfileInput) => request<MyProfile>('PUT', '/me/profile', { body: input }),
+    /** Turns the new-account "tips" nudge emails on or off (issue #7). Works even before onboarding. */
+    updateEmailPrefs: (tipsEmails: boolean) =>
+      request<EmailPrefsResponse>('PUT', '/me/email-prefs', { body: { tipsEmails } }),
     /**
      * Schedules delayed account deletion (issue #8), or runs it immediately for the App Review
      * account. Idempotent. Deleting every file and row (for the reviewer) can take a while; a
@@ -239,6 +243,16 @@ export const api = {
     cancelByToken: (token: string) =>
       request<CancelDeletionByTokenResponse>('POST', '/account-deletion/cancel', {
         body: { token },
+        skipAuthHandler: true,
+      }),
+  },
+
+  /** The signed-out /unsubscribe page (issue #7), reached from a tips email's link. No auth. */
+  email: {
+    unsubscribe: (token: string) =>
+      request<{ ok: true }>('POST', '/email/unsubscribe', {
+        query: { token },
+        body: {},
         skipAuthHandler: true,
       }),
   },

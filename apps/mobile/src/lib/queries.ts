@@ -53,6 +53,15 @@ export function useUpdateProfile() {
   });
 }
 
+/** Turns the "tips" emails setting on or off (issue #7, Me tab) and refreshes `me` so the switch stays in sync. */
+export function useUpdateEmailPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tipsEmails: boolean) => api.me.updateEmailPrefs(tipsEmails),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.me }),
+  });
+}
+
 /** Schedules delayed account deletion (issue #8), or deletes immediately for the reviewer account. */
 export function useScheduleDeletion() {
   return useMutation({ mutationFn: () => api.me.scheduleDeletion() });

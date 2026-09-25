@@ -17,6 +17,7 @@ tag, not from `main`, because `main` already contains the features below.
 | Privacy text: link previews | 25 Sep 2026 | No: policy only | — |
 | Search visibility switch (#14) | 25 Sep 2026 | No: JS only | — |
 | Delayed account deletion with export prompt (#8) | 26 Sep 2026 | No: JS only, but native must switch off `DELETE /me` to `POST /me/deletion` | — |
+| Connect form tips opt-in and Tips emails setting (#7) | 26 Sep 2026 | No: JS only | — |
 
 ## Releasing a batch to the apps
 

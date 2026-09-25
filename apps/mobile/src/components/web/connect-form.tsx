@@ -5,7 +5,7 @@ import { Link } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions, type TextInput } from 'react-native';
 
-import { Button, Card, Icon, Text, TextField } from '@/components/ui';
+import { Button, Card, Checkbox, Icon, Text, TextField } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError, api } from '@/lib/api';
@@ -41,6 +41,7 @@ export function ConnectForm({
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [note, setNote] = useState('');
+  const [tipsOptIn, setTipsOptIn] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const turnstile = useRef<TurnstileHandle>(null);
@@ -56,7 +57,7 @@ export function ConnectForm({
   });
 
   const submit = () => {
-    const parsed = connectFormSchema.safeParse({ name, contact, note, turnstileToken: token ?? '' });
+    const parsed = connectFormSchema.safeParse({ name, contact, note, tipsOptIn, turnstileToken: token ?? '' });
     if (!parsed.success) {
       const next: FieldErrors = {};
       for (const issue of parsed.error.issues) {
@@ -173,6 +174,22 @@ export function ConnectForm({
         editable={!busy}
       />
 
+      <View style={styles.tipsOptIn}>
+        <Checkbox
+          checked={tipsOptIn}
+          onChange={setTipsOptIn}
+          label="Email me tips to set up my own free Chatsoon profile"
+          disabled={busy}
+        />
+        <Text variant="caption" color="textTertiary">
+          Optional. Unsubscribe any time.{' '}
+          <Text variant="caption" color="primary" {...externalLinkProps('/privacy#emails-we-send', { newTab: true })}>
+            Privacy policy
+          </Text>
+          .
+        </Text>
+      </View>
+
       <Turnstile ref={turnstile} onToken={setToken} />
 
       {errors.form ? (
@@ -214,6 +231,7 @@ const styles = StyleSheet.create({
   // Leaves room for the 300px Turnstile widget on 375px phones.
   cardNarrow: { padding: Spacing.four },
   heading: { gap: Spacing.one },
+  tipsOptIn: { gap: Spacing.one },
   formError: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -20,6 +20,8 @@ export interface ConnectFormValues {
   name: string;
   contact: string;
   note: string;
+  /** The "Email me tips..." checkbox (issue #7): true only when ticked. */
+  tipsOptIn: boolean;
 }
 
 export type ConnectFieldErrors = Partial<Record<'name' | 'contact' | 'note', string>>;
@@ -52,10 +54,18 @@ export interface ConnectPayload {
   contact: string;
   note: string;
   turnstileToken: string;
+  /** The "Email me tips..." checkbox (issue #7): true only when ticked, otherwise false. */
+  tipsOptIn: boolean;
 }
 
 export function buildConnectPayload(values: ConnectFormValues, turnstileToken: string): ConnectPayload {
-  return { name: values.name.trim(), contact: values.contact.trim(), note: values.note.trim(), turnstileToken };
+  return {
+    name: values.name.trim(),
+    contact: values.contact.trim(),
+    note: values.note.trim(),
+    tipsOptIn: values.tipsOptIn,
+    turnstileToken,
+  };
 }
 
 /** connect-form.tsx's `errorMessage`: the shared mapping first, then the server's own message. */
@@ -82,10 +92,16 @@ export function buildSuccessContent(config: ConnectConfig, data: ConnectFormResp
 
 function readValues(form: HTMLFormElement): ConnectFormValues {
   const data = new FormData(form);
+  // Unchecked checkboxes are omitted from FormData entirely, so the checkbox element's own
+  // `.checked` is read directly rather than via `data.get('tipsOptIn')` (which would only ever be
+  // 'on' or null): true only when ticked, false in every other case (unticked, or the element
+  // somehow missing).
+  const tipsCheckbox = form.elements.namedItem('tipsOptIn');
   return {
     name: String(data.get('name') ?? ''),
     contact: String(data.get('contact') ?? ''),
     note: String(data.get('note') ?? ''),
+    tipsOptIn: tipsCheckbox instanceof HTMLInputElement && tipsCheckbox.checked,
   };
 }
 

@@ -229,6 +229,11 @@ function connectSection(p: PageProfile): string {
 <label for="cf-note">Note (optional)</label>
 <textarea id="cf-note" name="note" maxlength="${CONNECT_FORM_MAX.note}"></textarea>
 </div>
+<div class="checkbox-row">
+<input type="checkbox" id="cf-tips" name="tipsOptIn">
+<label for="cf-tips">Email me tips to set up my own free Chatsoon profile</label>
+</div>
+<p class="tips-note">Optional. Unsubscribe any time. <a href="/privacy#emails-we-send" target="_blank" rel="noopener noreferrer">Privacy policy<span class="sr-only"> (opens in a new tab)</span></a>.</p>
 <div id="turnstile-slot" style="min-height:65px"></div>
 <p id="connect-error" role="alert" hidden></p>
 <button type="submit" class="button button-primary button-block">Send</button>

@@ -21,7 +21,7 @@
           "Your contacts: the people you add and what you record about them, such as their name, company, role, email, phone, social handles, notes, tags, priority and the event where you met.",
           "Card and badge photos: photos you take of business cards or event badges so Chatsoon can read the details for you.",
           "Connections: when you connect with another Chatsoon user by scanning their QR code, we record that you are connected and, if you set one, the event where you met.",
-          "Connect form submissions: when someone sends you their details from your public profile page, we store the name, email address and note they entered, and email you to say they connected.",
+          "Connect form submissions: when someone sends you their details from your public profile page, we store the name, email address and note they entered, and email you to say they connected. If they tick the tips emails checkbox, we also store that choice and when they agreed to it.",
           "Reports and blocks: if you report or block someone, we store the block, or the report (who or what it's about, the reason and any details you add, and for a reported Connect form message, a copy of that message), and send the report to our moderation inbox for review.",
           "Technical logs: basic information our servers record when the app or website makes a request, such as IP address, device and browser type, and the time and result of the request."
         ]
@@ -66,7 +66,16 @@
         "heading": "Connecting with people",
         "paragraphs": [
           "When two Chatsoon users connect by scanning a QR code in the app, each of them receives the other's public profile, including their mobile number if they added one, as a contact. That copy stays in their contacts if you later change or remove your number.",
-          "When you fill in the Connect form on someone's public profile page, the name, email address and note you enter are sent to that profile's owner and saved in their contacts. Only share details you're happy for them to have. Once they have your details, the profile owner is responsible for how they use them. The form is protected by Cloudflare Turnstile, which checks that a person, not a bot, is sending it."
+          "When you fill in the Connect form on someone's public profile page, the name, email address and note you enter are sent to that profile's owner and saved in their contacts. Only share details you're happy for them to have. Once they have your details, the profile owner is responsible for how they use them. The form is protected by Cloudflare Turnstile, which checks that a person, not a bot, is sending it. The form also has an optional box to email you tips for setting up your own free Chatsoon profile; see Emails we send below."
+        ]
+      },
+      {
+        "heading": "Emails we send",
+        "paragraphs": [
+          "Account emails: sign-in codes, notices when someone connects with you, and account deletion notices. These are part of the service and can't be turned off while you have an account.",
+          "Tips for people who connect with you: if you tick \"Email me tips to set up my own free Chatsoon profile\" on a Connect form, we send up to three emails over about a week about creating a free profile, and stop when you sign up or unsubscribe. We keep a record of when you agreed and the wording you agreed to.",
+          "Tips for account holders: after you sign up, we may send up to two emails with tips for finishing your profile and sharing your link. Turn them off in Me › Tips emails or with the unsubscribe link in any tips email.",
+          "Every tips email has an unsubscribe link and identifies us, and we never include other people's messages in them."
         ]
       },
       {

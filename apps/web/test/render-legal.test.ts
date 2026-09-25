@@ -67,6 +67,12 @@ it('the privacy page has the #analytics-cookies anchor from an "Analytics cookie
   expect(html).toContain('<h2>Analytics cookies</h2>');
 });
 
+it('the privacy page has the #emails-we-send anchor from an "Emails we send" section (issue #7)', () => {
+  const html = renderLegal('privacy', legal.privacy);
+  expect(html).toContain('id="emails-we-send"');
+  expect(html).toContain('<h2>Emails we send</h2>');
+});
+
 it('only adds a table of contents past 6 sections', () => {
   for (const key of KEYS) {
     const html = renderLegal(key, legal[key]);

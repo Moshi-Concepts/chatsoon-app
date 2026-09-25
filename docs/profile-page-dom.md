@@ -52,6 +52,7 @@ Present only when there are booking links.
   - `<label for="cf-name">`, then `<input id="cf-name" name="name" autocomplete="name" maxlength=CONNECT_FORM_MAX.name required>`
   - `<label for="cf-contact">Email</label>`, then `<input id="cf-contact" name="contact" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength=CONNECT_FORM_MAX.contact required>` (issue #10: email address only, still named `contact` on the wire)
   - `<label for="cf-note">`, then `<textarea id="cf-note" name="note" maxlength=CONNECT_FORM_MAX.note>`
+  - a tips opt-in checkbox (issue #7): `<div class="checkbox-row"><input type="checkbox" id="cf-tips" name="tipsOptIn"><label for="cf-tips">Email me tips to set up my own free Chatsoon profile</label></div>`, unticked by default, 20px box with `accent-color` primary, 44px tall tap target. Followed by `<p class="tips-note">Optional. Unsubscribe any time. <a href="/privacy#emails-we-send" target="_blank" rel="noopener noreferrer">Privacy policy<span class="sr-only"> (opens in a new tab)</span></a>.</p>`.
   - `<div id="turnstile-slot" style="min-height:65px"></div>` (not `id="turnstile"`: an element id becomes a `window` global and would shadow the Turnstile API)
   - `<p id="connect-error" role="alert" hidden></p>`
   - `<button type="submit" class="button primary">Send</button>`

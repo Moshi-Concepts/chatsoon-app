@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { router, Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Switch, View } from 'react-native';
 
 import { DeletionBanner } from '@/components/deletion-banner';
 import { Avatar, Button, Card, ListRow, Screen, Section, Text } from '@/components/ui';
@@ -14,7 +14,7 @@ import { confirm, showError } from '@/lib/dialogs';
 import { deleteExportedFiles, exportContactsCsv } from '@/lib/export';
 import { roleLine } from '@/lib/format';
 import { useOutbox } from '@/lib/outbox';
-import { useMe } from '@/lib/queries';
+import { useMe, useUpdateEmailPrefs } from '@/lib/queries';
 
 // Web only: apps/web/src/render/consent.ts (issue #17) sets this global on every page it renders,
 // including the exported SPA shell, so the Me tab's "Cookie settings" row (below) can reopen the same
@@ -40,6 +40,7 @@ export default function MeScreen() {
   const me = useMe();
   const { signOut } = useAuth();
   const { items: unsynced } = useOutbox();
+  const emailPrefs = useUpdateEmailPrefs();
   const [exporting, setExporting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -57,6 +58,12 @@ export default function MeScreen() {
   const url = profileUrl(profile.slug);
   const subtitle = roleLine(profile.role, profile.company);
   const busy = signingOut;
+  // Older cached `me` responses lack tipsEmails; true (opted in) is the server's own default too.
+  const tipsEmails = me.data.tipsEmails ?? true;
+
+  const toggleTipsEmails = (value: boolean) => {
+    emailPrefs.mutate(value, { onError: (err) => showError(err, "Couldn't update tips emails") });
+  };
 
   const openPublicPage = async () => {
     if (Platform.OS === 'web') {
@@ -189,6 +196,26 @@ export default function MeScreen() {
           />
         ) : null}
         <ListRow icon="help-circle-outline" title="Support" onPress={() => router.push('/support')} />
+      </Section>
+
+      <Section title="Preferences">
+        <ListRow
+          icon="mail-outline"
+          title="Tips emails"
+          subtitle="Occasional emails to help you get more out of Chatsoon. Sign-in codes and account emails always arrive."
+          chevron={false}
+          right={
+            <Switch
+              value={tipsEmails}
+              onValueChange={toggleTipsEmails}
+              disabled={emailPrefs.isPending}
+              trackColor={{ false: theme.border, true: theme.primary }}
+              thumbColor={theme.surface}
+              ios_backgroundColor={theme.border}
+              accessibilityLabel="Tips emails"
+            />
+          }
+        />
       </Section>
 
       <Section

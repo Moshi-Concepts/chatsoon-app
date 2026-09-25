@@ -132,6 +132,18 @@ describe('renderProfile', () => {
     expect(html).toContain('<div id="turnstile-slot" style="min-height:65px"></div>');
   });
 
+  it('renders the tips opt-in checkbox unticked by default, with its label and privacy link', () => {
+    const html = renderProfile(BASE, ASSETS);
+    expect(html).toContain('<input type="checkbox" id="cf-tips" name="tipsOptIn">');
+    expect(html).not.toMatch(/id="cf-tips"[^>]*checked/);
+    expect(html).toContain('<label for="cf-tips">Email me tips to set up my own free Chatsoon profile</label>');
+    expect(html).toContain('Optional. Unsubscribe any time.');
+    expect(html).toContain('href="/privacy#emails-we-send"');
+    // Between the note field and the Turnstile slot (spec order: note, tips checkbox, Turnstile/Send).
+    expect(html.indexOf('id="cf-note"')).toBeLessThan(html.indexOf('id="cf-tips"'));
+    expect(html.indexOf('id="cf-tips"')).toBeLessThan(html.indexOf('id="turnstile-slot"'));
+  });
+
   it('gzips to 14 KB or less with 5 links and 5 booking links', () => {
     const html = renderProfile(BASE, ASSETS);
     expect(gzipSync(Buffer.from(html, 'utf8')).byteLength).toBeLessThanOrEqual(14 * 1024);

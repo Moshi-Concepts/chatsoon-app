@@ -243,6 +243,10 @@ function profileCss(): string {
 
 #connect{display:flex;flex-direction:column;gap:${Spacing.three}px}
 #connect-form{display:flex;flex-direction:column;gap:${Spacing.four}px}
+.checkbox-row{display:flex;align-items:center;gap:${Spacing.two}px;min-height:44px}
+.checkbox-row input[type="checkbox"]{width:20px;height:20px;flex:none;margin:0;accent-color:var(--primary)}
+.checkbox-row label{font-size:15px}
+.tips-note{color:var(--text-tertiary);font-size:13px;margin:0}
 .connect-privacy{color:var(--text-tertiary);font-size:13px;margin:0;text-align:center}
 #connect-error{display:flex;align-items:center;gap:${Spacing.two}px;padding:${Spacing.three}px;border-radius:${Radius.md}px;background:var(--danger-soft);color:var(--danger-text)}
 #connect-error[hidden],#connect-success[hidden]{display:none}

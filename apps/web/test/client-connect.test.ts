@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildConnectPayload, buildSuccessContent, mapConnectError, validateConnectForm } from '../src/client/connect';
 
 describe('validateConnectForm', () => {
-  const valid = { name: 'Jordan Lee', contact: 'jordan@example.com', note: '' };
+  const valid = { name: 'Jordan Lee', contact: 'jordan@example.com', note: '', tipsOptIn: false };
 
   it('passes a valid submission', () => {
     expect(validateConnectForm(valid)).toBeNull();
@@ -48,12 +48,21 @@ describe('validateConnectForm', () => {
 
 describe('buildConnectPayload', () => {
   it('trims every field and carries the token through', () => {
-    expect(buildConnectPayload({ name: ' Jordan ', contact: ' jordan@example.com ', note: ' hi ' }, 'tok')).toEqual({
+    expect(
+      buildConnectPayload({ name: ' Jordan ', contact: ' jordan@example.com ', note: ' hi ', tipsOptIn: false }, 'tok'),
+    ).toEqual({
       name: 'Jordan',
       contact: 'jordan@example.com',
       note: 'hi',
+      tipsOptIn: false,
       turnstileToken: 'tok',
     });
+  });
+
+  it('sends tipsOptIn true only when the checkbox was checked', () => {
+    const base = { name: 'Jordan', contact: 'jordan@example.com', note: '' };
+    expect(buildConnectPayload({ ...base, tipsOptIn: true }, 'tok').tipsOptIn).toBe(true);
+    expect(buildConnectPayload({ ...base, tipsOptIn: false }, 'tok').tipsOptIn).toBe(false);
   });
 });
 

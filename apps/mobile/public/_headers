@@ -64,6 +64,11 @@
 /cancel-deletion
   X-Robots-Tag: noindex
 
+# Reached only from a tips email's unsubscribe link (issue #7): a token URL, not a page anyone should
+# land on from search.
+/unsubscribe
+  X-Robots-Tag: noindex
+
 /llms.txt
   Cache-Control: public, max-age=3600
 
