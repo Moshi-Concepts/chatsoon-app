@@ -63,6 +63,10 @@ export default defineConfig(async () => {
     ],
     test: {
       setupFiles: ['./test/setup.ts'],
+      // Integration tests sign up several accounts through the real auth routes (OTP, profile save,
+      // tag seeding) before asserting, which can pass 5 s on a shared CI runner. CI run 36176621104
+      // timed out the sitemap test at 5 s while every assertion would have passed.
+      testTimeout: 20_000,
     },
   };
 });
