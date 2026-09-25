@@ -328,28 +328,32 @@ function MemberActions({ profile, onReport }: { profile: PublicProfile; onReport
 /** Signed out on the web: the visitor who scanned a QR code with their phone camera. */
 function VisitorActions({ profile, onReport }: { profile: PublicProfile; onReport: () => void }) {
   const theme = useTheme();
-  const [sent, setSent] = useState(false);
   return (
     <View style={styles.actions}>
-      <ConnectForm slug={profile.slug} firstName={firstName(profile.displayName)} onSent={() => setSent(true)} />
-      {sent ? null : (
-        <Card style={styles.promo}>
-          <View style={styles.promoRow}>
-            <View style={[styles.iconBadge, { backgroundColor: theme.primarySoft }]}>
-              <Icon name="qr-code-outline" size={20} color="primary" />
-            </View>
-            <View style={styles.flex}>
-              <Text variant="bodyStrong">Get your own profile</Text>
-              <Text variant="caption" color="textSecondary">
-                Share your QR, scan business cards and follow up with everyone you meet at events.
-              </Text>
-            </View>
-          </View>
-          <Link href="/" asChild>
-            <Button title="Get Chatsoon" size="md" variant="secondary" />
-          </Link>
-        </Card>
-      )}
+      <ConnectForm slug={profile.slug} firstName={firstName(profile.displayName)} />
+      {/* A solid brand-purple card, not green: green means success elsewhere in the app (issue #16).
+          Stays visible after the Connect form is sent. */}
+      <View style={[styles.promo, { backgroundColor: theme.primary }]}>
+        <View style={[styles.iconBadge, styles.promoBadge]}>
+          <Icon name="qr-code-outline" size={20} color="onPrimary" />
+        </View>
+        <Text variant="bodyStrong" color="onPrimary" align="center">
+          Get your own free profile
+        </Text>
+        <Text variant="caption" color="onPrimary" align="center">
+          Share your QR, scan business cards and follow up with everyone you meet at events.
+        </Text>
+        <Link href="/sign-in" asChild>
+          <Button title="Create your free profile" variant="inverse" />
+        </Link>
+        <Link href="/" asChild>
+          <Pressable accessibilityRole="link" hitSlop={8}>
+            <Text variant="captionStrong" color="onPrimary" style={styles.promoLink}>
+              See how it works
+            </Text>
+          </Pressable>
+        </Link>
+      </View>
       <View style={styles.safety}>
         <QuietAction icon="flag-outline" label="Report profile" onPress={onReport} />
       </View>
@@ -427,8 +431,11 @@ const styles = StyleSheet.create({
   ownCard: { gap: Spacing.four },
   ownRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   iconBadge: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  promo: { gap: Spacing.four },
-  promoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  // Matches Card's own radius/padding (apps/mobile/src/components/ui/card.tsx) since this promo card
+  // swaps Card's neutral surface for a solid `primary` fill (issue #16: brand purple, never green).
+  promo: { borderRadius: Radius.lg, padding: Spacing.four, gap: Spacing.three, alignItems: 'center' },
+  promoBadge: { backgroundColor: 'rgba(255,255,255,0.18)' },
+  promoLink: { textDecorationLine: 'underline', paddingVertical: Spacing.one },
   signInCard: { gap: Spacing.three, padding: Spacing.five },
   safety: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.two },
   quiet: {

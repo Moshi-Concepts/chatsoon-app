@@ -217,7 +217,13 @@ function connectSection(p: PageProfile): string {
 // ---- Promo and report ----
 
 function promoBlock(): string {
-  return `<p class="promo"><a href="/">Create your free digital business card</a></p>`;
+  return `<section id="promo" class="card promo-card" aria-labelledby="promo-h">
+<div class="promo-badge">${icon('qr-code-outline', 22)}</div>
+<h2 id="promo-h">Get your own free profile</h2>
+<p>Share your QR, scan business cards and follow up with everyone you meet at events.</p>
+<a class="button button-block promo-cta" href="/sign-in">Create your free profile</a>
+<a class="promo-more" href="/">See how it works</a>
+</section>`;
 }
 
 function reportBlock(slug: string): string {
@@ -232,7 +238,7 @@ function reportBlock(slug: string): string {
 
 /** Only the icons this particular profile actually renders, so the hidden sprite carries no unused paths. */
 function iconNames(p: PageProfile): IconName[] {
-  const names = new Set<IconName>(['download-outline', 'flag-outline']);
+  const names = new Set<IconName>(['download-outline', 'flag-outline', 'qr-code-outline']);
   if (roleLine(p.role, p.company)) names.add('briefcase-outline');
   for (const l of PROFILE_LINKS) if (toLinkUrl(l.key, p.links[l.key])) names.add(l.icon);
   if (p.contactChannels.length) {

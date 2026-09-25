@@ -28,9 +28,13 @@ function contrast(a: string, b: string): number {
  * mark next to a real text label (needs no contrast at all). `.hero-title .accent` (the "Follow up."
  * hero accent) used to be here as a large-text (>=24px bold, needs only 3:1) exception, but it now
  * uses `--primary-text` like normal-size text, so it's covered by the `pairs` contrast check below
- * instead. Any other selector using `--primary` as `color` would repeat the dark-mode contrast bug
- * this test guards against — see the comment above `a{...}` in css.ts. */
-const PRIMARY_AS_TEXT_ALLOWED = new Set<string>(['.feature-icon', '.legal section li::marker']);
+ * instead. `.promo-cta` (issue #16's "Get your own free profile" card) sits on `--on-primary` (white
+ * in both schemes), not on `--surface`/`--background`/`--primary-soft` — the backgrounds
+ * `--primary-text` exists to stay readable on — so plain `--primary` is the right token there, and
+ * it's covered by its own `pairs` entry below instead. Any other selector using `--primary` as
+ * `color` would repeat the dark-mode contrast bug this test guards against — see the comment above
+ * `a{...}` in css.ts. */
+const PRIMARY_AS_TEXT_ALLOWED = new Set<string>(['.feature-icon', '.legal section li::marker', '.promo-cta']);
 
 /** Every top-level-ish `selector{declarations}` block in the generated stylesheet. Good enough here:
  * it also picks up the two `:root{...}` variable blocks (light and the one nested in the dark
@@ -70,6 +74,7 @@ describe('css() dark-mode text contrast (regression for the --primary/--primary-
     ['.kicker (Steps section)', 'primaryText', 'background'],
     ['.closing .button', 'primaryText', 'surface'],
     ['.hero-title .accent', 'primaryText', 'background'],
+    ['.promo-cta', 'primary', 'onPrimary'],
   ];
 
   describe.each(['light', 'dark'] as const)('in %s mode', (scheme) => {

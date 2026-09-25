@@ -56,7 +56,15 @@ Present only when there are booking links.
 
 ## Other
 
-- **Promo:** a link to `/` reading "Create your free digital business card".
+- **Promo:** `<section id="promo" class="card promo-card" aria-labelledby="promo-h">`, a solid brand-purple card
+  (never green — green means success elsewhere in the app), holding:
+  1. a decorative icon badge (`qr-code-outline`).
+  2. `<h2 id="promo-h">Get your own free profile</h2>`, sized like the other section h2s.
+  3. a paragraph: "Share your QR, scan business cards and follow up with everyone you meet at events."
+  4. the primary action: `<a class="button button-block promo-cta" href="/sign-in">Create your free profile</a>`
+     (white background, brand-purple bold text).
+  5. a small underlined text link: `<a class="promo-more" href="/">See how it works</a>`.
+  It stays visible after the Connect form is sent — the island only hides `#connect-form`, never `#promo`.
 - **Report:** `<button type="button" id="report">Report profile</button>`, plus
   `<noscript><a href="mailto:hello@chatsoon.app?subject=Report%20profile%20<slug>">Report profile</a></noscript>`
   (inside `email_off`).

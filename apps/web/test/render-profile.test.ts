@@ -265,4 +265,18 @@ describe('renderProfile', () => {
     const html = renderProfile({ ...BASE, bookingLinks: [] }, ASSETS);
     expect(html).not.toContain('id="booking"');
   });
+
+  describe('promo card (issue #16)', () => {
+    it('renders a purple promo card with the free-profile heading, aria-labelledby and a /sign-in CTA', () => {
+      const html = renderProfile(BASE, ASSETS);
+      expect(html).toContain('<section id="promo" class="card promo-card" aria-labelledby="promo-h">');
+      expect(html).toContain('<h2 id="promo-h">Get your own free profile</h2>');
+      expect(html).toContain('<a class="button button-block promo-cta" href="/sign-in">Create your free profile</a>');
+    });
+
+    it('gives the "see how it works" link an href of "/"', () => {
+      const html = renderProfile(BASE, ASSETS);
+      expect(html).toContain('<a class="promo-more" href="/">See how it works</a>');
+    });
+  });
 });

@@ -6,7 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { Icon, type IconName } from './icon';
 import { Text } from './text';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerSoft';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerSoft' | 'inverse';
 
 export type ButtonProps = Omit<PressableProps, 'style' | 'children'> & {
   title: string;
@@ -24,6 +24,10 @@ const palette: Record<Variant, { bg: ThemeColor | 'transparent'; fg: ThemeColor;
   ghost: { bg: 'transparent', fg: 'primary' },
   danger: { bg: 'danger', fg: 'onPrimary' },
   dangerSoft: { bg: 'dangerSoft', fg: 'danger' },
+  // White background, primary-coloured text: for a primary action placed on a solid `primary` surface
+  // (e.g. the "Get your own free profile" promo card), where the ordinary `primary` variant would
+  // disappear into its own background.
+  inverse: { bg: 'onPrimary', fg: 'primary' },
 };
 
 export function Button({
@@ -41,6 +45,11 @@ export function Button({
   const p = palette[variant];
   const height = size === 'lg' ? 52 : size === 'md' ? 44 : 36;
   const isDisabled = disabled || loading;
+  // `Text`'s `color` prop aliases 'primary' to 'primaryText', a token tuned for use on dark/soft
+  // surfaces (design.ts). `inverse`'s label sits on a solid white (`onPrimary`) button face instead,
+  // where `primaryText` (e.g. dark mode's #8F88FF) falls well under 4.5:1 — so override with the raw
+  // `primary` token, which is what `Icon`/`ActivityIndicator` below already use unaliased.
+  const labelColorOverride = variant === 'inverse' ? theme[p.fg] : undefined;
   return (
     <Pressable
       accessibilityRole="button"
@@ -75,7 +84,7 @@ export function Button({
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.7}
-            style={styles.label}>
+            style={labelColorOverride ? [styles.label, { color: labelColorOverride }] : styles.label}>
             {title}
           </Text>
         </View>

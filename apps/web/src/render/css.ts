@@ -79,7 +79,7 @@ ${typeClasses()}
 .brand svg{display:block;flex:none}
 
 /* Buttons */
-.button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 ${Spacing.three}px;border-radius:${Radius.md}px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-weight:600;font-size:13px;cursor:pointer}
+.button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 ${Spacing.three}px;border-radius:${Radius.md}px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-weight:600;font-size:13px;cursor:pointer;text-decoration:none}
 .button:hover{text-decoration:none;border-color:var(--primary)}
 .button-primary{border-color:var(--primary);background:var(--primary);color:var(--on-primary)}
 .button-primary:hover{border-color:var(--primary-pressed);background:var(--primary-pressed)}
@@ -246,9 +246,19 @@ function profileCss(): string {
 #connect-error{display:flex;align-items:center;gap:${Spacing.two}px;padding:${Spacing.three}px;border-radius:${Radius.md}px;background:var(--danger-soft);color:var(--danger-text)}
 #connect-error[hidden],#connect-success[hidden]{display:none}
 
-.promo,.report-wrap{text-align:center;margin:0}
+.report-wrap{text-align:center;margin:0}
 #report{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 ${Spacing.three}px;border:none;border-radius:${Radius.pill}px;background:transparent;color:var(--text-secondary);font:inherit;font-weight:600;font-size:13px;appearance:none;cursor:pointer}
 #report:hover{background:var(--surface-alt)}
+
+/* "Get your own free profile" promo card: solid brand-purple background, never green (green means
+   success elsewhere in the app). White text throughout at full opacity for AA contrast (issue #16). */
+.promo-card{display:flex;flex-direction:column;align-items:center;gap:${Spacing.three}px;text-align:center;background:var(--primary);color:var(--on-primary)}
+.promo-badge{width:40px;height:40px;flex:none;border-radius:${Radius.pill}px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center}
+.promo-card p{margin:0;font-size:15px;line-height:1.5}
+.promo-cta{background:var(--on-primary);border-color:var(--on-primary);color:var(--primary);font-weight:700}
+.promo-cta:hover{background:var(--on-primary);border-color:var(--on-primary);opacity:.9}
+.promo-more{font-size:13px;color:var(--on-primary);text-decoration:underline}
+.promo-card a:focus-visible{outline:2px solid var(--on-primary);outline-offset:2px}
 
 #spa-loading{display:none}
 /* Signed-in handoff: the app mounts #root at the end of <body> and its reset sets body{overflow:hidden},
