@@ -4,7 +4,7 @@
     "target": {
       "namespace": "android_app",
       "package_name": "app.chatsoon",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_PLAY_APP_SIGNING_SHA256"]
+      "sha256_cert_fingerprints": ["65:60:4E:AD:51:9C:7F:60:27:42:61:A4:39:47:14:F6:5C:56:E6:97:D7:F9:E1:E3:2E:E9:44:60:2D:12:29:F2"]
     }
   }
 ]
