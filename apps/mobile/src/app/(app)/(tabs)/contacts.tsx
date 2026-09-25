@@ -12,6 +12,7 @@ import { ALL_CONTACTS, buildSearchIndex, filterContacts, type ContactFilter } fr
 import { SearchField } from '@/components/contacts/search-field';
 import { isReadingCard, needsReview, plural } from '@/components/contacts/source';
 import { DeletionBanner } from '@/components/deletion-banner';
+import { ContactsReferralBanner } from '@/components/referrals/contacts-banner';
 import { Button, EmptyState, Icon, Screen, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -209,6 +210,7 @@ export default function ContactsScreen() {
           <DeletionBanner deleteAfter={me.data.deletionScheduledFor} compact />
         </View>
       ) : null}
+      <ContactsReferralBanner />
 
       {all.length > 0 ? (
         <View style={styles.toolbar}>

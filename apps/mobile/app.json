@@ -52,6 +52,11 @@
               "scheme": "https",
               "host": "chatsoon.app",
               "pathPrefix": "/id/"
+            },
+            {
+              "scheme": "https",
+              "host": "chatsoon.app",
+              "pathPrefix": "/r/"
             }
           ],
           "category": [

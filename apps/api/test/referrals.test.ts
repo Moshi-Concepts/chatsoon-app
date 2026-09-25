@@ -198,6 +198,16 @@ describe('GET /me/referral: the referral code', () => {
   it('requires a session', async () => {
     expect((await call('/me/referral')).status).toBe(401);
   });
+
+  it('carries enabled: true from REFERRAL_ENABLED (test env), and false with the flag off', async () => {
+    const user = await realUser('code-enabled');
+    expect((await referralSummary(user.token)).enabled).toBe(true);
+
+    const disabledEnv = withEnv({ REFERRAL_ENABLED: 'false' });
+    const res = await callWithEnv('/me/referral', disabledEnv, { token: user.token });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as GetReferralResponse).enabled).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

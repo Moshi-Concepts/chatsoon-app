@@ -12,6 +12,8 @@ export const qk = {
   tags: ['tags'] as const,
   events: ['events'] as const,
   profile: (slug: string) => ['profile', slug] as const,
+  referral: ['referral'] as const,
+  connectedAccounts: ['connected-accounts'] as const,
 };
 
 /** Writes a contact into both the list and detail caches. */

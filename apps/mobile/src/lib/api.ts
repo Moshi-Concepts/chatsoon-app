@@ -1,4 +1,5 @@
 import type {
+  AttributeReferralInput,
   ApiErrorBody,
   AuthProvidersResponse,
   AvatarFromProviderResponse,
@@ -6,8 +7,11 @@ import type {
   CancelDeletionByTokenResponse,
   CancelDeletionResponse,
   ChatsoonEvent,
+  ClaimReferralInput,
+  ClaimReferralResponse,
   ConnectFormInput,
   ConnectFormResponse,
+  ConnectedAccountsResponse,
   Contact,
   ContactCreateInput,
   ContactsResponse,
@@ -15,15 +19,20 @@ import type {
   EmailPrefsResponse,
   EventsResponse,
   ExtractCardResponse,
+  GetReferralResponse,
+  InviteEmailsInput,
   Me,
   MyProfile,
   ProfileInput,
   PublicProfile,
+  PublicReferralProfile,
   ReportInput,
   ScanConnectResponse,
   ScheduleDeletionResponse,
+  SendInvitesResponse,
   SignInResponse,
   SocialProvider,
+  SocialValidationProvider,
   Tag,
   TagsResponse,
   UploadPurpose,
@@ -41,6 +50,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    /** Only set for `referral_claim_open` (ApiErrorBody.error.url): the still-live claim link. */
+    public url?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -64,6 +75,16 @@ export function getAuthToken(): string | null {
 }
 export function setUnauthorizedHandler(handler: (() => void) | null) {
   onUnauthorized = handler;
+}
+
+/**
+ * X-Chatsoon-Device (issue #11, docs/referrals.md "How attribution works"): a random UUID generated
+ * once per install (storage.ts's `ensureDeviceId`, called once from the root layout) and sent on every
+ * request from here on. Only `POST /me/referral/attribute` reads it server-side.
+ */
+let deviceId: string | null = null;
+export function setDeviceId(id: string | null) {
+  deviceId = id;
 }
 
 type RequestOpts = {
@@ -116,6 +137,7 @@ async function request<T>(method: string, path: string, opts: RequestOpts = {}):
 
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  if (deviceId) headers['X-Chatsoon-Device'] = deviceId;
   let body: BodyInit | undefined = opts.raw;
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -140,11 +162,13 @@ async function request<T>(method: string, path: string, opts: RequestOpts = {}):
     if (!res.ok) {
       let code = 'internal';
       let message = fallbackMessage(res.status);
+      let errorUrl: string | undefined;
       try {
         const data = (await res.json()) as Partial<ApiErrorBody> & { message?: string; code?: string };
         if (data.error) {
           code = data.error.code;
           message = data.error.message;
+          errorUrl = data.error.url;
         } else if (data.message) {
           // Better Auth error shape
           code = data.code ?? code;
@@ -154,7 +178,7 @@ async function request<T>(method: string, path: string, opts: RequestOpts = {}):
         // not JSON
       }
       if (res.status === 401 && !opts.skipAuthHandler && authToken) onUnauthorized?.();
-      throw new ApiError(res.status, code, message);
+      throw new ApiError(res.status, code, message, errorUrl);
     }
 
     if (opts.asResponse) return res as unknown as T;
@@ -232,6 +256,15 @@ export const api = {
       }),
 
     /**
+     * Connect/Reconnect on the Connected accounts screen (issue #11, docs/referrals.md "Account
+     * linking"): Better Auth's `linkSocial` for the *signed-in* caller (the bearer token already on
+     * every request identifies them), as opposed to `socialSignIn` above. Navigate to the returned
+     * `url` the same way.
+     */
+    linkSocial: (provider: SocialValidationProvider, urls: { callbackURL: string; errorCallbackURL: string }) =>
+      request<{ url: string; redirect: boolean }>('POST', '/auth/link-social', { body: { provider, ...urls } }),
+
+    /**
      * Called from /auth-complete once the provider's redirect lands back on our own origin: the OAuth
      * callback (api.chatsoon.app/auth/callback/<provider>) already set Better Auth's session cookie on
      * the API origin, so this exchanges it for the bearer token the app actually stores. `credentials:
@@ -292,6 +325,19 @@ export const api = {
     },
     /** Downloads the photo from a social sign-in (issue #24) into R2 as a normal avatar upload. */
     avatarFromProvider: () => request<AvatarFromProviderResponse>('POST', '/me/avatar/from-provider', { body: {} }),
+    /** Linked social accounts and referral eligibility (issue #11): never returns tokens. */
+    connectedAccounts: () => request<ConnectedAccountsResponse>('GET', '/me/connected-accounts'),
+  },
+
+  /** Referrals (issue #11, docs/referrals.md "API"). */
+  referrals: {
+    get: () => request<GetReferralResponse>('GET', '/me/referral'),
+    attribute: (input: AttributeReferralInput) =>
+      request<{ attributed: boolean }>('POST', '/me/referral/attribute', { body: input }),
+    sendInvites: (input: InviteEmailsInput) => request<SendInvitesResponse>('POST', '/me/referral/invites', { body: input }),
+    claim: (input: ClaimReferralInput) => request<ClaimReferralResponse>('POST', '/me/referral/claims', { body: input }),
+    /** GET /referral/:code (anonymous-capable): the inviter's public card, for /r/[code]. */
+    byCode: (code: string) => request<PublicReferralProfile>('GET', `/referral/${encodeURIComponent(code)}`, { skipAuthHandler: true }),
   },
 
   /** The signed-out flow from the "scheduled" email's cancel link (issue #8). */

@@ -14,7 +14,8 @@ import { confirm, showError } from '@/lib/dialogs';
 import { deleteExportedFiles, exportContactsCsv } from '@/lib/export';
 import { roleLine } from '@/lib/format';
 import { useOutbox } from '@/lib/outbox';
-import { useMe, useUpdateEmailPrefs } from '@/lib/queries';
+import { useMe, useReferral, useUpdateEmailPrefs } from '@/lib/queries';
+import { referralProgress } from '@/lib/referral-progress';
 
 // Web only: apps/web/src/render/consent.ts (issue #17) sets this global on every page it renders,
 // including the exported SPA shell, so the Me tab's "Cookie settings" row (below) can reopen the same
@@ -38,6 +39,7 @@ function appVersion(): string {
 export default function MeScreen() {
   const theme = useTheme();
   const me = useMe();
+  const referral = useReferral();
   const { signOut } = useAuth();
   const { items: unsynced } = useOutbox();
   const emailPrefs = useUpdateEmailPrefs();
@@ -161,6 +163,17 @@ export default function MeScreen() {
         </View>
       </Card>
 
+      {referral.data?.enabled ? (
+        <Section title="Invite friends">
+          <ListRow
+            icon="gift-outline"
+            title="Refer friends, earn points"
+            subtitle={referralProgress(referral.data).line}
+            onPress={() => router.push('/referrals')}
+          />
+        </Section>
+      ) : null}
+
       <Section title="Contacts">
         <ListRow icon="pricetags-outline" title="Manage tags" onPress={() => router.push('/tags')} divider />
         <ListRow
@@ -222,6 +235,7 @@ export default function MeScreen() {
         title="Account"
         footer="Deleting your account permanently removes your profile, contacts, notes, tags, connections and photos, 24 hours after you confirm.">
         <ListRow icon="mail-outline" title={email} subtitle="Signed in with this email" divider />
+        <ListRow icon="link-outline" title="Connected accounts" onPress={() => router.push('/connected-accounts')} divider />
         <ListRow
           icon="log-out-outline"
           title="Sign out"

@@ -432,6 +432,8 @@ describe('profileSlugFromUrl', () => {
     'https://www.chatsoon.app/id/peter-bui-7f3a',
     'https://chatsoon.app/id/peter-bui-7f3a/',
     'https://chatsoon.app/id/peter-bui-7f3a?ref=qr',
+    // The QR tab payload once a referral code is known (issue #11, docs/referrals.md "Entry points").
+    'https://chatsoon.app/id/peter-bui-7f3a?ref=23456789',
     'https://chatsoon.app/id/peter-bui-7f3a#connect',
     'chatsoon.app/id/peter-bui-7f3a',
     'HTTPS://CHATSOON.APP/ID/PETER-BUI-7F3A',

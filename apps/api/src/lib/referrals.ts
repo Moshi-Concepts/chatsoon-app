@@ -802,6 +802,7 @@ export async function getReferralSummary(env: Env, db: DB, userId: string): Prom
         status: claimRow.status as 'issued' | 'redeemed',
         milestone: claimRow.milestone,
         expiresAt: claimRow.tokenExpiresAt.toISOString(),
+        claimedAt: claimRow.createdAt.toISOString(),
         ...(claimUrl ? { url: claimUrl } : {}),
       }
     : null;
@@ -816,6 +817,7 @@ export async function getReferralSummary(env: Env, db: DB, userId: string): Prom
   const referralsList = await listMyReferrals(env, db, userId);
 
   return {
+    enabled: referralEnabled(env),
     code,
     link: referralLink(code),
     founderThreshold,

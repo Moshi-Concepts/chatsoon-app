@@ -1,8 +1,8 @@
-import { isValidSlug, type PublicProfile } from '@chatsoon/shared';
+import { isValidReferralCode, isValidSlug, type PublicProfile } from '@chatsoon/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Link, Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { BookingLinksCard } from '@/components/booking';
@@ -20,6 +20,7 @@ import { useCurrentEvent } from '@/lib/current-event';
 import { confirm, showError } from '@/lib/dialogs';
 import { roleLine } from '@/lib/format';
 import { qk, useBlock, useMe, usePublicProfile, useScanConnect, useUnblock } from '@/lib/queries';
+import { setPendingReferralCode } from '@/lib/storage';
 
 // Public profile at chatsoon.app/id/<slug>. Universal links, app links and chatsoon://id/<slug> land here too.
 //   Signed out on the web: Connect form (Turnstile), vCard, report.
@@ -30,10 +31,18 @@ import { qk, useBlock, useMe, usePublicProfile, useScanConnect, useUnblock } fro
 const returnHere = (p: PublicProfile) => ({ next: `/id/${p.slug}` });
 
 export default function PublicProfileScreen() {
-  const params = useLocalSearchParams<{ slug: string }>();
+  const params = useLocalSearchParams<{ slug: string; ref?: string }>();
   const slug = typeof params.slug === 'string' ? params.slug.trim().toLowerCase() : '';
   const valid = isValidSlug(slug);
   const { status } = useAuth();
+
+  // `?ref=<CODE>` (issue #11, docs/referrals.md "How attribution works" / "Mobile files"): the QR tab
+  // and printed codes can carry a referral code alongside the profile link. Stored the same way
+  // /r/[code] does; onboarding (or the hub's "Enter a code") reads it back later.
+  const refParam = typeof params.ref === 'string' ? params.ref.trim().toUpperCase() : '';
+  useEffect(() => {
+    if (refParam && isValidReferralCode(refParam)) void setPendingReferralCode(refParam);
+  }, [refParam]);
   // Opened from a link on a cold start, this is the only screen in the stack, so there's no back button.
   const canGoBack = useNavigation().canGoBack();
   const query = usePublicProfile(valid ? slug : undefined);

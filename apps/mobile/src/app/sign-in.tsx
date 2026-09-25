@@ -91,7 +91,12 @@ function authErrorMessage(err: unknown, step: Step): string {
 export default function SignInScreen() {
   const theme = useTheme();
   const { status, sendCode, verifyCode } = useAuth();
-  const next = profileReturnPath(useLocalSearchParams<{ next?: string }>().next);
+  const params = useLocalSearchParams<{ next?: string; invitedBy?: string }>();
+  const next = profileReturnPath(params.next);
+  // Set by /r/[code] when it lands here signed out (issue #11, docs/referrals.md "How attribution
+  // works"): the code itself is already stored (storage.ts's pendingReferralCode) and picked up by
+  // onboarding after sign-in, so this is display only.
+  const invitedBy = typeof params.invitedBy === 'string' && params.invitedBy.trim() ? params.invitedBy.trim() : null;
   // Coming from a profile in the app, show the header so there's a visible way back to it.
   const withHeader = !!next && Platform.OS !== 'web';
 
@@ -277,6 +282,14 @@ export default function SignInScreen() {
             </Text>
           </View>
 
+          {invitedBy ? (
+            <View style={[styles.invitedBy, { backgroundColor: theme.primarySoft }]}>
+              <Text variant="captionStrong" color="primaryText" align="center">
+                Invited by {invitedBy}
+              </Text>
+            </View>
+          ) : null}
+
           {socialError ? (
             <Text variant="caption" color="danger" align="center" accessibilityLiveRegion="polite">
               {socialError}
@@ -290,6 +303,10 @@ export default function SignInScreen() {
                 onPress={(provider) => void startSocialSignIn(provider)}
                 pending={socialPending}
               />
+              <Text variant="caption" color="textTertiary" align="center">
+                Already have an account? Sign in with the email you used, then add socials from Me &gt; Connected
+                accounts.
+              </Text>
               <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
                 <Text variant="caption" color="textTertiary">
@@ -498,6 +515,7 @@ const styles = StyleSheet.create({
   brand: { alignItems: 'center', gap: Spacing.three },
   form: { gap: Spacing.four },
   intro: { gap: Spacing.two, marginBottom: Spacing.one },
+  invitedBy: { borderRadius: Radius.md, paddingVertical: Spacing.two, paddingHorizontal: Spacing.three },
   divider: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
   strong: { fontWeight: '600' },
