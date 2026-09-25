@@ -53,6 +53,20 @@ export function useUpdateProfile() {
   });
 }
 
+/** Schedules delayed account deletion (issue #8), or deletes immediately for the reviewer account. */
+export function useScheduleDeletion() {
+  return useMutation({ mutationFn: () => api.me.scheduleDeletion() });
+}
+
+/** Cancels a pending scheduled deletion and refreshes `me` so the banner clears. */
+export function useCancelDeletion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.me.cancelDeletion(),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.me }),
+  });
+}
+
 /** Public profile by slug. Works signed in or out. */
 export function usePublicProfile(slug: string | undefined) {
   return useQuery({

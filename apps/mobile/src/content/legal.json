@@ -1,7 +1,7 @@
 {
   "privacy": {
     "title": "Privacy Policy",
-    "updated": "25 September 2026",
+    "updated": "26 September 2026",
     "intro": "Chatsoon is a networking app for events, published by Moshi Concepts Inc. (\"we\", \"us\"). This policy explains what we collect when you use the Chatsoon apps for iOS and Android and the website at chatsoon.app, why we collect it, who processes it for us and the choices you have. The short version: we collect only what Chatsoon needs to work, we don't show ads, we don't track you across other apps or websites, and we never sell your data.",
     "sections": [
       {
@@ -93,7 +93,7 @@
         "heading": "Retention and deletion",
         "bullets": [
           "We keep your information for as long as your account is open.",
-          "You can delete your account at any time: open the Me tab in the app, or sign in at https://chatsoon.app and open the Me tab, then tap Delete account. You can also email hello@chatsoon.app from the address you sign in with and we will delete it within 30 days. This immediately and permanently deletes your account, profile, contacts, notes, tags, connections and the files you uploaded, including profile and card photos and the link preview images made from your profile. Your public profile link stops working straight away.",
+          "You can delete your account at any time: open the Me tab in the app, or sign in at https://chatsoon.app and open the Me tab, then tap Delete account. Your public profile link stops working straight away, and 24 hours later we permanently delete your account, profile, contacts, notes, tags, connections and the files you uploaded, including profile and card photos and the link preview images made from your profile. We email you a link to cancel during those 24 hours, and a final email once it's done. You can also email hello@chatsoon.app from the address you sign in with and we will delete it within 30 days.",
           "Our database provider keeps backups for disaster recovery. Deleted data rolls off these backups automatically, within 30 days.",
           "Reports you made, reports made about you and your blocks are deleted with your account. Copies of reports already sent to our moderation inbox may be kept until we finish reviewing them.",
           "Contacts that other people saved about you, for example from your public profile or a connection, belong to their accounts and are not removed when you delete yours. You can ask them to remove it, or email us.",
@@ -336,8 +336,8 @@
           "Chatsoon is published by Moshi Concepts Inc. You can delete your Chatsoon account in any of these ways, even if you no longer have the app installed:"
         ],
         "bullets": [
-          "In the app: open the Me tab, tap Delete account and confirm.",
-          "Without the app: sign in at https://chatsoon.app with your email address, open the Me tab, tap Delete account and confirm.",
+          "In the app: open the Me tab, tap Delete account. You'll be offered the chance to export your contacts as a CSV first, then type DELETE to confirm. Your public profile goes offline straight away, and your account is permanently deleted 24 hours later. We email you a link to cancel during those 24 hours, and a final email once it's done.",
+          "Without the app: sign in at https://chatsoon.app with your email address, open the Me tab, tap Delete account and follow the same steps.",
           "By email: email hello@chatsoon.app from the address you sign in with and ask us to delete your account. We will delete it within 30 days.",
           "Deleting your account permanently deletes your account, profile, contacts, notes, tags, connections and photos, and it can't be undone. Your public profile link stops working immediately. Backups roll off within 30 days, technical logs are kept no more than 30 days, and copies of reports already sent to our moderation inbox may be kept until we finish reviewing them. Contacts other people saved about you stay in their accounts. If you want to keep your contacts, export them first."
         ]

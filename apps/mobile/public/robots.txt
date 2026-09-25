@@ -12,6 +12,8 @@ Disallow: /card-review/
 Disallow: /tags$
 Disallow: /profile-edit$
 Disallow: /onboarding$
+Disallow: /delete-account$
+Disallow: /cancel-deletion$
 
 User-agent: GPTBot
 User-agent: ClaudeBot

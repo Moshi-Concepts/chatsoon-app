@@ -56,6 +56,14 @@
 /profile-edit
   X-Robots-Tag: noindex
 
+/delete-account
+  X-Robots-Tag: noindex
+
+# Reached only from the "scheduled" email's cancel link (issue #8): a token URL, not a page anyone
+# should land on from search.
+/cancel-deletion
+  X-Robots-Tag: noindex
+
 /llms.txt
   Cache-Control: public, max-age=3600
 

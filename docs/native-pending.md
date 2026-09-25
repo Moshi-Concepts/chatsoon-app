@@ -16,6 +16,7 @@ tag, not from `main`, because `main` already contains the features below.
 | Accessible colour tokens (web now; native appearance changes) | 25 Sep 2026 | No: JS only | — |
 | Privacy text: link previews | 25 Sep 2026 | No: policy only | — |
 | Search visibility switch (#14) | 25 Sep 2026 | No: JS only | — |
+| Delayed account deletion with export prompt (#8) | 26 Sep 2026 | No: JS only, but native must switch off `DELETE /me` to `POST /me/deletion` | — |
 
 ## Releasing a batch to the apps
 

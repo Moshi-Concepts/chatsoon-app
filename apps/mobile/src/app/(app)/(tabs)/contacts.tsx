@@ -11,11 +11,12 @@ import { OutboxSection } from '@/components/contacts/outbox-section';
 import { ALL_CONTACTS, buildSearchIndex, filterContacts, type ContactFilter } from '@/components/contacts/search';
 import { SearchField } from '@/components/contacts/search-field';
 import { isReadingCard, needsReview, plural } from '@/components/contacts/source';
+import { DeletionBanner } from '@/components/deletion-banner';
 import { Button, EmptyState, Icon, Screen, Text } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useOutbox } from '@/lib/outbox';
-import { qk, useContacts, useEvents, useTags } from '@/lib/queries';
+import { qk, useContacts, useEvents, useMe, useTags } from '@/lib/queries';
 
 function sameFilter(a: ContactFilter, b: ContactFilter) {
   return a.kind === b.kind && (a.kind === 'all' || (b.kind !== 'all' && a.id === b.id));
@@ -31,6 +32,7 @@ function openContact(contact: Contact) {
 export default function ContactsScreen() {
   const theme = useTheme();
   const qc = useQueryClient();
+  const me = useMe();
   const contacts = useContacts();
   const tags = useTags();
   const events = useEvents();
@@ -202,6 +204,12 @@ export default function ContactsScreen() {
         }}
       />
 
+      {me.data?.deletionScheduledFor ? (
+        <View style={styles.bannerWrap}>
+          <DeletionBanner deleteAfter={me.data.deletionScheduledFor} compact />
+        </View>
+      ) : null}
+
       {all.length > 0 ? (
         <View style={styles.toolbar}>
           <View style={styles.search}>
@@ -261,6 +269,7 @@ const styles = StyleSheet.create({
   screen: { gap: 0 },
   // Gap and bottom padding are 4pt less than they look: the chip row adds 4pt above and below.
   toolbar: { paddingTop: Spacing.two, paddingBottom: Spacing.two, gap: Spacing.two },
+  bannerWrap: { paddingHorizontal: Spacing.four, paddingTop: Spacing.two },
   search: { paddingHorizontal: Spacing.four },
   listContent: { flexGrow: 1, paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
   listHeader: { gap: Spacing.four, paddingBottom: Spacing.two },

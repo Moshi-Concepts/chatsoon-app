@@ -1,6 +1,8 @@
 import type {
   ApiErrorBody,
   BlockInput,
+  CancelDeletionByTokenResponse,
+  CancelDeletionResponse,
   ChatsoonEvent,
   ConnectFormInput,
   ConnectFormResponse,
@@ -16,6 +18,7 @@ import type {
   PublicProfile,
   ReportInput,
   ScanConnectResponse,
+  ScheduleDeletionResponse,
   SignInResponse,
   Tag,
   TagsResponse,
@@ -215,13 +218,29 @@ export const api = {
   me: {
     get: () => request<Me>('GET', '/me'),
     updateProfile: (input: ProfileInput) => request<MyProfile>('PUT', '/me/profile', { body: input }),
-    // Deleting every file and row can take a while; a client timeout must not cut it short.
-    deleteAccount: () => request<void>('DELETE', '/me', { timeoutMs: SLOW_TIMEOUT_MS }),
+    /**
+     * Schedules delayed account deletion (issue #8), or runs it immediately for the App Review
+     * account. Idempotent. Deleting every file and row (for the reviewer) can take a while; a
+     * client timeout must not cut it short.
+     */
+    scheduleDeletion: () =>
+      request<ScheduleDeletionResponse>('POST', '/me/deletion', { body: { confirm: 'DELETE' }, timeoutMs: SLOW_TIMEOUT_MS }),
+    /** Cancels a pending scheduled deletion. 404s (as an ApiError) if nothing is pending. */
+    cancelDeletion: () => request<CancelDeletionResponse>('DELETE', '/me/deletion'),
     /** CSV text of all contacts. */
     exportCsv: async (): Promise<string> => {
       const res = await request<Response>('GET', '/me/export.csv', { asResponse: true });
       return res.text();
     },
+  },
+
+  /** The signed-out flow from the "scheduled" email's cancel link (issue #8). */
+  accountDeletion: {
+    cancelByToken: (token: string) =>
+      request<CancelDeletionByTokenResponse>('POST', '/account-deletion/cancel', {
+        body: { token },
+        skipAuthHandler: true,
+      }),
   },
 
   profiles: {

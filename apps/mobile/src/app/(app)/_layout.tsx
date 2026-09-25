@@ -72,6 +72,7 @@ export default function AppLayout() {
       <Stack.Screen name="card" options={{ presentation: 'fullScreenModal' }} />
       <Stack.Screen name="card-review/[id]" />
       <Stack.Screen name="profile-edit" />
+      <Stack.Screen name="delete-account" />
     </Stack>
   );
 }

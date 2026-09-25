@@ -5,12 +5,12 @@ import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
+import { DeletionBanner } from '@/components/deletion-banner';
 import { Avatar, Button, Card, ListRow, Screen, Section, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { confirm, showAlert, showError } from '@/lib/dialogs';
+import { confirm, showError } from '@/lib/dialogs';
 import { deleteExportedFiles, exportContactsCsv } from '@/lib/export';
 import { roleLine } from '@/lib/format';
 import { useOutbox } from '@/lib/outbox';
@@ -29,11 +29,10 @@ function appVersion(): string {
 export default function MeScreen() {
   const theme = useTheme();
   const me = useMe();
-  const { signOut, clearSession } = useAuth();
+  const { signOut } = useAuth();
   const { items: unsynced } = useOutbox();
   const [exporting, setExporting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const profile = me.data?.profile;
   if (!me.data || !profile) {
@@ -48,7 +47,7 @@ export default function MeScreen() {
   const email = me.data.user.email;
   const url = profileUrl(profile.slug);
   const subtitle = roleLine(profile.role, profile.company);
-  const busy = signingOut || deleting;
+  const busy = signingOut;
 
   const openPublicPage = async () => {
     if (Platform.OS === 'web') {
@@ -97,35 +96,11 @@ export default function MeScreen() {
     router.replace('/sign-in');
   };
 
-  const confirmDelete = async () => {
-    const ok = await confirm({
-      title: 'Delete your account?',
-      message:
-        "This permanently deletes your profile, contacts, notes, tags and photos. It can't be undone.",
-      confirmText: 'Delete account',
-      destructive: true,
-    });
-    if (!ok) return;
-    setDeleting(true);
-    try {
-      await api.me.deleteAccount();
-    } catch (err) {
-      setDeleting(false);
-      showError(err, "Couldn't delete your account");
-      return;
-    }
-    // The account is gone on the server now, so a local clean-up hiccup must not report
-    // "Couldn't delete". Its sessions are revoked too, so a token left in storage just gets a
-    // 401 on the next launch, which signs out.
-    deleteExportedFiles();
-    await clearSession().catch(() => undefined);
-    router.replace('/sign-in');
-    showAlert('Account deleted', 'Your account and all of your data have been removed.');
-  };
-
   return (
     <Screen edges={[]} onRefresh={() => void me.refetch()} refreshing={me.isRefetching} contentStyle={styles.content}>
       <Stack.Screen options={{ title: 'Me' }} />
+
+      {me.data.deletionScheduledFor ? <DeletionBanner deleteAfter={me.data.deletionScheduledFor} /> : null}
 
       <Card style={styles.profileCard}>
         <View style={styles.person}>
@@ -195,7 +170,7 @@ export default function MeScreen() {
 
       <Section
         title="Account"
-        footer="Deleting your account permanently removes your profile, contacts, notes, tags and photos.">
+        footer="Deleting your account permanently removes your profile, contacts, notes, tags, connections and photos, 24 hours after you confirm.">
         <ListRow icon="mail-outline" title={email} subtitle="Signed in with this email" divider />
         <ListRow
           icon="log-out-outline"
@@ -209,9 +184,7 @@ export default function MeScreen() {
           icon="trash-outline"
           title="Delete account"
           destructive
-          onPress={busy ? undefined : () => void confirmDelete()}
-          chevron={false}
-          right={deleting ? <ActivityIndicator color={theme.danger} /> : undefined}
+          onPress={busy ? undefined : () => router.push('/delete-account')}
         />
       </Section>
 

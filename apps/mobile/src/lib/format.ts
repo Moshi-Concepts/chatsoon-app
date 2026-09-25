@@ -12,6 +12,17 @@ export function roleLine(role?: string | null, company?: string | null): string 
   return role || company || null;
 }
 
+/** "27 Sep 2026, 2:30 pm" in the device's local time zone, for a scheduled account deletion. */
+export function formatScheduledDeletion(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.round(diff / 60000);
