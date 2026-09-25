@@ -108,6 +108,7 @@ footer .tagline{margin:6px 0 0;font-size:13px}
 footer .copy{color:var(--text-tertiary);font-size:13px;margin:${Spacing.two}px 0 0}
 ${homeCss()}
 ${legalCss()}
+${profileCss()}
 `.trim();
 }
 
@@ -198,5 +199,63 @@ function legalCss(): string {
 .legal section ul{color:var(--text-secondary);margin:0 0 ${Spacing.three}px}
 .legal section li{margin:0 0 10px}
 .legal section li::marker{color:var(--primary)}
+`;
+}
+
+/** The profile page only (Stage C, WP-C3): the card, links, contact chips, booking rows, connect form
+ * and the SPA-handoff spinner. Ported from apps/mobile/src/components/{web/profile-card,web/contact-
+ * pills,web/connect-form,booking/booking-links-card}.tsx onto plain HTML and this file's shared
+ * `.card`/`.button`/`.pill`/`.field` classes, so the profile page looks like the app it replaces. */
+function profileCss(): string {
+  return `
+.profile-wrap{max-width:520px;padding-top:${Spacing.six}px;padding-bottom:${Spacing.six}px;display:flex;flex-direction:column;gap:${Spacing.five}px}
+.profile-card{align-items:center;text-align:center;display:flex;flex-direction:column;gap:${Spacing.four}px;padding:${Spacing.six}px ${Spacing.five}px}
+#avatar{width:104px;height:104px;border-radius:${Radius.pill}px;object-fit:cover;display:block}
+.avatar.initials{width:104px;height:104px;font-size:40px}
+.profile-card h1{font-size:26px;line-height:1.25;font-weight:700;margin:0}
+.profile-headline{color:var(--text-secondary);font-size:16px;line-height:1.4;margin:0}
+.profile-role{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--text-secondary);font-size:15px;margin:0}
+
+#contact-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:${Spacing.two}px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 ${Spacing.three}px;border:none;border-radius:${Radius.pill}px;background:var(--surface-alt);color:var(--text);font:inherit;font-weight:600;font-size:13px;appearance:none;cursor:pointer}
+.chip.locked{color:var(--text-tertiary);cursor:default}
+.chips-note{color:var(--text-secondary);font-size:13px;margin:0}
+
+.links{display:flex;flex-wrap:wrap;justify-content:center;gap:${Spacing.two}px;list-style:none;margin:0;padding:0}
+.links a{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 ${Spacing.three}px;border-radius:${Radius.pill}px;background:var(--surface-alt);color:var(--text);font-weight:600;font-size:13px}
+.links a:hover{text-decoration:none;background:var(--primary-soft)}
+
+.button-block{align-self:stretch;width:100%;height:48px;font-size:15px}
+
+#booking{padding:0;overflow:hidden}
+#booking h2,#connect h2{margin:0}
+#booking h2{padding:${Spacing.four}px ${Spacing.four}px 0}
+.section-caption{color:var(--text-secondary);font-size:13px;margin:2px 0 0}
+#booking .section-caption{margin:2px ${Spacing.four}px ${Spacing.three}px}
+.booking-row{display:flex;align-items:center;gap:${Spacing.three}px;padding:14px ${Spacing.four}px;border-top:1px solid var(--border);color:var(--text)}
+.booking-row:hover{text-decoration:none;background:var(--surface-alt)}
+.booking-row-body{flex:1;display:flex;flex-direction:column;gap:2px;text-align:left}
+.booking-row-label{font-size:16px}
+.booking-row-provider{color:var(--text-secondary);font-size:13px}
+
+#connect{display:flex;flex-direction:column;gap:${Spacing.three}px}
+#connect-form{display:flex;flex-direction:column;gap:${Spacing.four}px}
+.connect-privacy{color:var(--text-tertiary);font-size:13px;margin:0;text-align:center}
+#connect-error{display:flex;align-items:center;gap:${Spacing.two}px;padding:${Spacing.three}px;border-radius:${Radius.md}px;background:var(--danger-soft);color:var(--danger-text)}
+#connect-error[hidden],#connect-success[hidden]{display:none}
+
+.promo,.report-wrap{text-align:center;margin:0}
+#report{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 ${Spacing.three}px;border:none;border-radius:${Radius.pill}px;background:transparent;color:var(--text-secondary);font:inherit;font-weight:600;font-size:13px;appearance:none;cursor:pointer}
+#report:hover{background:var(--surface-alt)}
+
+#spa-loading{display:none}
+.spa #page{display:none}
+.spa #spa-loading{display:flex;min-height:60vh;align-items:center;justify-content:center}
+.spinner{width:32px;height:32px;border-radius:${Radius.pill}px;border:3px solid var(--border);border-top-color:var(--primary);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.status{padding:${Spacing.seven}px 0;text-align:center;display:flex;flex-direction:column;align-items:center;gap:${Spacing.four}px}
+.status h1{font-size:28px;line-height:1.3;margin:0}
+.status p{color:var(--text-secondary)}
 `;
 }
