@@ -2,16 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LINK_KEYS,
+  LINK_PREFIXES,
+  canonicalLinkValue,
   cleanText,
   displayLink,
   isEmail,
   isTelegramHandle,
   isXHandle,
+  linkFieldValue,
   linkLabel,
   linkedInProfileUrl,
   normalizeHandle,
   parseSocialUrl,
   profileSlugFromUrl,
+  stripTrackingParams,
   toLinkUrl,
 } from './links';
 
@@ -493,5 +497,292 @@ describe('cleanText', () => {
     expect(normalizeHandle(value)).toBe(value);
     expect(toLinkUrl('website', value)).toBeNull();
     expect(Date.now() - start).toBeLessThan(1000);
+  });
+});
+
+describe('LINK_PREFIXES', () => {
+  it('has a fixed prefix for every handle network, and none for website', () => {
+    expect(LINK_PREFIXES).toEqual({
+      x: 'x.com/',
+      telegram: 't.me/',
+      linkedin: 'linkedin.com/in/',
+      youtube: 'youtube.com/@',
+    });
+    expect(LINK_PREFIXES.website).toBeUndefined();
+  });
+});
+
+describe('stripTrackingParams', () => {
+  it.each([
+    ['https://example.com/?utm_source=x&utm_medium=y', 'https://example.com/'],
+    ['example.com/?utm_source=x', 'example.com/'],
+    ['https://example.com/page?a=1&utm_campaign=z&b=2', 'https://example.com/page?a=1&b=2'],
+    ['https://example.com/page?UTM_Source=x', 'https://example.com/page'],
+    ['https://example.com/?fbclid=abc', 'https://example.com/'],
+    ['https://example.com/?gclid=abc', 'https://example.com/'],
+    ['https://example.com/?dclid=abc', 'https://example.com/'],
+    ['https://example.com/?msclkid=abc', 'https://example.com/'],
+    ['https://example.com/?mc_cid=1&mc_eid=2', 'https://example.com/'],
+    ['https://example.com/?igshid=abc', 'https://example.com/'],
+    ['https://youtube.com/watch?v=123&si=abc', 'https://youtube.com/watch?v=123'],
+    ['https://open.spotify.com/track/1?si=abc', 'https://open.spotify.com/track/1'],
+    ['https://instagram.com/p/1?igsh=abc', 'https://instagram.com/p/1'],
+    ['https://www.linkedin.com/in/peter?trk=x&trackingId=y&lipi=z&originalSubdomain=au', 'https://www.linkedin.com/in/peter'],
+    ['https://example.com/?ref_src=twsrc&ref_url=https://x.com', 'https://example.com/'],
+    ['https://x.com/peter?s=20', 'https://x.com/peter'],
+    ['https://twitter.com/peter?t=abc&s=09', 'https://twitter.com/peter'],
+    ['https://www.x.com/peter?s=20', 'https://www.x.com/peter'],
+    ['https://mobile.twitter.com/peter?s=20', 'https://mobile.twitter.com/peter'],
+    // 's' and 't' are only special-cased for X - a website keeps them.
+    ['https://example.com/?s=20&t=abc', 'https://example.com/?s=20&t=abc'],
+    // Non-tracking params and the hash survive.
+    ['https://example.com/?a=1&utm_source=x#section', 'https://example.com/?a=1#section'],
+    ['https://example.com/#utm_source=x', 'https://example.com/#utm_source=x'],
+    // No query at all: unchanged.
+    ['https://example.com/page', 'https://example.com/page'],
+    ['peter', 'peter'],
+    ['', ''],
+  ])('%j -> %j', (input, expected) => {
+    expect(stripTrackingParams(input)).toBe(expected);
+  });
+
+  it('never throws on unparseable input', () => {
+    expect(stripTrackingParams('?a=1')).toBe('?a=1');
+    expect(stripTrackingParams('not a url at all')).toBe('not a url at all');
+    expect(() => stripTrackingParams('%%%')).not.toThrow();
+  });
+
+  it('does not add a scheme the caller did not type', () => {
+    expect(stripTrackingParams('example.com/?utm_source=x')).not.toMatch(/^https?:\/\//);
+  });
+});
+
+describe('linkFieldValue', () => {
+  it('gives an empty handle for empty input', () => {
+    for (const key of LINK_KEYS) expect(linkFieldValue(key, '')).toEqual({ mode: 'handle', handle: '' });
+    for (const key of LINK_KEYS) expect(linkFieldValue(key, null)).toEqual({ mode: 'handle', handle: '' });
+    for (const key of LINK_KEYS) expect(linkFieldValue(key, undefined)).toEqual({ mode: 'handle', handle: '' });
+  });
+
+  describe('x', () => {
+    it.each([
+      ['peterbui', 'peterbui'],
+      ['@peterbui', 'peterbui'],
+      ['https://x.com/peterbui', 'peterbui'],
+      ['https://twitter.com/peterbui?s=21', 'peterbui'],
+      ['https://mobile.twitter.com/peterbui', 'peterbui'],
+    ])('%j -> handle %j', (stored, handle) => {
+      expect(linkFieldValue('x', stored)).toEqual({ mode: 'handle', handle });
+    });
+
+    it('falls back to url mode for a reserved page or a Telegram link', () => {
+      expect(linkFieldValue('x', 'https://x.com/home')).toEqual({ mode: 'url', url: 'https://x.com/home' });
+      expect(linkFieldValue('x', 't.me/peterbui')).toEqual({ mode: 'url', url: 't.me/peterbui' });
+    });
+  });
+
+  describe('telegram', () => {
+    it.each([
+      ['peterbui', 'peterbui'],
+      ['@peterbui', 'peterbui'],
+      ['https://t.me/peterbui', 'peterbui'],
+      ['https://telegram.me/peterbui', 'peterbui'],
+    ])('%j -> handle %j', (stored, handle) => {
+      expect(linkFieldValue('telegram', stored)).toEqual({ mode: 'handle', handle });
+    });
+
+    it('falls back to url mode for a reserved path or an X link', () => {
+      expect(linkFieldValue('telegram', 'https://t.me/joinchat/AAAAAEkk2WdoDrB4-Q8-gg')).toEqual({
+        mode: 'url',
+        url: 'https://t.me/joinchat/AAAAAEkk2WdoDrB4-Q8-gg',
+      });
+      expect(linkFieldValue('telegram', 'https://x.com/peterbui')).toEqual({
+        mode: 'url',
+        url: 'https://x.com/peterbui',
+      });
+    });
+  });
+
+  describe('linkedin', () => {
+    it.each([
+      ['https://www.linkedin.com/in/peter-bui', 'peter-bui'],
+      ['https://www.linkedin.com/in/peter-bui/', 'peter-bui'],
+      ['linkedin.com/in/peter-bui', 'peter-bui'],
+      ['peter-bui', 'peter-bui'],
+      ['@peter-bui', 'peter-bui'],
+      ['张伟', '张伟'],
+      ['https://cn.linkedin.com/in/%E5%BC%A0%E4%BC%9F', '张伟'],
+    ])('%j -> handle %j', (stored, handle) => {
+      expect(linkFieldValue('linkedin', stored)).toEqual({ mode: 'handle', handle });
+    });
+
+    it('falls back to url mode for a company page or a /pub/ url', () => {
+      expect(linkFieldValue('linkedin', 'https://www.linkedin.com/company/moshi-concepts')).toEqual({
+        mode: 'url',
+        url: 'https://www.linkedin.com/company/moshi-concepts',
+      });
+      expect(linkFieldValue('linkedin', 'https://www.linkedin.com/pub/peter-bui/12/345/678')).toEqual({
+        mode: 'url',
+        url: 'https://www.linkedin.com/pub/peter-bui/12/345/678',
+      });
+    });
+  });
+
+  describe('youtube', () => {
+    it.each([
+      ['@peterbui', 'peterbui'],
+      ['peterbui', 'peterbui'],
+      ['youtube.com/@peterbui', 'peterbui'],
+      ['https://www.youtube.com/@peterbui', 'peterbui'],
+      ['https://m.youtube.com/@peterbui', 'peterbui'],
+      ['https://youtube.com/@peterbui/', 'peterbui'],
+    ])('%j -> handle %j', (stored, handle) => {
+      expect(linkFieldValue('youtube', stored)).toEqual({ mode: 'handle', handle });
+    });
+
+    it('falls back to url mode for a channel or /c/ url', () => {
+      expect(linkFieldValue('youtube', 'https://www.youtube.com/channel/UC123')).toEqual({
+        mode: 'url',
+        url: 'https://www.youtube.com/channel/UC123',
+      });
+      expect(linkFieldValue('youtube', 'https://www.youtube.com/c/PeterBui')).toEqual({
+        mode: 'url',
+        url: 'https://www.youtube.com/c/PeterBui',
+      });
+    });
+  });
+
+  it('is always url mode for website', () => {
+    expect(linkFieldValue('website', 'example.com')).toEqual({ mode: 'url', url: 'example.com' });
+  });
+});
+
+describe('canonicalLinkValue', () => {
+  it('keeps an empty string empty', () => {
+    for (const key of LINK_KEYS) expect(canonicalLinkValue(key, '')).toBe('');
+    for (const key of LINK_KEYS) expect(canonicalLinkValue(key, '   ')).toBe('');
+  });
+
+  describe('x', () => {
+    it.each([
+      ['peterbui', 'peterbui'],
+      ['@peterbui', 'peterbui'],
+      ['ChatSoonApp', 'ChatSoonApp'],
+      ['https://x.com/ChatSoonApp?s=20', 'ChatSoonApp'],
+      ['https://twitter.com/peterbui', 'peterbui'],
+      ['https://mobile.twitter.com/peterbui?s=09', 'peterbui'],
+      ['https://x.com/peterbui/', 'peterbui'],
+    ])('%j -> %j', (input, expected) => {
+      expect(canonicalLinkValue('x', input)).toBe(expected);
+    });
+
+    it('keeps an unreduced value cleaned but as entered', () => {
+      expect(canonicalLinkValue('x', 'https://x.com/home')).toBe('https://x.com/home');
+      expect(canonicalLinkValue('x', 'https://instagram.com/peter')).toBe('https://instagram.com/peter');
+      expect(canonicalLinkValue('x', 'Peter Bui')).toBe('Peter Bui');
+    });
+  });
+
+  describe('telegram', () => {
+    it.each([
+      ['peterbui', 'peterbui'],
+      ['@peterbui', 'peterbui'],
+      ['name', 'name'],
+      ['https://t.me/peterbui', 'peterbui'],
+      ['telegram.me/peterbui', 'peterbui'],
+      ['https://peterbui.t.me', 'peterbui'],
+    ])('%j -> %j', (input, expected) => {
+      expect(canonicalLinkValue('telegram', input)).toBe(expected);
+    });
+
+    it('keeps an unreduced value cleaned but as entered', () => {
+      expect(canonicalLinkValue('telegram', 'https://t.me/joinchat/AAAAAEkk2WdoDrB4-Q8-gg')).toBe(
+        'https://t.me/joinchat/AAAAAEkk2WdoDrB4-Q8-gg',
+      );
+    });
+  });
+
+  describe('linkedin', () => {
+    it.each([
+      ['peter-bui', 'https://www.linkedin.com/in/peter-bui'],
+      ['@peter-bui', 'https://www.linkedin.com/in/peter-bui'],
+      ['https://www.linkedin.com/in/peter-bui', 'https://www.linkedin.com/in/peter-bui'],
+      ['https://www.linkedin.com/in/peter-bui/', 'https://www.linkedin.com/in/peter-bui'],
+      [
+        'https://www.linkedin.com/in/peter-bui?utm_source=share&utm_medium=ios_app&trk=x',
+        'https://www.linkedin.com/in/peter-bui',
+      ],
+      ['au.linkedin.com/in/peter-bui', 'https://www.linkedin.com/in/peter-bui'],
+      ['张伟', 'https://www.linkedin.com/in/%E5%BC%A0%E4%BC%9F'],
+    ])('%j -> %j', (input, expected) => {
+      expect(canonicalLinkValue('linkedin', input)).toBe(expected);
+    });
+
+    it('keeps a company page or /pub/ url cleaned but not reduced', () => {
+      expect(canonicalLinkValue('linkedin', 'https://www.linkedin.com/company/moshi-concepts?trk=x')).toBe(
+        'https://www.linkedin.com/company/moshi-concepts',
+      );
+      expect(canonicalLinkValue('linkedin', 'https://www.linkedin.com/pub/peter-bui/12/345/678')).toBe(
+        'https://www.linkedin.com/pub/peter-bui/12/345/678',
+      );
+    });
+  });
+
+  describe('youtube', () => {
+    it.each([
+      ['peterbui', 'https://www.youtube.com/@peterbui'],
+      ['@peterbui', 'https://www.youtube.com/@peterbui'],
+      ['youtube.com/@peterbui', 'https://www.youtube.com/@peterbui'],
+      ['https://www.youtube.com/@peterbui?si=abc123', 'https://www.youtube.com/@peterbui'],
+      ['https://m.youtube.com/@peterbui', 'https://www.youtube.com/@peterbui'],
+      ['https://youtube.com/@peterbui/', 'https://www.youtube.com/@peterbui'],
+    ])('%j -> %j', (input, expected) => {
+      expect(canonicalLinkValue('youtube', input)).toBe(expected);
+    });
+
+    it('keeps a channel or /c/ url cleaned but not reduced', () => {
+      expect(canonicalLinkValue('youtube', 'https://www.youtube.com/channel/UC123?si=abc')).toBe(
+        'https://www.youtube.com/channel/UC123',
+      );
+    });
+  });
+
+  describe('website', () => {
+    it.each([
+      ['example.com', 'example.com'],
+      ['https://example.com', 'https://example.com'],
+      ['https://example.com/?utm_source=newsletter', 'https://example.com/'],
+      ['www.example.com/about?utm_campaign=x&ref=y', 'www.example.com/about?ref=y'],
+    ])('%j -> %j', (input, expected) => {
+      expect(canonicalLinkValue('website', input)).toBe(expected);
+    });
+  });
+
+  it('produces values toLinkUrl always accepts', () => {
+    expect(toLinkUrl('linkedin', canonicalLinkValue('linkedin', 'https://www.linkedin.com/in/x'))).toBe(
+      'https://www.linkedin.com/in/x',
+    );
+    expect(toLinkUrl('youtube', canonicalLinkValue('youtube', 'https://www.youtube.com/@x'))).toBe(
+      'https://www.youtube.com/@x',
+    );
+    expect(toLinkUrl('x', canonicalLinkValue('x', 'ChatSoonApp'))).toBe('https://x.com/ChatSoonApp');
+    expect(toLinkUrl('telegram', canonicalLinkValue('telegram', 'name'))).toBe('https://t.me/name');
+
+    // And directly, per the issue's explicit checks.
+    expect(toLinkUrl('linkedin', 'https://www.linkedin.com/in/x')).toBe('https://www.linkedin.com/in/x');
+    expect(toLinkUrl('youtube', 'https://www.youtube.com/@x')).toBe('https://www.youtube.com/@x');
+    expect(toLinkUrl('x', 'ChatSoonApp')).toBe('https://x.com/ChatSoonApp');
+    expect(toLinkUrl('telegram', 'name')).toBe('https://t.me/name');
+  });
+});
+
+describe('displayLink with canonical values', () => {
+  it.each([
+    ['x', 'ChatSoonApp', '@ChatSoonApp'],
+    ['linkedin', 'https://www.linkedin.com/in/x', 'linkedin.com/in/x'],
+    ['youtube', 'https://www.youtube.com/@x', 'youtube.com/@x'],
+    ['telegram', 'name', '@name'],
+  ] as const)('%s %j -> %j', (key, value, expected) => {
+    expect(displayLink(key, value)).toBe(expected);
   });
 });

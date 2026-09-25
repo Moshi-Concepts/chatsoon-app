@@ -1,5 +1,13 @@
 import type { ContactVisibility, LinkKey, MyProfile, ProfileContactKey, ProfileInput } from '@chatsoon/shared';
-import { CONTACT_KEYS, changedKeys, LINK_KEYS, profileInputSchema } from '@chatsoon/shared';
+import {
+  CONTACT_KEYS,
+  LINK_KEYS,
+  LINK_PREFIXES,
+  canonicalLinkValue,
+  changedKeys,
+  linkFieldValue,
+  profileInputSchema,
+} from '@chatsoon/shared';
 import * as Crypto from 'expo-crypto';
 import { useRef } from 'react';
 import { StyleSheet, Switch, View, type TextInput, type TextInputProps } from 'react-native';
@@ -11,12 +19,21 @@ import { useTheme } from '@/hooks/use-theme';
 import { BookingLinksEditor, type BookingLinkFormValue } from './booking-links-editor';
 import { ContactFields } from './contact-fields';
 
+/** Whether a link field is showing a bare handle (with its fixed prefix) or a full URL. */
+export type LinkFieldMode = 'handle' | 'url';
+
 export type ProfileFormValues = {
   displayName: string;
   headline: string;
   company: string;
   role: string;
+  /**
+   * What's shown in each link field: the bare handle when `linkModes[key]` is 'handle' (the prefix in
+   * LINK_PREFIXES is shown before it), or a full URL when it's 'url'. Never the raw stored value as-is -
+   * `profileToForm` always splits it with `linkFieldValue` first.
+   */
   links: Record<LinkKey, string>;
+  linkModes: Record<LinkKey, LinkFieldMode>;
   contact: Record<ProfileContactKey, string>;
   contactVisibility: ContactVisibility;
   bookingLinks: BookingLinkFormValue[];
@@ -38,21 +55,38 @@ export type ProfileField =
   | `bookingLinks.${number}.label`;
 export type ProfileFormErrors = Partial<Record<ProfileField, string>>;
 
+/** Splits every stored link into its form display value and mode with `linkFieldValue`. */
+function linksToForm(links: Partial<Record<LinkKey, string>>): {
+  links: Record<LinkKey, string>;
+  linkModes: Record<LinkKey, LinkFieldMode>;
+} {
+  const values = {} as Record<LinkKey, string>;
+  const modes = {} as Record<LinkKey, LinkFieldMode>;
+  for (const key of LINK_KEYS) {
+    const field = linkFieldValue(key, links[key] ?? '');
+    values[key] = field.mode === 'handle' ? field.handle : field.url;
+    modes[key] = field.mode;
+  }
+  return { links: values, linkModes: modes };
+}
+
+/** The canonical (storable) value of every link field, from its current form display value. */
+function canonicalLinksOf(values: Pick<ProfileFormValues, 'links'>): Record<LinkKey, string> {
+  const out = {} as Record<LinkKey, string>;
+  for (const key of LINK_KEYS) out[key] = canonicalLinkValue(key, values.links[key]);
+  return out;
+}
+
 export function profileToForm(profile: MyProfile | null | undefined): ProfileFormValues {
-  const links = profile?.links ?? {};
   const contact = profile?.contact ?? {};
+  const { links, linkModes } = linksToForm(profile?.links ?? {});
   return {
     displayName: profile?.displayName ?? '',
     headline: profile?.headline ?? '',
     company: profile?.company ?? '',
     role: profile?.role ?? '',
-    links: {
-      x: links.x ?? '',
-      telegram: links.telegram ?? '',
-      linkedin: links.linkedin ?? '',
-      website: links.website ?? '',
-      youtube: links.youtube ?? '',
-    },
+    links,
+    linkModes,
     // Old cached profiles (fetched before this field existed) have no contact: default to none, private.
     contact: {
       phone: contact.phone ?? '',
@@ -81,7 +115,7 @@ export function sameProfileForm(a: ProfileFormValues, b: ProfileFormValues): boo
     a.headline === b.headline &&
     a.company === b.company &&
     a.role === b.role &&
-    LINK_KEYS.every((k) => a.links[k] === b.links[k]) &&
+    LINK_KEYS.every((k) => a.links[k] === b.links[k] && a.linkModes[k] === b.linkModes[k]) &&
     CONTACT_KEYS.every((k) => a.contact[k] === b.contact[k]) &&
     a.contactVisibility === b.contactVisibility &&
     a.searchVisible === b.searchVisible &&
@@ -109,7 +143,13 @@ export function parseProfileForm(
   const bookingRows = values.bookingLinks
     .map((link, index) => ({ link, index }))
     .filter(({ link }) => link.url.trim() || link.label.trim());
-  const links = withLinks ? (initial ? changedKeys(initial.links, values.links) : values.links) : undefined;
+  // Diffed and sent as their canonical (storable) form, never the raw handle/URL text shown in the
+  // field, so a pasted URL that only reduces to the same handle the user already had sends no change.
+  const links = withLinks
+    ? initial
+      ? changedKeys(canonicalLinksOf(initial), canonicalLinksOf(values))
+      : canonicalLinksOf(values)
+    : undefined;
   const contact = withLinks ? (initial ? changedKeys(initial.contact, values.contact) : values.contact) : undefined;
   const contactVisibility =
     withLinks && (!initial || initial.contactVisibility !== values.contactVisibility)
@@ -163,18 +203,18 @@ type LinkFieldConfig = {
 };
 
 const LINK_FIELDS: Record<LinkKey, LinkFieldConfig> = {
-  x: { label: 'X', icon: 'logo-x', placeholder: '@yourhandle', maxLength: 200, keyboardType: 'default' },
+  x: { label: 'X', icon: 'logo-x', placeholder: 'yourhandle', maxLength: 200, keyboardType: 'default' },
   telegram: {
     label: 'Telegram',
     icon: 'paper-plane-outline',
-    placeholder: '@username',
+    placeholder: 'username',
     maxLength: 200,
     keyboardType: 'default',
   },
   linkedin: {
     label: 'LinkedIn',
     icon: 'logo-linkedin',
-    placeholder: 'linkedin.com/in/your-name',
+    placeholder: 'your-name',
     maxLength: 300,
     keyboardType: 'url',
   },
@@ -189,7 +229,7 @@ const LINK_FIELDS: Record<LinkKey, LinkFieldConfig> = {
   youtube: {
     label: 'YouTube',
     icon: 'logo-youtube',
-    placeholder: 'youtube.com/@yourchannel',
+    placeholder: 'yourchannel',
     maxLength: 300,
     keyboardType: 'url',
   },
@@ -229,7 +269,29 @@ export function ProfileFields({
 
   const set = <K extends 'displayName' | 'headline' | 'company' | 'role'>(key: K, value: string) =>
     onChange({ ...values, [key]: value });
-  const setLink = (key: LinkKey, value: string) => onChange({ ...values, links: { ...values.links, [key]: value } });
+
+  /**
+   * Typing a bare handle just stores it. Pasting or typing something URL-shaped (has a '/' or starts
+   * with 'http'/'www.') runs it through canonicalLinkValue + linkFieldValue: a URL that reduces to a
+   * handle (e.g. a copied profile link) shows just the handle, with the prefix back; a URL that
+   * doesn't reduce (a company page, a channel URL) switches the field to url mode, showing the full
+   * cleaned URL with the prefix hidden. Clearing a url-mode field goes back to handle mode.
+   */
+  const setLink = (key: LinkKey, text: string) => {
+    const looksLikeUrl = /^(?:https?:\/\/|www\.)/i.test(text) || text.includes('/');
+    if (looksLikeUrl) {
+      const field = linkFieldValue(key, canonicalLinkValue(key, text));
+      const value = field.mode === 'handle' ? field.handle : field.url;
+      onChange({
+        ...values,
+        links: { ...values.links, [key]: value },
+        linkModes: { ...values.linkModes, [key]: field.mode },
+      });
+      return;
+    }
+    const mode = text.trim() === '' ? 'handle' : values.linkModes[key];
+    onChange({ ...values, links: { ...values.links, [key]: text }, linkModes: { ...values.linkModes, [key]: mode } });
+  };
 
   // Focus order: role -> mobile -> WhatsApp -> Signal (inside ContactFields) -> first link.
   const afterRole = () => {
@@ -328,6 +390,9 @@ export function ProfileFields({
               const field = LINK_FIELDS[key];
               const last = i === LINK_KEYS.length - 1;
               const next = LINK_KEYS[i + 1];
+              // Only a handle-mode field shows its fixed prefix; a url-mode field (a company page, a
+              // channel URL, or anything that didn't reduce to a handle) shows the full URL instead.
+              const prefix = values.linkModes[key] === 'handle' ? LINK_PREFIXES[key] : undefined;
               return (
                 <TextField
                   key={key}
@@ -336,6 +401,7 @@ export function ProfileFields({
                   }}
                   label={field.label}
                   icon={field.icon}
+                  prefix={prefix}
                   placeholder={field.placeholder}
                   value={values.links[key]}
                   onChangeText={(v) => setLink(key, v)}
@@ -345,6 +411,7 @@ export function ProfileFields({
                   autoCapitalize="none"
                   autoCorrect={false}
                   spellCheck={false}
+                  accessibilityLabel={prefix ? `${field.label} handle, ${prefix}` : field.label}
                   returnKeyType={last ? 'done' : 'next'}
                   submitBehavior={last ? 'blurAndSubmit' : 'submit'}
                   onSubmitEditing={() => (next ? linkRefs.current[next]?.focus() : onSubmit?.())}

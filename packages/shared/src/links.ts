@@ -463,3 +463,202 @@ export function displayLink(key: LinkKey | 'email' | 'phone', value: string | nu
       return safeDecode(url.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/\/+$/, ''));
   }
 }
+
+// ---- Editable link fields (issue #18: Luma-style "fixed prefix + handle" inputs) ----
+
+/** Fixed part of the URL shown before the handle in the profile form. Website has no prefix. */
+export const LINK_PREFIXES: Partial<Record<LinkKey, string>> = {
+  x: 'x.com/',
+  telegram: 't.me/',
+  linkedin: 'linkedin.com/in/',
+  youtube: 'youtube.com/@',
+};
+
+/** Tracking/share-id param names stripTrackingParams always removes, whatever the host. */
+const TRACKING_PARAM_NAMES = new Set([
+  'fbclid',
+  'gclid',
+  'dclid',
+  'msclkid',
+  'mc_cid',
+  'mc_eid',
+  'igshid',
+  'igsh',
+  'si',
+  'ref_src',
+  'ref_url',
+  'trk',
+  'trackingid',
+  'lipi',
+  'originalsubdomain',
+]);
+
+/**
+ * Loosely splits a URL into its scheme, "host + path" and raw query/hash strings, without the URL API
+ * (React Native's polyfill is incomplete - see the file banner). Null when there's nothing before the
+ * query/hash to treat as a host.
+ */
+function splitUrlForQuery(
+  value: string,
+): { scheme: string | null; hostAndPath: string; query: string; hash: string } | null {
+  const schemeMatch = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(value);
+  const scheme = schemeMatch?.[1] ?? null;
+  const rest = schemeMatch ? value.slice(schemeMatch[0].length) : value;
+  const hashIndex = rest.indexOf('#');
+  const hash = hashIndex === -1 ? '' : rest.slice(hashIndex);
+  const beforeHash = hashIndex === -1 ? rest : rest.slice(0, hashIndex);
+  const queryIndex = beforeHash.indexOf('?');
+  const hostAndPath = queryIndex === -1 ? beforeHash : beforeHash.slice(0, queryIndex);
+  const query = queryIndex === -1 ? '' : beforeHash.slice(queryIndex + 1);
+  return hostAndPath ? { scheme, hostAndPath, query, hash } : null;
+}
+
+/**
+ * Removes utm_* params (case-insensitive), common ad/share click ids and LinkedIn's tracking params
+ * from a URL. 's' and 't' (X's share params) are only removed when the host is x.com or twitter.com,
+ * so a website link's own 's'/'t' query params survive. Keeps every other param and the hash untouched,
+ * drops a trailing '?' left by an emptied query, and never adds a scheme the caller didn't type.
+ * Never throws: returns the input unchanged when there's no query to clean or it isn't URL-shaped.
+ */
+export function stripTrackingParams(url: string): string {
+  const v = cleanText(url);
+  if (!v) return url;
+  const parsed = splitUrlForQuery(v);
+  if (!parsed || !parsed.query) return url;
+  const hostSegment = parsed.hostAndPath.split('/')[0] ?? '';
+  const host = hostSegment.toLowerCase().replace(/^(?:www|m|mobile)\./, '');
+  const isX = host === 'x.com' || host === 'twitter.com';
+  const kept = parsed.query
+    .split('&')
+    .filter(Boolean)
+    .filter((pair) => {
+      const name = (pair.includes('=') ? pair.slice(0, pair.indexOf('=')) : pair).toLowerCase();
+      if (/^utm_/.test(name)) return false;
+      if (TRACKING_PARAM_NAMES.has(name)) return false;
+      if (isX && (name === 's' || name === 't')) return false;
+      return true;
+    });
+  const query = kept.length ? `?${kept.join('&')}` : '';
+  return `${parsed.scheme ? `${parsed.scheme}://` : ''}${parsed.hostAndPath}${query}${parsed.hash}`;
+}
+
+/**
+ * The personal-profile id after '/in/', from a LinkedIn URL or a bare id. Null for anything else
+ * (a company page, a '/pub/...' URL, or junk) - mirrors toLinkedInUrl's bare-id branch, but only the
+ * host branch's single-segment '/in/<id>' path, since a company or /pub/ page isn't a plain handle.
+ */
+function linkedInHandle(value: string): string | null {
+  const v = cleanText(value);
+  if (!v) return null;
+  const host = LINKEDIN_HOST.exec(v);
+  if (host?.[1]) {
+    if (host[1].toLowerCase() === 'lnkd.in') return null;
+    const path = LINKEDIN_PROFILE_PATH.exec(v.slice(host[0].length));
+    if (!path?.[1] || path[1].toLowerCase() !== 'in' || !path[2]) return null;
+    const segments = path[2].split('/').filter(Boolean);
+    return segments.length === 1 && LINKEDIN_ID.test(segments[0]!) ? safeDecode(segments[0]!) : null;
+  }
+  // Same rule as toLinkedInUrl's bare-id branch: no scheme, no dot (so not a domain).
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(v) || v.includes('.')) return null;
+  const id = v
+    .replace(/^@/, '')
+    .replace(/^\/?in\//i, '')
+    .replace(/\/+$/, '');
+  return id.length >= 2 && id.length <= 100 && LINKEDIN_ID.test(id) ? safeDecode(id) : null;
+}
+
+const YOUTUBE_HANDLE_URL = /^(?:https?:\/\/)?(?:(?:www|m|mobile)\.)?youtube\.com\/@([^/?#]+)\/*(?:[?#].*)?$/i;
+/** Charset a YouTube handle may use - the same rule toYouTubeUrl applies to a bare '@name'. */
+const YOUTUBE_HANDLE_CHARS = /^(?:[A-Za-z0-9_.·-]|[^\x00-\x7F\s])+$/;
+
+/** The handle from a 'youtube.com/@name' URL (any scheme, with or without www/m/mobile), or a bare '@name'/'name'. */
+function youTubeHandle(value: string): string | null {
+  const v = cleanText(value);
+  if (!v) return null;
+  const bare = v.startsWith('@') ? v.slice(1) : /^[^./:]+$/.test(v) ? v : null;
+  if (bare !== null) return bare.length <= 100 && YOUTUBE_HANDLE_CHARS.test(bare) ? bare : null;
+  const match = YOUTUBE_HANDLE_URL.exec(v);
+  return match?.[1] ? safeDecode(match[1]) : null;
+}
+
+export type LinkFieldValue = { mode: 'handle'; handle: string } | { mode: 'url'; url: string };
+
+/**
+ * The value to show in the profile form for a stored link: a bare handle when one can be pulled out
+ * (an X/Telegram handle, a LinkedIn '/in/' id, a YouTube '@handle'), or the stored value as a full URL
+ * when it can't (a LinkedIn company page, a YouTube channel/'c/' URL, a website, or anything else
+ * unrecognised). An empty stored value gives an empty handle, so the field starts blank.
+ */
+export function linkFieldValue(key: LinkKey, stored: string | null | undefined): LinkFieldValue {
+  const v = cleanText(stored ?? '');
+  if (!v) return { mode: 'handle', handle: '' };
+  if (key === 'x') {
+    const handle = normalizeHandle(v);
+    if (handleNetwork(v) !== 'telegram' && isXHandle(handle) && !X_RESERVED.has(handle.toLowerCase())) {
+      return { mode: 'handle', handle };
+    }
+  } else if (key === 'telegram') {
+    const handle = normalizeHandle(v);
+    if (handleNetwork(v) !== 'x' && isTelegramHandle(handle) && !TELEGRAM_RESERVED.has(handle.toLowerCase())) {
+      return { mode: 'handle', handle };
+    }
+  } else if (key === 'linkedin') {
+    const handle = linkedInHandle(v);
+    if (handle) return { mode: 'handle', handle };
+  } else if (key === 'youtube') {
+    const handle = youTubeHandle(v);
+    if (handle) return { mode: 'handle', handle };
+  }
+  return { mode: 'url', url: v };
+}
+
+/**
+ * The value to store for a profile link field, from what the user typed or pasted.
+ *
+ * Handle networks (x, telegram, linkedin, youtube) lose a leading '@'. A pasted URL is cleaned of
+ * tracking params (stripTrackingParams) and, when possible, reduced to the network's canonical form:
+ * a bare handle for x/telegram, 'https://www.linkedin.com/in/<id>' for linkedin, or
+ * 'https://www.youtube.com/@<handle>' for youtube. A website value is only cleaned, never reduced.
+ * Anything that can't be reduced (a company page, a channel URL, plain junk) is kept, cleaned, exactly
+ * as entered: canonicalLinkValue never discards a value it doesn't recognise. An empty input stays
+ * empty. Every non-empty value this returns is accepted by toLinkUrl.
+ */
+export function canonicalLinkValue(key: LinkKey, input: string): string {
+  const trimmed = cleanText(input);
+  if (!trimmed) return '';
+  const stripped = stripTrackingParams(trimmed);
+  const cleaned = key === 'website' ? stripped : stripped.replace(/^@+/, '');
+  switch (key) {
+    case 'x': {
+      const handle = normalizeHandle(cleaned);
+      if (handleNetwork(cleaned) !== 'telegram' && isXHandle(handle) && !X_RESERVED.has(handle.toLowerCase())) {
+        return handle;
+      }
+      return cleaned;
+    }
+    case 'telegram': {
+      const handle = normalizeHandle(cleaned);
+      if (
+        handleNetwork(cleaned) !== 'x' &&
+        isTelegramHandle(handle) &&
+        !TELEGRAM_RESERVED.has(handle.toLowerCase())
+      ) {
+        return handle;
+      }
+      return cleaned;
+    }
+    case 'linkedin': {
+      const handle = linkedInHandle(cleaned);
+      const encoded = handle !== null ? encodeNonAscii(handle) : null;
+      return encoded ? `https://www.linkedin.com/in/${encoded}` : cleaned;
+    }
+    case 'youtube': {
+      const handle = youTubeHandle(cleaned);
+      const encoded = handle !== null ? encodeNonAscii(handle) : null;
+      return encoded ? `https://www.youtube.com/@${encoded}` : cleaned;
+    }
+    case 'website':
+    default:
+      return cleaned;
+  }
+}

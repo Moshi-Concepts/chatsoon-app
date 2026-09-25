@@ -31,6 +31,14 @@ const OWNER_LINKS = {
   linkedin: 'https://linkedin.com/in/olivia',
   website: 'https://olivia.dev',
 };
+// PUT /me/profile canonicalises links on save (issue #18): the '@' is dropped and the LinkedIn URL
+// gets its 'www.', so what's read back differs from what was sent in OWNER_LINKS above.
+const OWNER_LINKS_STORED = {
+  x: 'olivia',
+  telegram: 'olivia_tg',
+  linkedin: 'https://www.linkedin.com/in/olivia',
+  website: 'https://olivia.dev',
+};
 
 let owner: Session;
 let viewer: Session;
@@ -134,7 +142,7 @@ describe('GET /id/:slug', () => {
       headline: 'Partnerships at Chatsoon',
       company: 'Chatsoon',
       role: 'Head of Partnerships',
-      links: OWNER_LINKS,
+      links: OWNER_LINKS_STORED,
       avatarUrl: null,
       bookingLinks: [],
       contactChannels: [],

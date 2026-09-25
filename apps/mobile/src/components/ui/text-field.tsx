@@ -1,5 +1,5 @@
-import { forwardRef, useState } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { forwardRef, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { Fonts, Radius, Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -12,14 +12,26 @@ export type TextFieldProps = TextInputProps & {
   hint?: string;
   error?: string | null;
   icon?: IconName;
+  /**
+   * Fixed, non-editable text shown inside the input's left edge before the editable text (e.g.
+   * 'youtube.com/@'). Tapping it focuses the input. Combine with an `accessibilityLabel` that reads
+   * the prefix out, since screen readers don't see this text as part of the input's own value.
+   */
+  prefix?: string;
 };
 
 export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
-  { label, hint, error, icon, style, multiline, onFocus, onBlur, ...rest },
+  { label, hint, error, icon, prefix, style, multiline, onFocus, onBlur, ...rest },
   ref,
 ) {
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
+  const innerRef = useRef<TextInput>(null);
+  const setRef = (node: TextInput | null) => {
+    innerRef.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  };
   return (
     <View style={styles.wrap}>
       {label ? (
@@ -42,8 +54,15 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             <Icon name={icon} size={18} color="textTertiary" />
           </View>
         ) : null}
+        {prefix ? (
+          <Pressable onPress={() => innerRef.current?.focus()} hitSlop={4}>
+            <Text variant="body" color="textTertiary" style={styles.prefix}>
+              {prefix}
+            </Text>
+          </Pressable>
+        ) : null}
         <TextInput
-          ref={ref}
+          ref={setRef}
           placeholderTextColor={theme.textTertiary}
           multiline={multiline}
           onFocus={(e) => {
@@ -90,4 +109,7 @@ const styles = StyleSheet.create({
   // outlineStyle removes the browser focus ring on web; the border shows focus instead.
   input: { flex: 1, paddingVertical: Spacing.three, outlineStyle: 'none' } as object,
   multiline: { minHeight: 90 },
+  // No vertical padding of its own: it sits inline with the input's own paddingVertical so the two
+  // baselines line up, on both native and react-native-web (a Pressable defaults to block on web).
+  prefix: (Platform.OS === 'web' ? { display: 'inline' } : {}) as object,
 });

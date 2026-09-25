@@ -1,4 +1,5 @@
 import {
+  canonicalLinkValue,
   LINK_KEYS,
   makeSlug,
   profileInputSchema,
@@ -78,6 +79,13 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
   const input = await parseJson(c, profileInputSchema);
   // '' removes the photo, like null.
   const avatarKey = input.avatarKey === '' ? null : input.avatarKey;
+  // Canonicalise every provided link (a pasted URL is cleaned of tracking params and reduced to a
+  // handle or canonical URL where possible) so older clients that still send raw pasted URLs get the
+  // same cleanup as the current form. Only keys present in the input are touched.
+  for (const key of LINK_KEYS) {
+    const link = input.links?.[key];
+    if (link) input.links![key] = canonicalLinkValue(key, link);
+  }
   for (const key of LINK_KEYS) {
     const link = input.links?.[key];
     if (link && !toLinkUrl(key, link)) throw badRequest(LINK_HINTS[key]);

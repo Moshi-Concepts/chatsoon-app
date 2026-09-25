@@ -147,8 +147,8 @@ describe('PUT /me/profile', () => {
     expect(profile.headline).toBe('Building Chatsoon');
     expect(profile.company).toBe('Moshi Concepts');
     expect(profile.role).toBe('Founder');
-    // Empty links are dropped rather than stored as ''.
-    expect(profile.links).toEqual({ x: '@peterbui', telegram: 'peterbui', website: 'https://chatsoon.app' });
+    // Empty links are dropped rather than stored as ''. x is canonicalised (no leading '@').
+    expect(profile.links).toEqual({ x: 'peterbui', telegram: 'peterbui', website: 'https://chatsoon.app' });
     expect(profile.avatarKey).toBeNull();
     expect(profile.avatarUrl).toBeNull();
     expect(await userName(userId)).toBe('Péter Bùi');
@@ -201,7 +201,8 @@ describe('PUT /me/profile', () => {
     expect(kept.headline).toBe('Investor');
     expect(kept.company).toBe('Page Capital');
     expect(kept.role).toBe('Partner');
-    expect(kept.links).toEqual({ x: 'parker', youtube: 'https://youtube.com/@parker' });
+    // youtube is canonicalised to its https://www... form.
+    expect(kept.links).toEqual({ x: 'parker', youtube: 'https://www.youtube.com/@parker' });
 
     const cleared = await saveProfile(token, { displayName: 'Parker Page', headline: '', company: null });
     expect(cleared.headline).toBeNull();
@@ -217,10 +218,11 @@ describe('PUT /me/profile', () => {
       displayName: 'Lee Links',
       links: { telegram: null, linkedin: 'https://linkedin.com/in/lee' },
     });
-    expect(updated.links).toEqual({ x: 'lee', linkedin: 'https://linkedin.com/in/lee' });
+    // Canonicalised on save (issue #18): the LinkedIn URL gets its 'www.'.
+    expect(updated.links).toEqual({ x: 'lee', linkedin: 'https://www.linkedin.com/in/lee' });
 
     const ignored = await saveProfile(token, { displayName: 'Lee Links', links: { mastodon: '@lee' } });
-    expect(ignored.links).toEqual({ x: 'lee', linkedin: 'https://linkedin.com/in/lee' });
+    expect(ignored.links).toEqual({ x: 'lee', linkedin: 'https://www.linkedin.com/in/lee' });
   });
 
   it('rejects links that would not open, and saves nothing', async () => {
@@ -245,7 +247,7 @@ describe('PUT /me/profile', () => {
     expect(me.profile?.links).toEqual({});
   });
 
-  it('accepts the usual ways of typing each link and stores them as typed', async () => {
+  it('accepts the usual ways of typing each link, canonicalising them on save', async () => {
     const { token } = await signIn('good-links@example.com');
     const links = {
       x: 'https://x.com/bea_x?s=21',
@@ -255,10 +257,33 @@ describe('PUT /me/profile', () => {
       youtube: 'youtube.com/@bea',
     };
     const profile = await saveProfile(token, { displayName: 'Bea Good', links });
-    expect(profile.links).toEqual(links);
+    // A pasted URL is reduced to a bare handle for x/telegram, and to the canonical https://www...
+    // form for linkedin/youtube. Website has no canonical reduction, so it's kept as typed.
+    expect(profile.links).toEqual({
+      x: 'bea_x',
+      telegram: 'bea_tg',
+      linkedin: 'https://www.linkedin.com/in/bea-links',
+      website: 'bealinks.dev',
+      youtube: 'https://www.youtube.com/@bea',
+    });
 
     const handles = await saveProfile(token, { displayName: 'Bea Good', links: { x: '@bea_x', telegram: 'bea_tg' } });
-    expect(handles.links).toMatchObject({ x: '@bea_x', telegram: 'bea_tg' });
+    expect(handles.links).toMatchObject({ x: 'bea_x', telegram: 'bea_tg' });
+  });
+
+  it('cleans tracking params from a pasted link and reduces it to canonical form (issue #18)', async () => {
+    const { token } = await signIn('tracked-links@example.com');
+    const profile = await saveProfile(token, {
+      displayName: 'Tia Tracked',
+      links: {
+        // A YouTube channel URL shared from the app carries a '?si=' tracking id.
+        youtube: 'https://www.youtube.com/@tiatracked?si=aBcDeFgHiJ',
+        // An X profile URL shared from the app carries a '?s=20' tracking param.
+        x: 'https://x.com/tiatracked?s=20',
+      },
+    });
+    expect(profile.links?.youtube).toBe('https://www.youtube.com/@tiatracked');
+    expect(profile.links?.x).toBe('tiatracked');
   });
 
   it('retries with a new suffix when the slug is taken', async () => {
