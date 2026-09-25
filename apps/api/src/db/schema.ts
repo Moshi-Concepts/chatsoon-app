@@ -263,6 +263,56 @@ export const accountDeletions = sqliteTable(
   (t) => [index('account_deletions_delete_after_idx').on(t.deleteAfter)],
 );
 
+/**
+ * A person who opted in to tips emails from the public Connect form (issue #7) without (yet) having
+ * a Chatsoon account. `email` is the primary key (always lowercased): one row per address. The
+ * scheduled job (lib/sequences.ts `runEmailSequences`) sends up to three "create your profile" tips
+ * emails, advancing `step` and `nextSendAt` each time; it stops on `unsubscribedAt` or `convertedAt`
+ * (an account with this email now exists). No raw unsubscribe token is stored: the one-click link
+ * carries an HMAC of the email instead (lib/unsubscribe.ts), verified by recomputing.
+ */
+export const emailLeads = sqliteTable(
+  'email_leads',
+  {
+    email: text('email').primaryKey(),
+    consentAt: integer('consent_at', { mode: 'timestamp_ms' }).notNull(),
+    /** Where consent was captured, e.g. 'connect_form'. */
+    consentSource: text('consent_source').notNull(),
+    /** The exact checkbox wording shown at consent time, kept for the compliance record. */
+    consentText: text('consent_text').notNull(),
+    step: integer('step').notNull().default(0),
+    /** Null once the sequence is finished (after step 3), unsubscribed, or converted. */
+    nextSendAt: integer('next_send_at', { mode: 'timestamp_ms' }),
+    unsubscribedAt: integer('unsubscribed_at', { mode: 'timestamp_ms' }),
+    /** Set when a Chatsoon account is found (or created) for this email; stops the sequence. */
+    convertedAt: integer('converted_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('email_leads_next_send_idx').on(t.nextSendAt)],
+);
+
+/**
+ * A signed-in user's tips-email preferences and new-account nudge sequence (issue #7). One row per
+ * user, created when their profile is first saved (onboarding). `nudgeStep`/`nextNudgeAt` drive the
+ * two-step "finish your profile" / "share your link" nudge sequence in lib/sequences.ts; a null
+ * `nextNudgeAt` means the sequence is finished. `tipsOptOutAt` gates every tips email regardless of
+ * where the sequence is (PUT /me/email-prefs, or the one-click unsubscribe link). Like email_leads,
+ * no raw unsubscribe token is stored (lib/unsubscribe.ts).
+ */
+export const emailPrefs = sqliteTable(
+  'email_prefs',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tipsOptOutAt: integer('tips_opt_out_at', { mode: 'timestamp_ms' }),
+    nudgeStep: integer('nudge_step').notNull().default(0),
+    nextNudgeAt: integer('next_nudge_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('email_prefs_next_nudge_idx').on(t.nextNudgeAt)],
+);
+
 /** Daily counters for paid calls (card extraction), keyed like 'extract:user:<id>:2026-09-24'. */
 export const usageCounters = sqliteTable(
   'usage_counters',
@@ -280,3 +330,5 @@ export type ProfileRow = typeof profiles.$inferSelect;
 export type ContactRow = typeof contacts.$inferSelect;
 export type TagRow = typeof tags.$inferSelect;
 export type EventRow = typeof events.$inferSelect;
+export type EmailLeadRow = typeof emailLeads.$inferSelect;
+export type EmailPrefsRow = typeof emailPrefs.$inferSelect;

@@ -8,6 +8,8 @@ import {
   connections,
   contacts,
   contactTags,
+  emailLeads,
+  emailPrefs,
   events,
   profiles,
   reports,
@@ -82,6 +84,11 @@ export async function deleteUserData(env: Env, db: DB, userId: string, email: st
     db.delete(sessions).where(eq(sessions.userId, userId)),
     db.delete(accounts).where(eq(accounts.userId, userId)),
     db.delete(verifications).where(inArray(verifications.identifier, identifiers)),
+    // Issue #7's tips-email tables: email_prefs has a real FK on user_id (cascades), removed
+    // explicitly anyway per this function's own rule above; email_leads has no user_id column at
+    // all (a lead may predate any account), so it's found by the same lowercased email instead.
+    db.delete(emailPrefs).where(eq(emailPrefs.userId, userId)),
+    db.delete(emailLeads).where(eq(emailLeads.email, normalized)),
     // A pending scheduled deletion (issue #8, lib/deletion.ts) for this same account, if this is the
     // reviewer's immediate wipe or a direct DELETE /me while one happened to be pending.
     db.delete(accountDeletions).where(eq(accountDeletions.userId, userId)),

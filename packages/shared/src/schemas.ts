@@ -162,6 +162,11 @@ export const connectFormSchema = z.object({
   contact: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address').max(200)),
   note: publicText(1000),
   turnstileToken: z.string().min(1).max(4096),
+  /**
+   * The "Email me tips to set up my own free Chatsoon profile" checkbox (issue #7). Marketing
+   * consent, so it defaults to false: an older client that never sends it opts nobody in.
+   */
+  tipsOptIn: z.boolean().default(false),
 });
 export type ConnectFormInput = z.input<typeof connectFormSchema>;
 
@@ -208,3 +213,7 @@ export type DeleteAccountInput = z.input<typeof deleteAccountSchema>;
 /** POST /account-deletion/cancel: the token from the "scheduled" email's cancel link. */
 export const cancelDeletionSchema = z.object({ token: z.string().trim().min(1).max(512) });
 export type CancelDeletionInput = z.input<typeof cancelDeletionSchema>;
+
+/** PUT /me/email-prefs (issue #7): turns the new-account "tips" nudge emails on or off. */
+export const emailPrefsInputSchema = z.object({ tipsEmails: z.boolean() });
+export type EmailPrefsInput = z.input<typeof emailPrefsInputSchema>;

@@ -128,7 +128,7 @@ describe('connectFormSchema moderation', () => {
   const valid = { name: 'Jane Doe', contact: 'jane@example.com', note: 'Great chat at the expo', turnstileToken: 't' };
 
   it('still parses a valid form', () => {
-    expect(connectFormSchema.parse({ ...valid, note: '  ' })).toEqual({ ...valid, note: null });
+    expect(connectFormSchema.parse({ ...valid, note: '  ' })).toEqual({ ...valid, note: null, tipsOptIn: false });
     expect(connectFormSchema.parse(valid).note).toBe('Great chat at the expo');
   });
 

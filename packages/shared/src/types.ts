@@ -105,6 +105,17 @@ export interface Me {
   profile: MyProfile | null;
   /** ISO timestamp of a pending account deletion (issue #8), or null. See POST/DELETE /me/deletion. */
   deletionScheduledFor: string | null;
+  /**
+   * "Tips" emails (issue #7: new-account nudges to finish the profile and share the link). True
+   * unless the account opted out, whether by PUT /me/email-prefs or the one-click unsubscribe link.
+   * Optional only because older cached responses lack it; the API always sends it.
+   */
+  tipsEmails?: boolean;
+}
+
+/** PUT /me/email-prefs response (issue #7): the value actually saved. */
+export interface EmailPrefsResponse {
+  tipsEmails: boolean;
 }
 
 /** POST /me/deletion (issue #8): schedules (or, for the reviewer account, immediately runs) deletion. */

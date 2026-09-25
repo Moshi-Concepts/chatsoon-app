@@ -64,6 +64,13 @@
       "when": 1790347968509,
       "tag": "0008_account_deletions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790355533744,
+      "tag": "0009_email_sequences",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,8 @@ export interface EmailMessage {
   text: string;
   html?: string;
   replyTo?: string;
+  /** Extra headers Resend should set, e.g. the RFC 8058 List-Unsubscribe pair on a tips email. */
+  headers?: Record<string, string>;
 }
 
 /** In 'log' mode every message is also pushed here (synchronously) so tests can read sign-in codes. */
@@ -52,6 +54,8 @@ export async function sendEmail(env: Env, msg: EmailMessage): Promise<void> {
     subject: msg.subject,
     text: msg.text,
     ...(msg.html ? { html: msg.html } : {}),
+    // The Resend API takes an object of extra headers to set on the outgoing message.
+    ...(msg.headers ? { headers: msg.headers } : {}),
   });
   // One key for every attempt, so a retry after a lost response never delivers the email twice.
   const idempotencyKey = crypto.randomUUID();
@@ -196,7 +200,7 @@ function footerHtml(year: number): string {
         </tr>`;
 }
 
-function shellHtml(subject: string, preheader: string, cardHtml: string): string {
+function shellHtml(subject: string, preheader: string, cardHtml: string, footer?: string): string {
   const year = new Date().getUTCFullYear();
   return `<!DOCTYPE html>
 <html lang="en">
@@ -221,13 +225,23 @@ function shellHtml(subject: string, preheader: string, cardHtml: string): string
             ${cardHtml}
           </td>
         </tr>
-        ${footerHtml(year)}
+        ${footer ?? footerHtml(year)}
       </table>
     </td>
   </tr>
 </table>
 </body>
 </html>`;
+}
+
+function ctaButtonHtml(url: string, label: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-radius:10px;background-color:${BRAND};">
+                  <a href="${url}" style="display:inline-block;padding:14px 24px;font-family:${FONT};font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;">${escapeHtml(label)}</a>
+                </td>
+              </tr>
+            </table>`;
 }
 
 /**
@@ -300,4 +314,93 @@ export function accountDeletedEmail(): RenderedEmail {
     text,
     html: shellHtml(subject, `Your ${APP_NAME} account and everything in it have been permanently deleted.`, cardHtml),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Tips emails (issue #7): the lead nurture sequence (people who opted in on the public Connect
+// form but don't have an account) and the new-account nudges. Both are marketing, not transactional,
+// so every one of these - unlike every template above - carries the sender/support line, a reason
+// for getting it, and the RFC 8058 one-click unsubscribe link (lib/unsubscribe.ts builds the token
+// and the matching List-Unsubscribe headers; this file only lays out the copy). Nothing the
+// recipient or anyone else typed (a name, a note, profile text) ever appears in these: the copy is
+// fixed, and the only per-recipient value is a Chatsoon-assigned profile slug (nudge step 2).
+// ---------------------------------------------------------------------------
+
+function tipsFooterText(consentLine: string, unsubscribeUrl: string): string {
+  return [consentLine, `Unsubscribe: ${unsubscribeUrl}`, `${APP_NAME}, by ${COPYRIGHT} · ${SUPPORT_EMAIL}`].join(
+    '\n',
+  );
+}
+
+function tipsFooterHtml(consentLine: string, unsubscribeUrl: string): string {
+  return `<tr>
+          <td style="padding:24px 8px 0 8px;font-family:${FONT};font-size:12px;line-height:18px;color:${FAINT};">
+            ${escapeHtml(consentLine)}<br>
+            <a href="${unsubscribeUrl}" style="color:${BRAND};text-decoration:none;">Unsubscribe</a><br>
+            ${APP_NAME}, by ${escapeHtml(COPYRIGHT)} &middot; <a href="mailto:${SUPPORT_EMAIL}" style="color:${BRAND};text-decoration:none;">${SUPPORT_EMAIL}</a>
+          </td>
+        </tr>`;
+}
+
+const LEAD_CONSENT_LINE = "You're getting this because you asked for tips when you connected with someone on Chatsoon.";
+const NUDGE_CONSENT_LINE = "You're getting this because you have a Chatsoon account. Turn these off in Me › Tips emails.";
+
+/**
+ * The three-step lead nurture sequence (lib/sequences.ts `runEmailSequences`), for someone who
+ * opted in on the public Connect form but doesn't have a Chatsoon account yet. `signInUrl` is
+ * `${WEB_ORIGIN}/sign-in`, built by the caller so this file stays free of env-specific URLs.
+ */
+export function leadStepEmail(step: 1 | 2 | 3, signInUrl: string, unsubscribeUrl: string): RenderedEmail {
+  const copy: Record<1 | 2 | 3, { subject: string; lead: string }> = {
+    1: {
+      subject: 'Create your free Chatsoon profile',
+      lead: 'You said yes to tips on setting up your own free Chatsoon profile: a digital business card people can save with one tap.',
+    },
+    2: {
+      subject: 'Your digital business card, ready in a minute',
+      lead: 'A Chatsoon profile is your digital business card: a QR code and link people can scan or tap to save your details instantly, no app required on their end.',
+    },
+    3: {
+      subject: 'Last reminder: your free Chatsoon profile',
+      lead: 'Last reminder: your free Chatsoon profile is still waiting whenever you want it. It only takes a minute to set up.',
+    },
+  };
+  const { subject, lead } = copy[step];
+
+  const text = [lead, '', 'Set yours up:', signInUrl, '', tipsFooterText(LEAD_CONSENT_LINE, unsubscribeUrl)].join('\n');
+
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">${escapeHtml(subject)}</p>
+            <p style="margin:0 0 24px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">${escapeHtml(lead)}</p>
+            ${ctaButtonHtml(signInUrl, 'Set up my profile')}`;
+
+  return { subject, text, html: shellHtml(subject, lead, cardHtml, tipsFooterHtml(LEAD_CONSENT_LINE, unsubscribeUrl)) };
+}
+
+/**
+ * The two-step new-account nudge sequence (lib/sequences.ts `runEmailSequences`). Step 1 only ever
+ * sends when the profile is still incomplete; step 2 always sends and includes the account's own
+ * profile link (`ctaUrl`, e.g. `chatsoon.app/id/<slug>`), never the display name.
+ */
+export function nudgeEmail(step: 1 | 2, ctaUrl: string, unsubscribeUrl: string): RenderedEmail {
+  if (step === 1) {
+    const subject = 'Finish your Chatsoon profile';
+    const lead = 'Add a photo, headline and links, so people remember you.';
+    const text = [lead, '', 'Finish your profile:', ctaUrl, '', tipsFooterText(NUDGE_CONSENT_LINE, unsubscribeUrl)].join(
+      '\n',
+    );
+    const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">${escapeHtml(subject)}</p>
+            <p style="margin:0 0 24px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">${escapeHtml(lead)}</p>
+            ${ctaButtonHtml(ctaUrl, 'Finish my profile')}`;
+    return { subject, text, html: shellHtml(subject, lead, cardHtml, tipsFooterHtml(NUDGE_CONSENT_LINE, unsubscribeUrl)) };
+  }
+
+  const subject = 'Put your Chatsoon link in your bio';
+  // The link itself is Chatsoon's own data (a slug we assigned), not anything the user typed.
+  const linkText = ctaUrl.replace(/^https?:\/\//, '');
+  const lead = `Add ${linkText} to your X and LinkedIn bios so the people you meet can find you.`;
+  const text = [lead, '', ctaUrl, '', tipsFooterText(NUDGE_CONSENT_LINE, unsubscribeUrl)].join('\n');
+  const cardHtml = `<p style="margin:0 0 8px 0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:700;color:${INK};">${escapeHtml(subject)}</p>
+            <p style="margin:0 0 24px 0;font-family:${FONT};font-size:15px;line-height:22px;color:${MUTED};">Add <strong style="color:${INK};">${escapeHtml(linkText)}</strong> to your X and LinkedIn bios so the people you meet can find you.</p>
+            ${ctaButtonHtml(ctaUrl, 'View my profile')}`;
+  return { subject, text, html: shellHtml(subject, lead, cardHtml, tipsFooterHtml(NUDGE_CONSENT_LINE, unsubscribeUrl)) };
 }

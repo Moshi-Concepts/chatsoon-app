@@ -1,5 +1,6 @@
 import {
   canonicalLinkValue,
+  emailPrefsInputSchema,
   isDiscordDiscriminator,
   isDiscordId,
   isDiscordInvite,
@@ -8,6 +9,7 @@ import {
   makeSlug,
   profileInputSchema,
   toLinkUrl,
+  type EmailPrefsResponse,
   type LinkKey,
   type Me,
 } from '@chatsoon/shared';
@@ -25,6 +27,7 @@ import { requireAuth } from '../lib/middleware';
 import { hashKey16, refreshOgCard } from '../lib/og';
 import { findProfileByUserId, isAvatarKey } from '../lib/profiles';
 import { parseContact, parseLinks, toMyProfile } from '../lib/serialize';
+import { setTipsEmailsEnabled, startTipsNudges, tipsEmailsEnabled } from '../lib/sequences';
 import { seedDefaultTags } from '../lib/tags';
 
 /** Slug suffixes are random; a collision is rare, five in a row is practically impossible. */
@@ -75,13 +78,27 @@ profileRoutes.get('/me', requireAuth, async (c) => {
     .limit(1);
   if (!user) throw unauthorized();
 
-  const [profile, deleteAfter] = await Promise.all([findProfileByUserId(db, id), pendingDeletionFor(db, id)]);
+  const [profile, deleteAfter, tipsEmails] = await Promise.all([
+    findProfileByUserId(db, id),
+    pendingDeletionFor(db, id),
+    tipsEmailsEnabled(db, id),
+  ]);
   const body: Me = {
     user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
     profile: profile ? await toMyProfile(c.env, profile) : null,
     deletionScheduledFor: deleteAfter ? deleteAfter.toISOString() : null,
+    tipsEmails,
   };
   c.header('Cache-Control', 'private, no-store');
+  return c.json(body);
+});
+
+/** Turns the new-account "tips" nudge emails on or off (issue #7). Works even before onboarding. */
+profileRoutes.put('/me/email-prefs', requireAuth, async (c) => {
+  const { id: userId } = c.get('user');
+  const input = await parseJson(c, emailPrefsInputSchema);
+  await setTipsEmailsEnabled(getDb(c.env), userId, input.tipsEmails);
+  const body: EmailPrefsResponse = { tipsEmails: input.tipsEmails };
   return c.json(body);
 });
 
@@ -91,7 +108,7 @@ profileRoutes.get('/me', requireAuth, async (c) => {
  * because printed QR codes point at it.
  */
 profileRoutes.put('/me/profile', requireAuth, async (c) => {
-  const { id: userId } = c.get('user');
+  const { id: userId, email: userEmail } = c.get('user');
   const input = await parseJson(c, profileInputSchema);
   // '' removes the photo, like null.
   const avatarKey = input.avatarKey === '' ? null : input.avatarKey;
@@ -155,6 +172,11 @@ profileRoutes.put('/me/profile', requireAuth, async (c) => {
         // The profile is saved; missing starter tags must not fail onboarding.
         console.error('Seeding default tags failed', err);
       }
+      // Onboarding just finished (issue #7): starts the new-account nudge sequence and converts any
+      // tips-email lead row for this same address. Best effort, same as the tag seeding above.
+      c.executionCtx.waitUntil(
+        startTipsNudges(db, userId, userEmail).catch((err) => console.error('Starting tips nudges failed', err)),
+      );
     } else {
       // A concurrent first save created the profile a moment ago.
       row = await updateProfile(db, userId, values);

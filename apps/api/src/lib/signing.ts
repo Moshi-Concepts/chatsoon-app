@@ -6,7 +6,8 @@ import type { Env } from '../env';
 
 const enc = new TextEncoder();
 
-async function hmacHex(secret: string, data: string): Promise<string> {
+/** Exported for lib/unsubscribe.ts, which HMACs a lead's email or a user id the same way. */
+export async function hmacHex(secret: string, data: string): Promise<string> {
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
     'sign',
   ]);

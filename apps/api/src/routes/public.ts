@@ -19,6 +19,7 @@ import { ApiError, badRequest, clientIp, ipKey, limit, notFound, parseJson } fro
 import { newId } from '../lib/ids';
 import { optionalAuth } from '../lib/middleware';
 import { contactFieldsFromConnectValue, findProfileBySlug, hasBlocked } from '../lib/profiles';
+import { maybeCreateLead } from '../lib/sequences';
 import { parseBookingLinks, parseContact, parseLinks, toPublicProfile } from '../lib/serialize';
 import { signedVcardUrl, verifyVcardSignature } from '../lib/signing';
 import { verifyTurnstile } from '../lib/turnstile';
@@ -180,6 +181,14 @@ publicRoutes.post('/id/:slug/connect', optionalAuth, async (c) => {
     .from(contacts)
     .where(and(eq(contacts.userId, owner.userId), eq(contacts.source, 'web_connect'), gt(contacts.createdAt, since)));
   if ((recent?.n ?? 0) <= CONNECT_EMAILS_PER_DAY) c.executionCtx.waitUntil(notifyOwner(c.env, db, owner.userId));
+
+  // Marketing consent (issue #7): only for a visitor who ticked the box, and only ever the sender's
+  // own address (input.contact), never anything about the profile owner they're connecting with.
+  if (input.tipsOptIn) {
+    c.executionCtx.waitUntil(
+      maybeCreateLead(c.env, db, input.contact).catch((err) => console.error('Tips lead signup failed', err)),
+    );
+  }
 
   const body: ConnectFormResponse = { ok: true };
   const usable = usableContact(parseContact(owner.contact));

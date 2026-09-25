@@ -6,9 +6,11 @@ import type { AppEnv, Env } from './env';
 import { allowedOrigins, createAuth, otpRateLimit } from './lib/auth';
 import { runDueDeletions } from './lib/deletion';
 import { errorBody, onError } from './lib/errors';
+import { runEmailSequences } from './lib/sequences';
 import { accountRoutes } from './routes/account';
 import { connectionsRoutes } from './routes/connections';
 import { contactsRoutes } from './routes/contacts';
+import { emailRoutes } from './routes/email';
 import { eventsRoutes } from './routes/events';
 import { extractRoutes } from './routes/extract';
 import { filesRoutes } from './routes/files';
@@ -32,6 +34,7 @@ import { tagsRoutes } from './routes/tags';
 //   POST /extract/card                                                routes/extract.ts
 //   POST /reports  POST /blocks  DELETE /blocks/:userId               routes/moderation.ts
 //   GET /_pages/profile/:slug  GET /_pages/og/:slug (secret-gated)     routes/pages.ts
+//   GET/POST /email/unsubscribe (no auth)                              routes/email.ts
 
 const app = new Hono<AppEnv>();
 
@@ -78,14 +81,17 @@ app.route('/', filesRoutes);
 app.route('/', extractRoutes);
 app.route('/', moderationRoutes);
 app.route('/', pagesRoutes);
+app.route('/', emailRoutes);
 
 /**
  * The wrangler.jsonc `triggers.crons` entry (every 10 minutes): finishes any account deletion
- * (issue #8) whose grace period has passed. All the logic lives in `runDueDeletions`, which is
- * plain and directly testable; this just wires it up and keeps it alive past the response.
+ * (issue #8) whose grace period has passed, and sends any due tips-email (issue #7) step or nudge.
+ * Each job gets its own `waitUntil`/`catch` so a failure in one never affects the other; within each
+ * job, `runDueDeletions`/`runEmailSequences` isolate failures row by row the same way.
  */
 async function scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
   ctx.waitUntil(runDueDeletions(env, Date.now()).catch((err) => console.error('runDueDeletions failed', err)));
+  ctx.waitUntil(runEmailSequences(env, Date.now()).catch((err) => console.error('runEmailSequences failed', err)));
 }
 
 // Cloudflare calls `.fetch` and `.scheduled` on whatever this module exports as default; `app.fetch`
