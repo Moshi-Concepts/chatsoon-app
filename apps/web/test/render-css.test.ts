@@ -89,3 +89,12 @@ describe('css() dark-mode text contrast (regression for the --primary/--primary-
     });
   });
 });
+
+describe('css() keeps island-toggled elements hideable', () => {
+  // An id rule that sets `display` outranks the user agent's `[hidden]{display:none}`, so each element
+  // the Connect island hides needs its own `[hidden]` override, or `el.hidden = true` does nothing.
+  it.each(['#connect-form', '#connect-error', '#connect-success'])('%s[hidden] is display:none', (id) => {
+    const hiding = rules(sheet).filter(({ selector }) => selector.split(',').includes(`${id}[hidden]`));
+    expect(hiding.map(({ declarations }) => declarations)).toContain('display:none');
+  });
+});

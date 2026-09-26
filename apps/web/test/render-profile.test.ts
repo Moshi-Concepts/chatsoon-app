@@ -360,6 +360,16 @@ describe('renderProfile', () => {
     });
   });
 
+  describe('connect success card (issue #30)', () => {
+    it('ships the hidden success card with its green tick badge, and the tick in the sprite', () => {
+      const html = renderProfile(BASE, ASSETS);
+      expect(html).toMatch(
+        /<div id="connect-success" hidden><div class="success-badge"><svg[^>]*><use href="#icon-checkmark-circle"><\/use><\/svg><\/div><\/div>/,
+      );
+      expect(html).toContain('id="icon-checkmark-circle"');
+    });
+  });
+
   describe('badge pill (issue #11)', () => {
     it('renders no pill markup when there are no badges (the css() rules are always present, but no element uses them)', () => {
       const html = renderProfile({ ...BASE, badges: [] }, ASSETS);
