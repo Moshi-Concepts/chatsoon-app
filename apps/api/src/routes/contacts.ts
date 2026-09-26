@@ -2,27 +2,33 @@ import {
   contactCreateSchema,
   contactUpdateSchema,
   followUpDueAt,
+  followUpFirstName,
   followUpInputSchema,
+  followUpTemplateBody,
   remindDueAt,
   remindFollowUpSchema,
   undoFollowUpSchema,
   type Contact,
   type ContactsResponse,
   type ExtractionStatus,
+  type FollowUpDraftResponse,
 } from '@chatsoon/shared';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
-import { contacts, tags, type ContactRow } from '../db/schema';
+import { contacts, events, tags, type ContactRow } from '../db/schema';
 import type { AppEnv } from '../env';
+import { draftFollowUp, FollowUpDraftError } from '../lib/anthropic';
 import { getContact, loadContacts } from '../lib/contacts';
 import { getDb, type DB } from '../lib/db';
 import { badRequest, conflict, limit, notFound, parseJson, userKey } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { requireAuth } from '../lib/middleware';
+import { findProfileByUserId } from '../lib/profiles';
 import { isCardKey } from '../lib/signing';
 import { assertTagsOwned, contactTagWrites } from '../lib/tags';
+import { reserveFollowUpDraft } from '../lib/usage';
 import { assertEventVisible, listVisibleEvents } from './events';
 
 export const contactsRoutes = new Hono<AppEnv>();
@@ -379,4 +385,75 @@ contactsRoutes.patch('/contacts/:id/follow-up', requireAuth, async (c) => {
   if (!updated) throw notFound('Contact not found');
 
   return c.json(await mustGetContact(c, db, id));
+});
+
+/**
+ * Drafts a follow-up message body with Claude, from the caller's own profile and their notes about
+ * this contact (issue #33 PR B). Always answers 200 with a usable body: the fixed template whenever
+ * the AI draft is switched off, over its daily spend cap, or the model call itself fails - so the
+ * app never has to show an error for this, only the per-minute rate limiter still answers 429.
+ */
+contactsRoutes.post('/contacts/:id/follow-up/draft', requireAuth, async (c) => {
+  const userId = c.get('user').id;
+  const id = c.req.param('id');
+  const db = getDb(c.env);
+
+  // 404 before anything else: never spend a model call, or even reveal whether the id exists, for a
+  // contact that isn't mine.
+  const contact = await mustGetContact(c, db, id);
+  await limit(c.env.FOLLOWUP_LIMITER, userKey(c, 'followup-draft', userId));
+
+  const eventName = contact.eventId
+    ? ((await db.select({ name: events.name }).from(events).where(eq(events.id, contact.eventId)).limit(1))[0]?.name ??
+      null)
+    : null;
+
+  // Filled in immediately either way, so the sheet is never left with an empty draft.
+  const templateBody = followUpTemplateBody(followUpFirstName(contact.name), eventName);
+  const respondTemplate = (limited?: boolean) => {
+    const body: FollowUpDraftResponse = { body: templateBody, source: 'template' };
+    if (limited) body.limited = true;
+    return c.json(body);
+  };
+
+  const budget = await reserveFollowUpDraft(c.env, userId);
+  if (!budget.ok) return respondTemplate(budget.reason === 'user_limit');
+
+  const [profile, tagRows] = await Promise.all([
+    findProfileByUserId(db, userId),
+    contact.tagIds.length
+      ? db
+          .select({ name: tags.name })
+          .from(tags)
+          .where(and(eq(tags.userId, userId), inArray(tags.id, contact.tagIds)))
+      : Promise.resolve([]),
+  ]);
+
+  try {
+    const body = await draftFollowUp(c.env, {
+      sender: {
+        displayName: profile?.displayName ?? '',
+        role: profile?.role ?? null,
+        company: profile?.company ?? null,
+        headline: profile?.headline ?? null,
+      },
+      contact: {
+        name: contact.name,
+        company: contact.company,
+        role: contact.role,
+        // Untrusted: draftFollowUp's prompt treats every one of these contact fields as data, never
+        // instructions (issue #33 PR B prompt-injection safety) - notes most of all, since they're
+        // free text the user themselves wrote about someone else.
+        notes: contact.notes,
+        tagNames: tagRows.map((t) => t.name),
+        priority: contact.priority,
+        eventName,
+        source: contact.source,
+      },
+    });
+    return c.json({ body, source: 'ai' } satisfies FollowUpDraftResponse);
+  } catch (err) {
+    if (!(err instanceof FollowUpDraftError)) console.error('Follow-up draft failed', err);
+    return respondTemplate();
+  }
 });

@@ -43,6 +43,6 @@ export const INTRO_CARDS: IntroCard[] = [
     where: 'Contacts tab',
     whereIcon: 'people-outline',
     title: 'Follow up in a tap',
-    body: 'Message people on Telegram, email, LinkedIn or X straight from their contact, and use priorities and tags so no lead slips through.',
+    body: "Chatsoon reminds you who's due and drafts a follow-up from your notes. Send it on WhatsApp, text, email or LinkedIn in one tap.",
   },
 ];

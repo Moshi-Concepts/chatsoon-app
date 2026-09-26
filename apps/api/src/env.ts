@@ -20,6 +20,8 @@ export interface Env {
   SCAN_LIMITER: RateLimit;
   UPLOAD_LIMITER: RateLimit;
   EXTRACT_LIMITER: RateLimit;
+  /** Per user, on AI follow-up drafts (issue #33 PR B). */
+  FOLLOWUP_LIMITER: RateLimit;
   REPORT_LIMITER: RateLimit;
   /** Per user, on writes that add rows. */
   WRITE_LIMITER: RateLimit;
@@ -47,6 +49,14 @@ export interface Env {
   EXTRACT_DAILY_PER_USER?: string;
   /** Card extractions across all accounts per UTC day. */
   EXTRACT_DAILY_TOTAL?: string;
+  /** Model for AI follow-up drafts (issue #33 PR B), defaulting like EXTRACT_MODEL to claude-haiku-4-5. */
+  FOLLOWUP_MODEL?: string;
+  /** "false" turns the AI draft off entirely (kill switch); the route always falls back to the template. */
+  FOLLOWUP_AI_ENABLED?: string;
+  /** AI follow-up drafts per account per UTC day. */
+  FOLLOWUP_DAILY_PER_USER?: string;
+  /** AI follow-up drafts across all accounts per UTC day. */
+  FOLLOWUP_DAILY_TOTAL?: string;
 
   // Secrets
   BETTER_AUTH_SECRET: string;

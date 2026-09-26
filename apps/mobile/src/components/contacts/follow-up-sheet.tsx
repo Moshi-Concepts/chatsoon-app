@@ -2,6 +2,7 @@ import {
   composeFollowUpMessage,
   FOLLOW_UP_CHANNELS,
   followUpChannelAvailable,
+  followUpFirstName,
   followUpMailtoUrl,
   followUpSignature,
   followUpSmsWebUrl,
@@ -13,7 +14,7 @@ import {
 } from '@chatsoon/shared';
 import * as Clipboard from 'expo-clipboard';
 import * as SMS from 'expo-sms';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -27,20 +28,21 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Icon, Text, TextField, type IconName } from '@/components/ui';
+import { Button, Card, Icon, Text, TextField, type IconName } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { isNetworkError } from '@/lib/api';
 import { openExternalUrl } from '@/lib/browser';
-import { showError } from '@/lib/dialogs';
-import { useFollowUp, useMe, useReferral } from '@/lib/queries';
+import { confirm, showError } from '@/lib/dialogs';
+import { useFollowUp, useFollowUpDraft, useMe, useReferral } from '@/lib/queries';
+import { getJson, setJson } from '@/lib/storage';
 
 import { openLink } from './contact-channels';
 
-// The draft sheet (issue #33 PR A): an editable template message plus a row of send channels. PR B
-// (AI draft) only needs to swap `buildDraftBody` below for an async, AI-generated body behind a
-// loading state - the signature, its composition (composeFollowUpMessage) and everything else here
-// stays the same.
+// The draft sheet (issue #33): the body is filled with the fixed template the instant the sheet
+// opens (buildDraftBody), so it's never empty, then PR B's AI draft (useFollowUpDraft) replaces it
+// once it arrives - unless the person already started editing. The signature and its composition
+// (composeFollowUpMessage) are the same for either body.
 
 export type FollowUpPrevious = {
   followedUpAt: string | null;
@@ -70,10 +72,17 @@ const CHANNEL_SPECS: ChannelSpec[] = [
   { channel: 'copy', label: 'Copy message', icon: 'copy-outline' },
 ];
 
-const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+const firstName = followUpFirstName;
 
-/** PR B swaps this for an async, AI-generated body. Everything downstream (the signature and its
- * composition) is unaffected - see composeFollowUpMessage in packages/shared/src/follow-up.ts. */
+/**
+ * Card scanning's one-time AI consent (apps/mobile/src/app/(app)/card.tsx's CARD_AI_CONSENT_KEY),
+ * mirrored here for the AI follow-up draft (issue #33 PR B): App Store 5.1.2(i) needs a clear
+ * disclosure and an explicit yes before the first one. Stored per account on this device.
+ */
+const FOLLOWUP_AI_CONSENT_KEY = 'chatsoon.followUpAiConsent';
+
+/** The instant fill so the sheet is never empty; useFollowUpDraft below replaces it with the AI
+ * draft once it arrives, unless the person already started editing. */
 function buildDraftBody(contact: Contact, eventName: string | null | undefined): string {
   return followUpTemplateBody(firstName(contact.name), eventName);
 }
@@ -102,6 +111,7 @@ function FollowUpSheetBody({ onClose, contact, eventName, onFollowedUp }: Follow
   const me = useMe();
   const referral = useReferral();
   const followUp = useFollowUp(contact.id);
+  const aiDraft = useFollowUpDraft(contact.id);
 
   const initialText = useMemo(() => {
     const displayName = me.data?.profile?.displayName || '';
@@ -115,11 +125,90 @@ function FollowUpSheetBody({ onClose, contact, eventName, onFollowedUp }: Follow
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Issue #33 PR B: the AI draft, gated by a one-time-per-account consent (mirrors card.tsx's
+  // CARD_AI_CONSENT_KEY). `source` reflects what's actually in `text` right now, not just what the
+  // last request returned - see requestAiDraft, which skips replacing `text` once the person has
+  // started editing it themselves.
+  const userId = me.data?.user.id;
+  const consentKey = `${FOLLOWUP_AI_CONSENT_KEY}.${userId ?? 'unknown'}`;
+  // null while the saved answer is still loading.
+  const [consent, setConsent] = useState<boolean | null>(null);
+  const [consentDismissed, setConsentDismissed] = useState(false);
+  const [source, setSource] = useState<'template' | 'ai'>('template');
+  const edited = useRef(false);
+  const requestedOnOpen = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getJson<boolean>(consentKey, false).then((saved) => {
+      if (!cancelled) setConsent(saved === true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [consentKey]);
+
+  async function requestAiDraft() {
+    try {
+      const result = await aiDraft.mutateAsync();
+      // The person started typing while this was in flight: their text wins, never overwritten.
+      if (edited.current) return;
+      const displayName = me.data?.profile?.displayName || '';
+      const referralLink = referral.data?.link || 'https://chatsoon.app';
+      setText(composeFollowUpMessage(result.body, followUpSignature(displayName, referralLink)));
+      setSource(result.source);
+    } catch {
+      // Network or server hiccup: the template already filled in keeps working. Never shown as an
+      // error - Regenerate tries again if the person wants to.
+    }
+  }
+
+  // Requests the first AI draft as soon as consent is in place, once per time the sheet is open.
+  useEffect(() => {
+    if (consent !== true || requestedOnOpen.current) return;
+    requestedOnOpen.current = true;
+    void requestAiDraft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consent]);
+
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 2500);
     return () => clearTimeout(timer);
   }, [copied]);
+
+  async function allowAiDrafts() {
+    // If storage fails, still go ahead this time; we'll just ask again next time.
+    await setJson(consentKey, true).catch(() => undefined);
+    setConsent(true);
+  }
+
+  /** The Regenerate button: asks for consent first if it hasn't been given, and confirms before
+   * discarding an edit the person already made. */
+  async function regenerate() {
+    if (busy || aiDraft.isPending) return;
+    if (consent !== true) {
+      setConsentDismissed(false);
+      return;
+    }
+    if (edited.current) {
+      const ok = await confirm({
+        title: 'Replace your message?',
+        message: 'This will overwrite your changes with a new AI draft.',
+        confirmText: 'Replace',
+      });
+      if (!ok) return;
+    }
+    edited.current = false;
+    await requestAiDraft();
+  }
+
+  /** The only path that marks the text as user-edited: programmatic updates (the AI draft arriving,
+   * Regenerate) call setText directly instead, so they're never mistaken for an edit. */
+  function onChangeText(value: string) {
+    edited.current = true;
+    setText(value);
+  }
 
   const channels = CHANNEL_SPECS.filter((spec) => followUpChannelAvailable(spec.channel, contact));
 
@@ -256,13 +345,47 @@ function FollowUpSheetBody({ onClose, contact, eventName, onFollowedUp }: Follow
           <TextField
             label="Message"
             value={text}
-            onChangeText={setText}
+            onChangeText={onChangeText}
             multiline
             maxLength={2000}
             editable={!busy}
             accessibilityLabel="Follow-up message"
             style={styles.input}
           />
+
+          {consent === false && !consentDismissed ? (
+            <FollowUpAiConsent onAllow={() => void allowAiDrafts()} onNotNow={() => setConsentDismissed(true)} />
+          ) : consent !== null ? (
+            <View style={styles.draftRow}>
+              <View style={styles.flex}>
+                {aiDraft.isPending ? (
+                  <View style={styles.draftStatus}>
+                    <ActivityIndicator size="small" color={theme.textSecondary} />
+                    <Text variant="caption" color="textSecondary">
+                      Writing a draft…
+                    </Text>
+                  </View>
+                ) : source === 'ai' ? (
+                  <Text variant="caption" color="textSecondary">
+                    Drafted with AI from your notes. Check it before sending.
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => void regenerate()}
+                disabled={!!busy || aiDraft.isPending}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Regenerate with AI">
+                <View style={[styles.regenerate, { opacity: busy || aiDraft.isPending ? 0.5 : 1 }]}>
+                  <Icon name="refresh-outline" size={16} color="primary" />
+                  <Text variant="captionStrong" color="primary">
+                    Regenerate
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          ) : null}
 
           {copied ? (
             <View style={[styles.notice, { backgroundColor: theme.primarySoft }]} accessibilityRole="alert">
@@ -317,6 +440,35 @@ function FollowUpSheetBody({ onClose, contact, eventName, onFollowedUp }: Follow
   );
 }
 
+/**
+ * One-time-per-account consent before the first AI draft (issue #33 PR B), mirroring card.tsx's
+ * AiDisclosure: same claim about Anthropic and training. "Not now" only dismisses this panel for the
+ * rest of this sheet opening - nothing is stored, so it asks again next time.
+ */
+function FollowUpAiConsent({ onAllow, onNotNow }: { onAllow: () => void; onNotNow: () => void }) {
+  const theme = useTheme();
+  return (
+    <Card style={styles.consent}>
+      <View style={styles.consentHead}>
+        <View style={[styles.consentIcon, { backgroundColor: theme.primarySoft }]}>
+          <Icon name="sparkles-outline" size={18} color="primary" />
+        </View>
+        <Text variant="bodyStrong" style={styles.flex} accessibilityRole="header">
+          Write a first draft with AI?
+        </Text>
+      </View>
+      <Text variant="callout" color="textSecondary">
+        Chatsoon can write a first draft for you. To do that, this contact&apos;s details and your notes are sent
+        to Anthropic&apos;s Claude AI. They don&apos;t use it to train their models.
+      </Text>
+      <View style={styles.consentActions}>
+        <Button title="Allow AI drafts" icon="checkmark" onPress={onAllow} />
+        <Button title="Not now" variant="secondary" onPress={onNotNow} />
+      </View>
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   backdrop: { flex: 1 },
@@ -336,6 +488,13 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 0 },
   body: { gap: Spacing.four },
   input: { minHeight: 140 },
+  consent: { gap: Spacing.three },
+  consentHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  consentIcon: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  consentActions: { gap: Spacing.three },
+  draftRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, minHeight: 20 },
+  draftStatus: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  regenerate: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   notice: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three, borderRadius: Radius.md },
   channels: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
   channelRow: {
