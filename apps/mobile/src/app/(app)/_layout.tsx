@@ -64,6 +64,7 @@ export default function AppLayout() {
         title: '',
       }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="intro" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="contact/new" />
       <Stack.Screen name="contact/[id]/index" />
       <Stack.Screen name="contact/[id]/edit" />

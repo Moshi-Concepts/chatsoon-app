@@ -67,8 +67,11 @@ export default function OnboardingScreen() {
   }, [step]);
 
   const finish = () => {
+    // A fresh account: show the one-time "How Chatsoon works" intro (issue #32) before Contacts.
+    // `next` means this signup came from a public profile's "Create my profile" and already has a
+    // specific place to return to, so it skips straight there instead.
     if (next) router.dismissTo(next);
-    else router.replace('/contacts');
+    else router.replace('/intro');
   };
 
   // Once we know whether referrals are on and this account can still enter a code, either show the

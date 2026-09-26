@@ -303,13 +303,14 @@
   },
   "support": {
     "title": "Support",
-    "updated": "24 September 2026",
+    "updated": "26 September 2026",
     "intro": "Need a hand with Chatsoon? Start with the answers below. If you can't find what you need, email hello@chatsoon.app and we'll get back to you. We usually reply within one business day.",
     "sections": [
       {
         "heading": "Getting started",
         "paragraphs": [
-          "Open Chatsoon, enter your email address and type in the 6 digit code we send you. There's no password to remember. Then add your name to create your profile. You can add a photo, headline, company, role and links at any time."
+          "Open Chatsoon, enter your email address and type in the 6 digit code we send you. There's no password to remember. Then add your name to create your profile. You can add a photo, headline, company, role and links at any time.",
+          "Right after that, a quick four-card intro shows what each part of Chatsoon does. You can replay it any time from Me > How Chatsoon works."
         ]
       },
       {

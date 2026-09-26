@@ -208,6 +208,12 @@ export default function MeScreen() {
             divider
           />
         ) : null}
+        <ListRow
+          icon="compass-outline"
+          title="How Chatsoon works"
+          onPress={() => router.push({ pathname: '/intro', params: { replay: '1' } })}
+          divider
+        />
         <ListRow icon="help-circle-outline" title="Support" onPress={() => router.push('/support')} />
       </Section>
 
