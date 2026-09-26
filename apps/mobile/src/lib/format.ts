@@ -29,6 +29,22 @@ export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/** "3 Oct" (no year): the contact page's "Followed up on <date>" line. */
+export function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/** "due today", "due tomorrow", or "due Mon 3 Oct" for a follow-up due date, in local time. */
+export function dueLabel(iso: string): string {
+  const due = new Date(iso);
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(due) - startOfDay(new Date())) / 86_400_000);
+  if (diffDays <= 0) return 'due today';
+  if (diffDays === 1) return 'due tomorrow';
+  const weekday = due.toLocaleDateString(undefined, { weekday: 'short' });
+  return `due ${weekday} ${shortDate(iso)}`;
+}
+
 export function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.round(diff / 60000);

@@ -18,6 +18,8 @@ type ContactDbRow = {
   notes: string | null;
   event_id: string | null;
   source: string;
+  created_at: number;
+  follow_up_due_at: number | null;
 };
 
 const scan = (token: string, json: unknown) => call('/connections/scan', { method: 'POST', token, json });
@@ -152,6 +154,11 @@ describe('POST /connections/scan', () => {
     });
     // Never leak the other user's email onto the card.
     expect(JSON.stringify(contact)).not.toContain('scan-bob@example.com');
+    // Issue #33: an app connection has no priority, so it's due the next day like any other.
+    expect(new Date(contact.followUpDueAt!).getTime() - new Date(contact.createdAt).getTime()).toBe(
+      24 * 60 * 60 * 1000,
+    );
+    expect(contact.followedUpAt).toBeNull();
 
     const alicesList = await contactsOf(alice.userId);
     expect(alicesList).toHaveLength(1);
@@ -171,6 +178,7 @@ describe('POST /connections/scan', () => {
       website: 'https://alice.dev',
       source: 'app_connect',
     });
+    expect(bobsList[0]!.follow_up_due_at! - bobsList[0]!.created_at).toBe(24 * 60 * 60 * 1000);
 
     expect(await contactsOf(carol.userId)).toHaveLength(0);
 

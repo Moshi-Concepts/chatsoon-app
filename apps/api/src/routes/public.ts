@@ -2,6 +2,7 @@ import {
   buildVCard,
   cleanText,
   connectFormSchema,
+  followUpDueAt,
   profileContactChannels,
   PROFILE_PATH_PREFIX,
   type ConnectFormResponse,
@@ -164,6 +165,9 @@ publicRoutes.post('/id/:slug/connect', optionalAuth, async (c) => {
   const { unmatched, ...fields } = contactFieldsFromConnectValue(input.contact);
   const notes = [input.note, unmatched ? `Contact: ${unmatched}` : null].filter(Boolean).join('\n\n') || null;
 
+  // Issue #33: a Connect form submission has no priority, so it's due the next day, timed from this
+  // same createdAt (set explicitly, rather than left to the column default).
+  const now = new Date();
   await db.insert(contacts).values({
     id: newId(),
     userId: owner.userId,
@@ -171,6 +175,9 @@ publicRoutes.post('/id/:slug/connect', optionalAuth, async (c) => {
     ...fields,
     notes,
     source: 'web_connect',
+    createdAt: now,
+    updatedAt: now,
+    followUpDueAt: followUpDueAt(null, now),
   });
 
   // The form is anonymous, so even someone the owner blocked can send it. Capping the emails per

@@ -611,6 +611,233 @@ describe('event visibility guard', () => {
   });
 });
 
+describe('follow-up due dates (issue #33)', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  it('sets follow_up_due_at from priority and created_at on POST /contacts', async () => {
+    const cases: { priority?: number | null; days: number }[] = [
+      { priority: 5, days: 0 },
+      { priority: 4, days: 0 },
+      { priority: 3, days: 1 },
+      { priority: null, days: 1 },
+      { days: 1 }, // no priority key at all
+      { priority: 2, days: 2 },
+      { priority: 1, days: 2 },
+    ];
+    for (const { priority, days } of cases) {
+      const json: Record<string, unknown> = { name: `Due priority ${priority ?? 'none'}` };
+      if (priority !== undefined) json.priority = priority;
+      const contact = await create(a, json);
+      expect(contact.followedUpAt, JSON.stringify(json)).toBeNull();
+      expect(contact.followUpChannel, JSON.stringify(json)).toBeNull();
+      const dueMs = new Date(contact.followUpDueAt!).getTime();
+      const createdMs = new Date(contact.createdAt).getTime();
+      expect(dueMs - createdMs, JSON.stringify(json)).toBe(days * DAY_MS);
+    }
+  });
+
+  it('does not backfill a contact that predates the feature', async () => {
+    const id = crypto.randomUUID();
+    await getDb(env).insert(contacts).values({ id, userId: a.userId, name: 'Pre-existing Pete', priority: 5 });
+    const got = await call(`/contacts/${id}`, { token: a.token });
+    expect(((await got.json()) as Contact).followUpDueAt).toBeNull();
+  });
+
+  it('recomputes due from the original created_at when priority changes before following up', async () => {
+    const contact = await create(a, { name: 'Recompute Rae', priority: 1 });
+    const res = await call(`/contacts/${contact.id}`, { method: 'PUT', token: a.token, json: { priority: 5 } });
+    expect(res.status).toBe(200);
+    const updated = (await res.json()) as Contact;
+    expect(updated.followUpDueAt).toBe(updated.createdAt);
+    expect(updated.createdAt).toBe(contact.createdAt);
+  });
+
+  it('does not recompute due once already followed up', async () => {
+    const contact = await create(a, { name: 'Settled Sam', priority: 2 });
+    const followedUp = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'POST',
+      token: a.token,
+      json: { channel: 'copy' },
+    });
+    expect(followedUp.status).toBe(200);
+
+    const res = await call(`/contacts/${contact.id}`, { method: 'PUT', token: a.token, json: { priority: 5 } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Contact).followUpDueAt).toBeNull();
+  });
+
+  it('leaves due alone when the update does not touch priority', async () => {
+    const contact = await create(a, { name: 'Untouched Ted', priority: 2 });
+    const res = await call(`/contacts/${contact.id}`, { method: 'PUT', token: a.token, json: { notes: 'hi' } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Contact).followUpDueAt).toBe(contact.followUpDueAt);
+  });
+});
+
+describe('POST /contacts/:id/follow-up', () => {
+  it('marks a contact followed up, records the channel, and clears the due date', async () => {
+    const contact = await create(a, { name: 'Follow Fred', priority: 3 });
+    expect(contact.followUpDueAt).not.toBeNull();
+
+    const before = Date.now();
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'POST',
+      token: a.token,
+      json: { channel: 'whatsapp' },
+    });
+    expect(res.status).toBe(200);
+    const updated = (await res.json()) as Contact;
+    expect(updated.followUpChannel).toBe('whatsapp');
+    expect(updated.followUpDueAt).toBeNull();
+    expect(new Date(updated.followedUpAt!).getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('moves followedUpAt to the latest time when followed up again, with the newest channel', async () => {
+    const contact = await create(a, { name: 'Repeat Rae' });
+    const first = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'POST',
+      token: a.token,
+      json: { channel: 'email' },
+    });
+    const firstContact = (await first.json()) as Contact;
+    await new Promise((r) => setTimeout(r, 5));
+    const second = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'POST',
+      token: a.token,
+      json: { channel: 'sms' },
+    });
+    const secondContact = (await second.json()) as Contact;
+    expect(secondContact.followUpChannel).toBe('sms');
+    expect(secondContact.followedUpAt! > firstContact.followedUpAt!).toBe(true);
+  });
+
+  it('rejects an unknown channel', async () => {
+    const contact = await create(a, { name: 'Bad Channel' });
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'POST',
+      token: a.token,
+      json: { channel: 'fax' },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("404s for another user's contact, and for an unknown one", async () => {
+    const contact = await create(a, { name: 'Not Yours' });
+    const theirs = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'POST',
+      token: b.token,
+      json: { channel: 'copy' },
+    });
+    expect(theirs.status).toBe(404);
+    const unknown = await call(`/contacts/${crypto.randomUUID()}/follow-up`, {
+      method: 'POST',
+      token: a.token,
+      json: { channel: 'copy' },
+    });
+    expect(unknown.status).toBe(404);
+  });
+});
+
+describe('DELETE /contacts/:id/follow-up (undo)', () => {
+  it('restores exactly the prior values the client passes', async () => {
+    const contact = await create(a, { name: 'Undo Uma', priority: 4 });
+    const marked = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'POST',
+      token: a.token,
+      json: { channel: 'linkedin' },
+    });
+    expect(marked.status).toBe(200);
+
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'DELETE',
+      token: a.token,
+      json: {
+        previous: {
+          followedUpAt: null,
+          followUpChannel: null,
+          followUpDueAt: contact.followUpDueAt,
+        },
+      },
+    });
+    expect(res.status).toBe(200);
+    const restored = (await res.json()) as Contact;
+    expect(restored.followedUpAt).toBeNull();
+    expect(restored.followUpChannel).toBeNull();
+    expect(restored.followUpDueAt).toBe(contact.followUpDueAt);
+  });
+
+  it('rejects a malformed previous shape', async () => {
+    const contact = await create(a, { name: 'Bad Undo' });
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'DELETE',
+      token: a.token,
+      json: { previous: { followedUpAt: 'not-a-date', followUpChannel: null, followUpDueAt: null } },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("404s for another user's contact", async () => {
+    const contact = await create(a, { name: 'Undo Not Yours' });
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'DELETE',
+      token: b.token,
+      json: { previous: { followedUpAt: null, followUpChannel: null, followUpDueAt: null } },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('PATCH /contacts/:id/follow-up (remind me again)', () => {
+  it('sets a due date 3, 7 or 14 days out', async () => {
+    const contact = await create(a, { name: 'Remind Rita' });
+    for (const days of [3, 7, 14] as const) {
+      const before = Date.now();
+      const res = await call(`/contacts/${contact.id}/follow-up`, {
+        method: 'PATCH',
+        token: a.token,
+        json: { remindInDays: days },
+      });
+      expect(res.status).toBe(200);
+      const updated = (await res.json()) as Contact;
+      const dueMs = new Date(updated.followUpDueAt!).getTime();
+      const dayMs = days * 24 * 60 * 60 * 1000;
+      expect(dueMs).toBeGreaterThanOrEqual(before + dayMs);
+      expect(dueMs).toBeLessThanOrEqual(Date.now() + dayMs);
+    }
+  });
+
+  it('clears the due date for "Never" (null)', async () => {
+    const contact = await create(a, { name: 'Never Nora' });
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'PATCH',
+      token: a.token,
+      json: { remindInDays: null },
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Contact).followUpDueAt).toBeNull();
+  });
+
+  it('rejects a remindInDays value that is not 3, 7, 14 or null', async () => {
+    const contact = await create(a, { name: 'Bad Remind' });
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'PATCH',
+      token: a.token,
+      json: { remindInDays: 5 },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("404s for another user's contact", async () => {
+    const contact = await create(a, { name: 'Remind Not Yours' });
+    const res = await call(`/contacts/${contact.id}/follow-up`, {
+      method: 'PATCH',
+      token: b.token,
+      json: { remindInDays: 3 },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('growth limits', () => {
   it('rate limits writes that add rows per user, across contacts, tags and events', { timeout: 60_000 }, async () => {
     const intoWindow = Date.now() % 60_000;
@@ -621,7 +848,12 @@ describe('growth limits', () => {
       call(path, { method: 'POST', token: s.token, json, headers: ip });
 
     // WRITE_LIMITER allows 120 a minute: plenty for the outbox syncing a day of offline contacts.
-    for (let i = 0; i < 118; i++) expect((await post('/contacts', { name: `Bulk ${i}` })).status).toBe(201);
+    let firstId: string | undefined;
+    for (let i = 0; i < 118; i++) {
+      const res = await post('/contacts', { name: `Bulk ${i}` });
+      expect(res.status).toBe(201);
+      if (i === 0) firstId = ((await res.json()) as Contact).id;
+    }
     expect((await post('/tags', { name: 'Late tag' })).status).toBe(201);
     expect((await post('/events', { name: 'Late event' })).status).toBe(201);
     for (const [path, json] of [
@@ -633,6 +865,9 @@ describe('growth limits', () => {
       expect(res.status, path).toBe(429);
       expect((await errorOf(res)).code).toBe('rate_limited');
     }
+    // The follow-up endpoints share the same per-user WRITE_LIMITER.
+    const followUp = await post(`/contacts/${firstId}/follow-up`, { channel: 'copy' });
+    expect(followUp.status).toBe(429);
     // Other users are unaffected, and so are reads and edits.
     expect((await post('/contacts', { name: 'Someone else' }, b)).status).toBe(201);
     expect((await call('/contacts', { token: w.token, headers: ip })).status).toBe(200);

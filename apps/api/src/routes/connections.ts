@@ -1,4 +1,4 @@
-import { scanConnectSchema, type ScanConnectResponse } from '@chatsoon/shared';
+import { followUpDueAt, scanConnectSchema, type ScanConnectResponse } from '@chatsoon/shared';
 import { and, desc, eq, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -107,10 +107,15 @@ function linkedContactStatements(
      where id = (select id from contacts where user_id = ?1 and unlinked_user_id = ?2 order by updated_at desc limit 1)
        and not exists (select 1 from contacts where user_id = ?1 and linked_user_id = ?2)`,
   ).bind(ownerId, other.userId);
+  // Issue #33: this card has no priority (app connections never set one), so it's due the next day
+  // like any other priority-3-or-none contact. created_at/updated_at are set explicitly (rather than
+  // left to the column default) so follow_up_due_at is timed from the exact same instant.
+  const now = Date.now();
+  const dueAt = followUpDueAt(null, new Date(now)).getTime();
   const insertIfMissing = DB.prepare(
     `insert into contacts
-       (id, user_id, linked_user_id, name, company, role, telegram, x_handle, linkedin_url, website, event_id, source, phone)
-     select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'app_connect', ?12
+       (id, user_id, linked_user_id, name, company, role, telegram, x_handle, linkedin_url, website, event_id, source, phone, created_at, updated_at, follow_up_due_at)
+     select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'app_connect', ?12, ?13, ?13, ?14
      where not exists (select 1 from contacts where user_id = ?2 and linked_user_id = ?3)`,
   ).bind(
     newId(),
@@ -125,6 +130,8 @@ function linkedContactStatements(
     f.website,
     eventId,
     f.phone,
+    now,
+    dueAt,
   );
   const refresh = DB.prepare(
     `update contacts set

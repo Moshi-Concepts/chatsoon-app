@@ -9,6 +9,7 @@ import {
   suggestBookingLabel,
 } from './booking';
 import { REPORT_REASONS } from './constants';
+import { FOLLOW_UP_CHANNELS, REMIND_DAY_OPTIONS } from './follow-up';
 import { hasObjectionableText } from './moderation';
 import { CONTACT_HINTS, CONTACT_MAX, contactUrl } from './profile-contact';
 import { isValidReferralCode } from './referrals';
@@ -175,6 +176,49 @@ export const scanConnectSchema = z.object({
   slug: z.string().trim().min(1).max(100),
   eventId: z.string().max(100).nullable().optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Follow-ups (issue #33)
+// ---------------------------------------------------------------------------
+
+export const followUpChannelSchema = z.enum(FOLLOW_UP_CHANNELS);
+
+/** POST /contacts/:id/follow-up. */
+export const followUpInputSchema = z.object({ channel: followUpChannelSchema });
+export type FollowUpInput = z.input<typeof followUpInputSchema>;
+
+/** An ISO timestamp string, as `Contact`'s date fields are sent on the wire. */
+const isoTimestamp = z
+  .string()
+  .trim()
+  .min(1)
+  .max(40)
+  .refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date');
+
+/**
+ * DELETE /contacts/:id/follow-up (undo): the exact prior values to restore, as the client last saw
+ * them on the contact. Validated as shapes only (timestamps may be null) - the server has no history
+ * of its own to check them against.
+ */
+export const undoFollowUpSchema = z.object({
+  previous: z.object({
+    followedUpAt: isoTimestamp.nullable(),
+    followUpChannel: followUpChannelSchema.nullable(),
+    followUpDueAt: isoTimestamp.nullable(),
+  }),
+});
+export type UndoFollowUpInput = z.input<typeof undoFollowUpSchema>;
+
+/** PATCH /contacts/:id/follow-up ("Remind me again"): days from now, or null for "Never". */
+export const remindFollowUpSchema = z.object({
+  remindInDays: z.union([
+    z.literal(REMIND_DAY_OPTIONS[0]),
+    z.literal(REMIND_DAY_OPTIONS[1]),
+    z.literal(REMIND_DAY_OPTIONS[2]),
+    z.null(),
+  ]),
+});
+export type RemindFollowUpInput = z.input<typeof remindFollowUpSchema>;
 
 export const tagInputSchema = z.object({ name: z.string().trim().min(1).max(40) });
 export const eventInputSchema = z.object({ name: z.string().trim().min(1).max(80) });

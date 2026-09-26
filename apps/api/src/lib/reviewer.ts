@@ -1,4 +1,5 @@
 import {
+  followUpDueAt,
   REVIEWER_EMAIL,
   SEEDED_EVENTS,
   makeSlug,
@@ -238,13 +239,17 @@ async function sampleContactWrites(env: Env, db: DB, userId: string): Promise<Ba
   SAMPLE_CONTACTS.forEach((sample, n) => {
     const id = ids[n]!;
     const { tags: tagNames, hoursAgo, extractionStatus, ...fields } = sample;
+    const createdAt = at(hoursAgo);
     rows.push({
       ...fields,
       id,
       userId,
       extractionStatus: extractionStatus ?? 'none',
-      createdAt: at(hoursAgo),
-      updatedAt: at(hoursAgo),
+      // Issue #33: seeded the same way a real creation would be, so the reviewer sees the follow-up
+      // feature working with realistic sample data.
+      followUpDueAt: followUpDueAt(fields.priority, createdAt),
+      createdAt,
+      updatedAt: createdAt,
     });
     addTags(id, tagNames);
   });
@@ -252,6 +257,7 @@ async function sampleContactWrites(env: Env, db: DB, userId: string): Promise<Ba
   const writes: BatchItem<'sqlite'>[] = [];
   if (linkable) {
     const id = ids[SAMPLE_CONTACTS.length]!;
+    const connectedCreatedAt = at(CONNECTED_SAMPLE.hoursAgo);
     rows.push({
       // The same card POST /connections/scan saves.
       ...contactFieldsFromProfile(connected),
@@ -263,8 +269,9 @@ async function sampleContactWrites(env: Env, db: DB, userId: string): Promise<Ba
       eventId: EVENT_ID,
       source: 'app_connect',
       extractionStatus: 'none',
-      createdAt: at(CONNECTED_SAMPLE.hoursAgo),
-      updatedAt: at(CONNECTED_SAMPLE.hoursAgo),
+      followUpDueAt: followUpDueAt(CONNECTED_SAMPLE.priority, connectedCreatedAt),
+      createdAt: connectedCreatedAt,
+      updatedAt: connectedCreatedAt,
     });
     addTags(id, CONNECTED_SAMPLE.tags);
 

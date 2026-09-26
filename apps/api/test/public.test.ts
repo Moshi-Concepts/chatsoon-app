@@ -22,6 +22,8 @@ type ContactDbRow = {
   notes: string | null;
   source: string;
   linked_user_id: string | null;
+  created_at: number;
+  follow_up_due_at: number | null;
 };
 
 const OWNER_EMAIL = 'owner-public@example.com';
@@ -529,6 +531,8 @@ describe('POST /id/:slug/connect', () => {
       notes: 'Met at the Token2049 afterparty',
       source: 'web_connect',
     });
+    // Issue #33: a Connect form submission has no priority, so it's due the next day.
+    expect(rows[0]!.follow_up_due_at! - rows[0]!.created_at).toBe(24 * 60 * 60 * 1000);
     expect(await contactsOf(bystander.userId)).toHaveLength(0);
     expect(await contactsOf(owner.userId)).toHaveLength(0);
 

@@ -2,6 +2,7 @@
 // JSON is camelCase on the wire; the database uses snake_case.
 
 import type { SocialProvider } from './constants';
+import type { FollowUpChannel } from './follow-up';
 import type { Badge } from './referrals';
 import type { SocialIneligibleReason, SocialValidationProvider } from './social';
 
@@ -197,6 +198,16 @@ export interface Contact {
   source: ContactSource;
   extractionStatus: ExtractionStatus;
   tagIds: string[];
+  /** Issue #33: when this contact was last marked followed up, or null. Updates to the latest time
+   * on every follow-up (an earlier one is not kept). */
+  followedUpAt: string | null;
+  /** How the last follow-up was sent. Null until followedUpAt is set. */
+  followUpChannel: FollowUpChannel | null;
+  /** When this contact is next due for a follow-up, or null (not due, or never followed up and
+   * not yet computed - existing contacts before #33 are never backfilled). Set on creation from
+   * priority, recalculated if priority changes before the first follow-up, cleared by a follow-up
+   * unless a "Remind me again" option sets a future date. */
+  followUpDueAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

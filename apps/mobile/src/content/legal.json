@@ -18,7 +18,7 @@
         "bullets": [
           "Account: your email address. We use it to send you one-time sign-in codes, to identify your account and to let you know when someone sends you their details with the Connect form. Chatsoon doesn't use passwords.",
           "Your public profile: the name, photo, headline, company, role and links (X, Telegram, Discord, LinkedIn, website, YouTube) you choose to publish, and, if you add them, your mobile number, WhatsApp and Signal details and who can see them, and whether you want it shown in search engines.",
-          "Your contacts: the people you add and what you record about them, such as their name, company, role, email, phone, social handles, notes, tags, priority and the event where you met.",
+          "Your contacts: the people you add and what you record about them, such as their name, company, role, email, phone, social handles, notes, tags, priority and the event where you met, plus whether and when you followed up with them and your reminder settings.",
           "Card and badge photos: photos you take of business cards or event badges so Chatsoon can read the details for you.",
           "Connections: when you connect with another Chatsoon user by scanning their QR code, we record that you are connected and, if you set one, the event where you met.",
           "Connect form submissions: when someone sends you their details from your public profile page, we store the name, email address and note they entered, and email you to say they connected. If they tick the tips emails checkbox, we also store that choice and when they agreed to it.",
