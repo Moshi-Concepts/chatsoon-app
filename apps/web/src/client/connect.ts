@@ -138,13 +138,14 @@ function renderSuccess(container: HTMLElement, content: ConnectSuccessContent): 
   const nodes: Node[] = [];
 
   const heading = document.createElement('p');
+  heading.className = 'text-heading';
   heading.setAttribute('role', 'alert');
   heading.textContent = content.heading;
   nodes.push(heading);
 
   if (content.pills.length) {
     const pillList = document.createElement('div');
-    pillList.className = 'pills';
+    pillList.className = 'chips';
     for (const pill of content.pills) {
       const a = document.createElement('a');
       a.href = pill.href;
@@ -168,7 +169,8 @@ function renderSuccess(container: HTMLElement, content: ConnectSuccessContent): 
     nodes.push(save);
   }
 
-  container.replaceChildren(...nodes);
+  // Appended after the server-rendered tick badge, which stays as the card's first child.
+  container.append(...nodes);
 }
 
 /** Wires the Connect form: lazy Turnstile, client-side validation, submit and its success/error states. */
@@ -246,6 +248,7 @@ export function initConnect(config: ConnectConfig, root: ParentNode = document):
       form.hidden = true;
       renderSuccess(successEl, buildSuccessContent(config, body as ConnectFormResponse));
       successEl.hidden = false;
+      successEl.scrollIntoView({ block: 'nearest' });
     } catch {
       showError('Something went wrong. Please check your connection and try again.');
     } finally {

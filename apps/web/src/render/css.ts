@@ -261,7 +261,10 @@ function profileCss(): string {
 .tips-note{color:var(--text-tertiary);font-size:13px;margin:0}
 .connect-privacy{color:var(--text-tertiary);font-size:13px;margin:0;text-align:center}
 #connect-error{display:flex;align-items:center;gap:${Spacing.two}px;padding:${Spacing.three}px;border-radius:${Radius.md}px;background:var(--danger-soft);color:var(--danger-text)}
-#connect-error[hidden],#connect-success[hidden]{display:none}
+#connect-success{display:flex;flex-direction:column;align-items:center;gap:${Spacing.three}px;text-align:center}
+#connect-success p{margin:0}
+.success-badge{width:72px;height:72px;border-radius:${Radius.xl}px;background:var(--success-soft);color:var(--success);display:flex;align-items:center;justify-content:center}
+#connect-form[hidden],#connect-error[hidden],#connect-success[hidden]{display:none}
 
 .report-wrap{text-align:center;margin:0}
 #report{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 ${Spacing.three}px;border:none;border-radius:${Radius.pill}px;background:transparent;color:var(--text-secondary);font:inherit;font-weight:600;font-size:13px;appearance:none;cursor:pointer}

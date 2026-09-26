@@ -72,8 +72,10 @@ Present only when there are booking links.
   - `<p id="connect-error" role="alert" hidden></p>`
   - `<button type="submit" class="button primary">Send</button>`
   - A short privacy line linking to `/privacy`.
-- `<div id="connect-success" hidden></div>`: the island fills it after a send (the "how to reach {first}" pills, plus
-  Save contact with `vcardUrl` when one comes back).
+- `<div id="connect-success" hidden><div class="success-badge">{checkmark-circle icon}</div></div>`: a green tick
+  badge (issue #30). After a send the island hides `#connect-form`, appends the "Sent." heading after the badge (then,
+  when a contact comes back, the "how to reach {first}" pills and Save contact with `vcardUrl`), shows the card and
+  scrolls it into view.
 
 ## Other
 

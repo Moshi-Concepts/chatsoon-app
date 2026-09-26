@@ -273,7 +273,7 @@ function connectSection(p: PageProfile): string {
 <button type="submit" class="button button-primary button-block">Send</button>
 <p class="connect-privacy">By sending, you agree to share these details with ${first}. See our <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy<span class="sr-only"> (opens in a new tab)</span></a>.</p>
 </form>
-<div id="connect-success" hidden></div>
+<div id="connect-success" hidden><div class="success-badge">${icon('checkmark-circle', 36)}</div></div>
 </section>`;
 }
 
@@ -301,7 +301,7 @@ function reportBlock(slug: string): string {
 
 /** Only the icons this particular profile actually renders, so the hidden sprite carries no unused paths. */
 function iconNames(p: PageProfile): IconName[] {
-  const names = new Set<IconName>(['download-outline', 'flag-outline', 'qr-code-outline']);
+  const names = new Set<IconName>(['checkmark-circle', 'download-outline', 'flag-outline', 'qr-code-outline']);
   if (roleLine(p.role, p.company)) names.add('briefcase-outline');
   if (p.badges.length) names.add('ribbon-outline');
   for (const l of PROFILE_LINKS) {
