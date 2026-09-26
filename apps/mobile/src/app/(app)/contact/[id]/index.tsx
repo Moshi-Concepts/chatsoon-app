@@ -7,6 +7,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { BookingLinksCard } from '@/components/booking';
 import { CardPhoto } from '@/components/contacts/card-photo';
 import { ChannelList, contactChannels, QuickActions } from '@/components/contacts/contact-channels';
+import { FollowUpStatus } from '@/components/contacts/follow-up-status';
 import { HeaderTextButton } from '@/components/contacts/header-button';
 import { Pill } from '@/components/contacts/pill';
 import { PriorityMeter } from '@/components/contacts/priority';
@@ -227,6 +228,8 @@ export default function ContactDetailScreen() {
           )}
         </View>
       </View>
+
+      <FollowUpStatus contact={c} eventName={eventName} />
 
       {review ? (
         <Card style={[styles.banner, { backgroundColor: theme.warningSoft, borderColor: theme.warningSoft }]}>

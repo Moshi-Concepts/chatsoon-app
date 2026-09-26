@@ -1,8 +1,8 @@
 # Chatsoon: working notes for Claude
 
 Spec: v1.0 MVP ships to the App Store and Google Play. Scope is fixed: accounts, profile, My QR, connect,
-contacts (manual, QR scan, card photo with AI), tags, notes, search and store compliance. Wallet, voice notes,
-reminders and similar come later. Do not add them.
+contacts (manual, QR scan, card photo with AI), tags, notes, search, follow-up reminders (issue #33) and store
+compliance. Wallet, voice notes and similar still come later. Do not add them.
 
 ## Layout
 - `apps/api`: Cloudflare Worker, Hono, Drizzle on D1, R2 (private, HMAC-signed URLs via `GET /files/*`), Better Auth email OTP + bearer plugin.

@@ -35,6 +35,7 @@ import { tagsRoutes } from './routes/tags';
 //   POST /account-deletion/cancel (no auth)                            routes/account.ts
 //   POST /connections/scan                                            routes/connections.ts
 //   GET/POST /contacts  GET/PUT/DELETE /contacts/:id                  routes/contacts.ts
+//   POST/DELETE/PATCH /contacts/:id/follow-up (issue #33)              routes/contacts.ts
 //   GET/POST /tags  DELETE /tags/:id                                  routes/tags.ts
 //   GET/POST /events                                                  routes/events.ts
 //   POST /files  GET /files/*  DELETE /files/card                     routes/files.ts
@@ -51,7 +52,8 @@ app.use('*', async (c, next) => {
     origin: (origin) => (origins.includes(origin) ? origin : null),
     // X-Chatsoon-Device (issue #11): sent on POST /me/referral/attribute only.
     allowHeaders: ['Content-Type', 'Authorization', 'X-Chatsoon-Device'],
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    // PATCH: only /contacts/:id/follow-up (issue #33, "Remind me again").
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     exposeHeaders: ['set-auth-token', 'Content-Disposition'],
     credentials: true,
     maxAge: 86400,

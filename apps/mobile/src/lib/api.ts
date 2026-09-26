@@ -19,6 +19,7 @@ import type {
   EmailPrefsResponse,
   EventsResponse,
   ExtractCardResponse,
+  FollowUpInput,
   GetReferralResponse,
   InviteEmailsInput,
   Me,
@@ -26,6 +27,7 @@ import type {
   ProfileInput,
   PublicProfile,
   PublicReferralProfile,
+  RemindFollowUpInput,
   ReportInput,
   ScanConnectResponse,
   ScheduleDeletionResponse,
@@ -35,6 +37,7 @@ import type {
   SocialValidationProvider,
   Tag,
   TagsResponse,
+  UndoFollowUpInput,
   UploadPurpose,
   UploadResponse,
 } from '@chatsoon/shared';
@@ -379,6 +382,15 @@ export const api = {
     update: (id: string, input: ContactUpdateInput) =>
       request<Contact>('PUT', `/contacts/${encodeURIComponent(id)}`, { body: input }),
     remove: (id: string) => request<void>('DELETE', `/contacts/${encodeURIComponent(id)}`),
+    /** Marks followed up: sets followedUpAt to now, records the channel, and clears any due date. */
+    followUp: (id: string, input: FollowUpInput) =>
+      request<Contact>('POST', `/contacts/${encodeURIComponent(id)}/follow-up`, { body: input }),
+    /** Undo, within the ~8s window: restores the exact prior values the caller passes. */
+    undoFollowUp: (id: string, input: UndoFollowUpInput) =>
+      request<Contact>('DELETE', `/contacts/${encodeURIComponent(id)}/follow-up`, { body: input }),
+    /** "Remind me again": sets the next due date, or clears it for "Never" (null). */
+    remindFollowUp: (id: string, input: RemindFollowUpInput) =>
+      request<Contact>('PATCH', `/contacts/${encodeURIComponent(id)}/follow-up`, { body: input }),
   },
 
   tags: {

@@ -182,12 +182,22 @@ export const contacts = sqliteTable(
     source: text('source').notNull().default('manual'),
     /** ExtractionStatus */
     extractionStatus: text('extraction_status').notNull().default('none'),
+    /** Issue #33: when this contact was last marked followed up. Updated to the latest time on every
+     * follow-up; never backdated. */
+    followedUpAt: integer('followed_up_at', { mode: 'timestamp_ms' }),
+    /** FollowUpChannel. Null until followedUpAt is set. */
+    followUpChannel: text('follow_up_channel'),
+    /** When this contact is next due for a follow-up, from `followUpDueAt` (packages/shared). Null
+     * for a contact that predates #33 (never backfilled), one already followed up with no reminder
+     * set, or one whose reminder was set to "Never". */
+    followUpDueAt: integer('follow_up_due_at', { mode: 'timestamp_ms' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index('contacts_user_updated_idx').on(t.userId, t.updatedAt),
     index('contacts_user_linked_idx').on(t.userId, t.linkedUserId),
+    index('contacts_user_follow_up_due_idx').on(t.userId, t.followUpDueAt),
   ],
 );
 

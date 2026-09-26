@@ -6,6 +6,9 @@ export * from './slug';
 export * from './links';
 export * from './profile-contact';
 export * from './booking';
+// Follow-ups (issue #33): plain string/date helpers, no zod, no URL/DOM APIs - same rule as
+// referrals.ts and social.ts above.
+export * from './follow-up';
 export * from './moderation';
 export * from './qr';
 export * from './vcard';

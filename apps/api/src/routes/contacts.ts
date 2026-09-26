@@ -1,6 +1,11 @@
 import {
   contactCreateSchema,
   contactUpdateSchema,
+  followUpDueAt,
+  followUpInputSchema,
+  remindDueAt,
+  remindFollowUpSchema,
+  undoFollowUpSchema,
   type Contact,
   type ContactsResponse,
   type ExtractionStatus,
@@ -204,6 +209,7 @@ contactsRoutes.post('/contacts', requireAuth, async (c) => {
     input.extractionStatus ?? (input.source === 'card_photo' && cardImageKey ? 'pending' : 'none');
   const id = input.id ?? newId();
   const now = new Date();
+  const priority = input.priority ?? null;
 
   const insertContact = db.insert(contacts).values({
     id,
@@ -219,10 +225,13 @@ contactsRoutes.post('/contacts', requireAuth, async (c) => {
     website: input.website ?? null,
     cardImageKey,
     notes: input.notes ?? null,
-    priority: input.priority ?? null,
+    priority,
     eventId,
     source: input.source,
     extractionStatus,
+    // Issue #33: every creation path is due a follow-up from day one, timed by priority. Existing
+    // contacts (from before this shipped) are never backfilled - only ever set here, on insert.
+    followUpDueAt: followUpDueAt(priority, now),
     createdAt: now,
     updatedAt: now,
   });
@@ -258,6 +267,13 @@ contactsRoutes.put('/contacts/:id', requireAuth, async (c) => {
   const changes = Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
   ) as Partial<typeof contacts.$inferInsert>;
+
+  // Issue #33: a priority change before the first follow-up moves the due date, timed from the
+  // contact's original createdAt (not now). Once followed up, priority no longer touches it - only
+  // POST/PATCH /contacts/:id/follow-up do.
+  if (fields.priority !== undefined && fields.priority !== current.priority && current.followedUpAt === null) {
+    changes.followUpDueAt = followUpDueAt(fields.priority, current.createdAt);
+  }
 
   let updated: { id: string }[];
   try {
@@ -297,4 +313,70 @@ contactsRoutes.delete('/contacts/:id', requireAuth, async (c) => {
 
   if (row.cardImageKey) releaseCardImage(c, db, userId, row.cardImageKey);
   return c.body(null, 204);
+});
+
+// ---- Follow-ups (issue #33) ----
+
+/** Marks a contact followed up: sets followedUpAt to now, records the channel, and clears any due date. */
+contactsRoutes.post('/contacts/:id/follow-up', requireAuth, async (c) => {
+  const userId = c.get('user').id;
+  const id = c.req.param('id');
+  await limit(c.env.WRITE_LIMITER, userKey(c, 'write', userId));
+  const { channel } = await parseJson(c, followUpInputSchema);
+  const db = getDb(c.env);
+
+  const [updated] = await db
+    .update(contacts)
+    .set({ followedUpAt: new Date(), followUpChannel: channel, followUpDueAt: null, updatedAt: new Date() })
+    .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
+    .returning({ id: contacts.id });
+  if (!updated) throw notFound('Contact not found');
+
+  return c.json(await mustGetContact(c, db, id));
+});
+
+/**
+ * Undo (about 8s after marking followed up, or until dismissed): restores exactly the prior values
+ * the client passes. The server keeps no history of its own, so this trusts the client's copy of
+ * what the contact looked like just before - the same way any other edit does.
+ */
+contactsRoutes.delete('/contacts/:id/follow-up', requireAuth, async (c) => {
+  const userId = c.get('user').id;
+  const id = c.req.param('id');
+  await limit(c.env.WRITE_LIMITER, userKey(c, 'write', userId));
+  const { previous } = await parseJson(c, undoFollowUpSchema);
+  const db = getDb(c.env);
+
+  const [updated] = await db
+    .update(contacts)
+    .set({
+      followedUpAt: previous.followedUpAt ? new Date(previous.followedUpAt) : null,
+      followUpChannel: previous.followUpChannel,
+      followUpDueAt: previous.followUpDueAt ? new Date(previous.followUpDueAt) : null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
+    .returning({ id: contacts.id });
+  if (!updated) throw notFound('Contact not found');
+
+  return c.json(await mustGetContact(c, db, id));
+});
+
+/** "Remind me again": sets the next due date `remindInDays` from now, or clears it for "Never". */
+contactsRoutes.patch('/contacts/:id/follow-up', requireAuth, async (c) => {
+  const userId = c.get('user').id;
+  const id = c.req.param('id');
+  await limit(c.env.WRITE_LIMITER, userKey(c, 'write', userId));
+  const { remindInDays } = await parseJson(c, remindFollowUpSchema);
+  const db = getDb(c.env);
+  const now = new Date();
+
+  const [updated] = await db
+    .update(contacts)
+    .set({ followUpDueAt: remindDueAt(remindInDays, now), updatedAt: now })
+    .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
+    .returning({ id: contacts.id });
+  if (!updated) throw notFound('Contact not found');
+
+  return c.json(await mustGetContact(c, db, id));
 });

@@ -5,11 +5,14 @@ import type {
   Contact,
   ContactCreateInput,
   ContactUpdateInput,
+  FollowUpInput,
   InviteEmailsInput,
   Me,
   ProfileInput,
+  RemindFollowUpInput,
   ReportInput,
   SocialValidationProvider,
+  UndoFollowUpInput,
 } from '@chatsoon/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Platform } from 'react-native';
@@ -152,6 +155,35 @@ export function useDeleteContact() {
   return useMutation({
     mutationFn: (id: string) => api.contacts.remove(id),
     onSuccess: (_void, id) => removeContactFromCache(qc, id),
+  });
+}
+
+// ---- Follow-ups (issue #33) ----
+
+/** Marks a contact followed up (the draft sheet's channel buttons and Copy). */
+export function useFollowUp(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: FollowUpInput) => api.contacts.followUp(id, input),
+    onSuccess: (contact) => putContactInCache(qc, contact),
+  });
+}
+
+/** Undo, shown inline for about 8s after marking followed up. */
+export function useUndoFollowUp(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UndoFollowUpInput) => api.contacts.undoFollowUp(id, input),
+    onSuccess: (contact) => putContactInCache(qc, contact),
+  });
+}
+
+/** "Remind me again", offered right after marking followed up. */
+export function useRemindFollowUp(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RemindFollowUpInput) => api.contacts.remindFollowUp(id, input),
+    onSuccess: (contact) => putContactInCache(qc, contact),
   });
 }
 

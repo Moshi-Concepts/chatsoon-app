@@ -16,7 +16,7 @@ import { Chip, Icon } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-import type { ContactFilter } from './search';
+import { FOLLOW_UP_FILTER, type ContactFilter } from './search';
 
 const isWeb = Platform.OS === 'web';
 
@@ -35,6 +35,9 @@ export type FilterBarProps = {
   events: ChatsoonEvent[];
   /** Contact count per event id. */
   eventCounts: Map<string, number>;
+  /** How many contacts are due for a follow-up right now (issue #33). The "To follow up" chip only
+   * shows up when this is more than zero. */
+  dueCount: number;
   onSelectAll: () => void;
   onToggleFilter: (filter: ContactFilter) => void;
 };
@@ -52,6 +55,7 @@ export function FilterBar({
   tagCounts,
   events,
   eventCounts,
+  dueCount,
   onSelectAll,
   onToggleFilter,
 }: FilterBarProps) {
@@ -135,6 +139,15 @@ export function FilterBar({
             icon={active.kind === 'all' ? 'checkmark' : undefined}
             onPress={onSelectAll}
           />
+          {dueCount > 0 ? (
+            <Chip
+              label="To follow up"
+              count={dueCount}
+              selected={active.kind === 'followUp'}
+              icon={active.kind === 'followUp' ? 'checkmark' : 'time-outline'}
+              onPress={() => onToggleFilter(FOLLOW_UP_FILTER)}
+            />
+          ) : null}
           {tags.map((tag) => {
             const selected = active.kind === 'tag' && active.id === tag.id;
             return (

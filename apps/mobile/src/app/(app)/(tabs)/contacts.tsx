@@ -6,9 +6,17 @@ import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ContactListSkeleton, ContactRow } from '@/components/contacts/contact-row';
 import { FilterBar } from '@/components/contacts/filter-bar';
+import { FollowUpSection } from '@/components/contacts/follow-up-section';
 import { HeaderIconButton } from '@/components/contacts/header-button';
 import { OutboxSection } from '@/components/contacts/outbox-section';
-import { ALL_CONTACTS, buildSearchIndex, filterContacts, type ContactFilter } from '@/components/contacts/search';
+import {
+  ALL_CONTACTS,
+  buildSearchIndex,
+  dueContacts,
+  filterContacts,
+  FOLLOW_UP_FILTER,
+  type ContactFilter,
+} from '@/components/contacts/search';
 import { SearchField } from '@/components/contacts/search-field';
 import { isReadingCard, needsReview, plural } from '@/components/contacts/source';
 import { DeletionBanner } from '@/components/deletion-banner';
@@ -19,8 +27,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { useOutbox } from '@/lib/outbox';
 import { qk, useContacts, useEvents, useMe, useTags } from '@/lib/queries';
 
-function sameFilter(a: ContactFilter, b: ContactFilter) {
-  return a.kind === b.kind && (a.kind === 'all' || (b.kind !== 'all' && a.id === b.id));
+function sameFilter(a: ContactFilter, b: ContactFilter): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'tag' && b.kind === 'tag') return a.id === b.id;
+  if (a.kind === 'event' && b.kind === 'event') return a.id === b.id;
+  return true;
 }
 
 /** Cards still being read or waiting for review open the review screen, which shows progress or the form. */
@@ -75,11 +86,16 @@ export default function ContactsScreen() {
     return counts;
   }, [all]);
   const index = useMemo(() => buildSearchIndex(all, tagNames, eventNames), [all, tagNames, eventNames]);
+  // Recomputed with the list, not on a timer: due dates only matter to the minute, and every write
+  // that could change them (creating, following up, a remind) already refreshes `all`.
+  const due = useMemo(() => dueContacts(all), [all]);
 
-  // A filter on a tag that was deleted, or an event with no contacts left, falls back to All.
+  // A filter on a tag that was deleted, an event with no contacts left, or "To follow up" once
+  // nothing is due any more, falls back to All.
   const active: ContactFilter =
     (filter.kind === 'tag' && !tagNames.has(filter.id)) ||
-    (filter.kind === 'event' && !usedEvents.some((e) => e.id === filter.id))
+    (filter.kind === 'event' && !usedEvents.some((e) => e.id === filter.id)) ||
+    (filter.kind === 'followUp' && due.length === 0)
       ? ALL_CONTACTS
       : filter;
   const visible = useMemo(() => filterContacts(index, query, active), [index, query, active]);
@@ -92,7 +108,13 @@ export default function ContactsScreen() {
 
   const filtering = query.trim() !== '' || active.kind !== 'all';
   const filterName =
-    active.kind === 'tag' ? tagNames.get(active.id) : active.kind === 'event' ? eventNames.get(active.id) : undefined;
+    active.kind === 'tag'
+      ? tagNames.get(active.id)
+      : active.kind === 'event'
+        ? eventNames.get(active.id)
+        : active.kind === 'followUp'
+          ? 'To follow up'
+          : undefined;
 
   function toggleFilter(next: ContactFilter) {
     setFilter(sameFilter(active, next) ? ALL_CONTACTS : next);
@@ -211,6 +233,7 @@ export default function ContactsScreen() {
         </View>
       ) : null}
       <ContactsReferralBanner />
+      <FollowUpSection due={due} onSeeAll={() => setFilter(FOLLOW_UP_FILTER)} />
 
       {all.length > 0 ? (
         <View style={styles.toolbar}>
@@ -229,6 +252,7 @@ export default function ContactsScreen() {
             tagCounts={tagCounts}
             events={usedEvents}
             eventCounts={eventCounts}
+            dueCount={due.length}
             onSelectAll={() => setFilter(ALL_CONTACTS)}
             onToggleFilter={toggleFilter}
           />

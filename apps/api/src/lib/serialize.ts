@@ -12,6 +12,7 @@ import {
   type ContactSource,
   type ContactVisibility,
   type ExtractionStatus,
+  type FollowUpChannel,
   type MyProfile,
   type PageProfile,
   type ProfileContact,
@@ -28,6 +29,7 @@ import { cardsEnabled, currentOgVersion, hashKey16 } from './og';
 import { signedFileUrl } from './signing';
 
 const iso = (d: Date) => d.toISOString();
+const isoOrNull = (d: Date | null) => (d ? d.toISOString() : null);
 
 export function parseLinks(json: string | null | undefined): ProfileLinks {
   if (!json) return {};
@@ -230,6 +232,9 @@ export async function toContact(
     source: row.source as ContactSource,
     extractionStatus: row.extractionStatus as ExtractionStatus,
     tagIds,
+    followedUpAt: isoOrNull(row.followedUpAt),
+    followUpChannel: row.followUpChannel as FollowUpChannel | null,
+    followUpDueAt: isoOrNull(row.followUpDueAt),
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };

@@ -22,6 +22,7 @@ tag, not from `main`, because `main` already contains the features below.
 | Referral links (`/r/*`), landing page and badge pill (#11) | 26 Sep 2026 | Yes: `app.json`'s Android `/r/` pathPrefix intent filter is done; still needs `{"/": "/r/*"}` added to `apple-app-site-association` in the same release as the `/r/[code]` screen | — |
 | Referral hub, invite picker and Connected accounts screens (#11) | 26 Sep 2026 | Yes: `expo-sms` (the invite picker's Text button) is a native module, so it only works once a native build includes it; social account linking from Connected accounts (`POST /auth/link-social`) is web-only for now, same limitation as social sign-in above — see `connected-accounts.tsx` | — |
 | First-run intro (#32) | 26 Sep 2026 | No: JS only | — |
+| Follow-ups (#33 PR A) | 26 Sep 2026 | No: JS only; the Text channel uses the existing `expo-sms` | — |
 
 ## Releasing a batch to the apps
 
