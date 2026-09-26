@@ -100,9 +100,10 @@
         ]
       },
       {
-        "heading": "Card scanning",
+        "heading": "Card scanning and AI follow-up drafts",
         "paragraphs": [
-          "When you photograph a business card or badge, the photo is stored privately in your account and sent to Anthropic's Claude AI model, which reads the text and returns the details for you to review. Anthropic processes the photo on our behalf only to provide this service. Under Anthropic's commercial terms, it does not use this data to train its models."
+          "When you photograph a business card or badge, the photo is stored privately in your account and sent to Anthropic's Claude AI model, which reads the text and returns the details for you to review. Anthropic processes the photo on our behalf only to provide this service. Under Anthropic's commercial terms, it does not use this data to train its models.",
+          "When you ask Chatsoon to write a first draft of a follow-up message, that contact's details and your notes about them are sent to Anthropic's Claude AI model to write the draft. We only do this after you give your permission, and, under Anthropic's commercial terms, it does not use this data to train its models."
         ]
       },
       {
@@ -112,7 +113,7 @@
         ],
         "bullets": [
           "Cloudflare, Inc.: hosts our servers, database and file storage (including profile and card photos), serves the website, and provides Turnstile bot protection for the Connect form.",
-          "Anthropic, PBC: reads card and badge photos when you use card scanning.",
+          "Anthropic, PBC: reads card and badge photos when you use card scanning, and writes follow-up message drafts when you ask for one.",
           "Resend: sends Chatsoon's emails, such as your sign-in codes and connect notifications.",
           "Google LLC (Android app only): the QR code scanner uses Google ML Kit, which sends Google basic device and app information, performance metrics, error codes and a per-installation identifier to measure and improve the scanner. The iPhone app doesn't use ML Kit."
         ]

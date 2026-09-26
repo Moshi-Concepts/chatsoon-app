@@ -267,6 +267,15 @@ export interface ExtractCardResponse {
   contact: Contact;
   extracted: ExtractedCard;
 }
+/** POST /contacts/:id/follow-up/draft response (issue #33 PR B). `source` is 'template' whenever the
+ * AI draft wasn't used - disabled, over a spend cap, or the model call failed - so the sheet always
+ * has a message and only shows the "Drafted with AI" caption when it's actually the AI's text. */
+export interface FollowUpDraftResponse {
+  body: string;
+  source: 'ai' | 'template';
+  /** Set (with `source: 'template'`) when this account hit its daily AI draft cap. */
+  limited?: boolean;
+}
 export interface SignInResponse {
   token: string;
   user: { id: string; email: string };

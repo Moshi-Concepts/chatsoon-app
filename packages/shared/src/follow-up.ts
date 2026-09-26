@@ -63,6 +63,11 @@ export function isFollowUpDue(contact: { followUpDueAt: string | null }, now: Da
 // and calls `composeFollowUpMessage` with it - the signature and its composition never change).
 // ---------------------------------------------------------------------------
 
+/** The first word of a contact's name, for greeting them by first name - "Marcus Chen" to "Marcus". */
+export function followUpFirstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
 /** The editable part of the draft: "Hi Marcus, great to meet you at Token2049! Let's keep in touch." */
 export function followUpTemplateBody(firstName: string, eventName: string | null | undefined): string {
   const where = eventName ? ` at ${eventName}` : '';

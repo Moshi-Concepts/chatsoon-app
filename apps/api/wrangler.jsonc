@@ -40,6 +40,8 @@
     // The app uploads one compressed photo per avatar or card.
     { "name": "UPLOAD_LIMITER", "namespace_id": "1007", "simple": { "limit": 20, "period": 60 } },
     { "name": "EXTRACT_LIMITER", "namespace_id": "1003", "simple": { "limit": 20, "period": 60 } },
+    // AI follow-up drafts (issue #33 PR B), per user.
+    { "name": "FOLLOWUP_LIMITER", "namespace_id": "1013", "simple": { "limit": 20, "period": 60 } },
     { "name": "REPORT_LIMITER", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } },
     // Per user, on writes that add rows (contacts, tags, events). Room for the offline outbox to sync.
     { "name": "WRITE_LIMITER", "namespace_id": "1009", "simple": { "limit": 120, "period": 60 } },
@@ -65,6 +67,11 @@
     "EXTRACT_ENABLED": "true",
     "EXTRACT_DAILY_PER_USER": "30",
     "EXTRACT_DAILY_TOTAL": "1000",
+    "FOLLOWUP_MODEL": "claude-haiku-4-5",
+    // Spend caps for the AI follow-up draft (issue #33 PR B). "false" is the kill switch.
+    "FOLLOWUP_AI_ENABLED": "true",
+    "FOLLOWUP_DAILY_PER_USER": "50",
+    "FOLLOWUP_DAILY_TOTAL": "2000",
     // "false" is the kill switch (and the Free-plan setting): profiles fall back to the default image.
     "OG_CARDS_ENABLED": "true",
     // Referrals (issue #11), account linking / social_checks eligibility (docs/referrals.md).

@@ -19,6 +19,7 @@ import type {
   EmailPrefsResponse,
   EventsResponse,
   ExtractCardResponse,
+  FollowUpDraftResponse,
   FollowUpInput,
   GetReferralResponse,
   InviteEmailsInput,
@@ -391,6 +392,10 @@ export const api = {
     /** "Remind me again": sets the next due date, or clears it for "Never" (null). */
     remindFollowUp: (id: string, input: RemindFollowUpInput) =>
       request<Contact>('PATCH', `/contacts/${encodeURIComponent(id)}/follow-up`, { body: input }),
+    /** AI-drafted follow-up body (issue #33 PR B). Always resolves - `source: 'template'` whenever
+     * the AI draft wasn't used, never a thrown error for that. */
+    followUpDraft: (id: string) =>
+      request<FollowUpDraftResponse>('POST', `/contacts/${encodeURIComponent(id)}/follow-up/draft`, { body: {} }),
   },
 
   tags: {

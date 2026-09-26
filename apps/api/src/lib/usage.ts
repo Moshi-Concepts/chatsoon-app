@@ -52,6 +52,28 @@ export async function reserveExtraction(env: Env, userId: string): Promise<Extra
   return { ok: true };
 }
 
+export type FollowUpDraftBudget = { ok: true } | { ok: false; reason: 'disabled' | 'user_limit' | 'daily_limit' };
+
+/**
+ * Reserves one AI follow-up draft for today (issue #33 PR B). FOLLOWUP_AI_ENABLED="false" turns it
+ * off entirely; FOLLOWUP_DAILY_PER_USER and FOLLOWUP_DAILY_TOTAL cap it per account and across
+ * everyone (UTC days), the same pattern as reserveExtraction above. No sweep here: the extraction
+ * sweep above already deletes every key's old rows once a day, these counters included.
+ */
+export async function reserveFollowUpDraft(env: Env, userId: string): Promise<FollowUpDraftBudget> {
+  if (env.FOLLOWUP_AI_ENABLED === 'false') return { ok: false, reason: 'disabled' };
+  const day = today();
+  if ((await bump(env, `followup:user:${userId}:${day}`, day)) > intVar(env.FOLLOWUP_DAILY_PER_USER, 50)) {
+    return { ok: false, reason: 'user_limit' };
+  }
+  const total = await bump(env, `followup:all:${day}`, day);
+  if (total > intVar(env.FOLLOWUP_DAILY_TOTAL, 2000)) {
+    console.warn(`Follow-up draft daily cap reached (${total})`);
+    return { ok: false, reason: 'daily_limit' };
+  }
+  return { ok: true };
+}
+
 /** Daily cap on new connections per user (issue #3 D12): connecting auto-accepts, so an unchecked
  * throwaway account could otherwise collect numbers at SCAN_LIMITER's per-minute rate all day. */
 export const NEW_CONNECTIONS_PER_DAY = 100;

@@ -187,6 +187,12 @@ export function useRemindFollowUp(id: string) {
   });
 }
 
+/** AI-drafted follow-up body (issue #33 PR B), requested by the draft sheet on open and on Regenerate.
+ * Doesn't touch the contact cache: the draft only ever changes the sheet's own editable text. */
+export function useFollowUpDraft(id: string) {
+  return useMutation({ mutationFn: () => api.contacts.followUpDraft(id) });
+}
+
 // ---- Connect ----
 
 export function useScanConnect() {
